@@ -1,0 +1,12 @@
+DROP TABLE IF EXISTS audit_log;
+DROP TABLE IF EXISTS budget_results;
+DROP TABLE IF EXISTS budget_inputs;
+DROP TABLE IF EXISTS budget_versions;
+DROP TABLE IF EXISTS budgets;
+DROP TABLE IF EXISTS user_project_permissions;
+DROP TABLE IF EXISTS projects;
+DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS cost_items;
+DROP TABLE IF EXISTS work_modes;
+DROP TABLE IF EXISTS positions;
+DROP TABLE IF EXISTS executors;

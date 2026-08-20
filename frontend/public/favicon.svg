@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_Слой_2" data-name="Слой 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 152.48 152.48">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: #0b292f;
+      }
+
+      .cls-1, .cls-2 {
+        stroke-width: 0px;
+      }
+
+      .cls-2 {
+        fill: #fff;
+      }
+    </style>
+  </defs>
+  <g id="Layer_1" data-name="Layer 1">
+    <circle class="cls-1" cx="76.24" cy="76.24" r="76.24"/>
+    <path class="cls-2" d="M125.13,18.06l3.41,2.32-50.67,74.56-3.41-2.32L125.13,18.06Z"/>
+    <path class="cls-2" d="M40.62,33.41v90.15h3.58l60-82.68v82.68h4.09V33.41h-3.71l-59.87,82.42V33.41h-4.09Z"/>
+  </g>
+</svg>

@@ -1,0 +1,7 @@
+.claude/
+audit/
+*.md
+*.png
+CLAUDE.md
+.env
+node_modules/
