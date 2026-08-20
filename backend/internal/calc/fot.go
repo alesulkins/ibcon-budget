@@ -115,7 +115,8 @@ func calcFOTMonthly(
 // calcTickets рассчитывает стоимость авиабилетов по месяцам (строка 184 = 4.6!E5).
 // Формула Excel: C5*(E318+E779), где:
 //   E318 — кол-во билетов вахтовиков (авто по графику, строки 168-317):
-//     "4/2" → 2; "К"/"не принят"/без изменений → 0; смена графика → 1
+//     "4/2" → 2; "К"/"не принят"/без изменений/пусто → 0; смена графика на
+//     непустое значение → 1 (пустая ячейка = COUNTA даёт 0, не "смену")
 //   E779 — кол-во билетов в командировках (строки 629+):
 //     "К" → 2, иначе 0
 func calcTickets(emps []Employee, ticketPrice float64, duration int) []float64 {
@@ -146,6 +147,11 @@ func calcTickets(emps []Employee, ticketPrice float64, duration int) []float64 {
 			case cur == Schedule42:
 				cnt = 2
 			case cur == prev:
+				cnt = 0
+			case cur == "":
+				// Excel: COUNTA(пустая ячейка) = 0 — незаполненный график
+				// не считается "сменой графика" и не даёт билет
+				// (audit/numeric_baseline.md, 4.6!E168).
 				cnt = 0
 			default:
 				cnt = 1

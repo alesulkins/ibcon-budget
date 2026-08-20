@@ -138,6 +138,48 @@ func TestCalcTickets(t *testing.T) {
 	}
 }
 
+// TestCalcTickets_EmptySchedule — регрессия на баг из audit/numeric_baseline.md:
+// незаполненная ячейка графика месяца не должна давать билет.
+// Источник: 4.6!E168 = IF(E16="4/2",2,COUNTA(E16)) — COUNTA(пустая ячейка) = 0,
+// т.е. Excel не считает пустой график "сменой графика".
+func TestCalcTickets_EmptySchedule(t *testing.T) {
+	emp := Employee{
+		BaseSchedule:    ScheduleOF,
+		SalaryNet:       50_000,
+		MonthlySchedule: []string{""},
+	}
+	price := 40_000.0
+	got := calcTickets([]Employee{emp}, price, 1)
+	want := []float64{0}
+	for i, w := range want {
+		if math.Abs(got[i]-w) > 0.01 {
+			t.Errorf("tickets month %d: want %.0f, got %.0f", i+1, w, got[i])
+		}
+	}
+}
+
+// TestCalcTickets_Regression — три ключевых случая из исправления бага в одном
+// сценарии: "4/2" → 2 билета; график не изменился → 0; график сменился с
+// пустого на непустое значение → 1 (не 0, как для "пусто → пусто").
+func TestCalcTickets_Regression(t *testing.T) {
+	emp := Employee{
+		BaseSchedule:    "",
+		SalaryNet:       50_000,
+		MonthlySchedule: []string{Schedule42, "", ScheduleOF},
+	}
+	// Месяц 1: "4/2" — 2 билета (приоритет над сравнением с базой)
+	// Месяц 2: "4/2" → "" — пустое текущее значение — 0 билетов
+	// Месяц 3: "" → "ОФ" — смена на непустое значение — 1 билет
+	price := 40_000.0
+	got := calcTickets([]Employee{emp}, price, 3)
+	want := []float64{2 * price, 0, price}
+	for i, w := range want {
+		if math.Abs(got[i]-w) > 0.01 {
+			t.Errorf("tickets month %d: want %.0f, got %.0f", i+1, w, got[i])
+		}
+	}
+}
+
 func TestCalcTickets_NotHired(t *testing.T) {
 	emp := Employee{
 		BaseSchedule:    ScheduleNotHired,
