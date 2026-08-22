@@ -57,20 +57,28 @@ func TestRun_SimpleOneMonth(t *testing.T) {
 		t.Errorf("TotalFOT: want %.2f, got %.2f", wantTotalFOT, mr.TotalFOT)
 	}
 
-	// Непредвиденные = TotalFOT × 0.07 (projectCosts=0)
-	wantUnpred := wantTotalFOT * 0.07
+	// Билеты: проект длиной 1 месяц — этот месяц одновременно последний,
+	// поэтому работает СЧЁТЗ-ветка 4.6!318 («в последний месяц уезжают все»):
+	// сотрудник на объекте (ОФ) получает 1 билет × 40 000.
+	wantTickets := 40_000.0
+	if math.Abs(mr.Tickets-wantTickets) > 0.01 {
+		t.Errorf("Tickets: want %.2f, got %.2f", wantTickets, mr.Tickets)
+	}
+
+	// Непредвиденные = (projectCosts + TotalFOT) × 0.07
+	wantUnpred := (wantTickets + wantTotalFOT) * 0.07
 	if math.Abs(mr.Unpredictables-wantUnpred) > 0.1 {
 		t.Errorf("Unpredictables: want %.2f, got %.2f", wantUnpred, mr.Unpredictables)
 	}
 
 	// АУП = (projectCosts + непред + TotalFOT) × 0.15
-	wantAUP := (wantTotalFOT + wantUnpred) * 0.15
+	wantAUP := (wantTickets + wantTotalFOT + wantUnpred) * 0.15
 	if math.Abs(mr.AUP-wantAUP) > 0.1 {
 		t.Errorf("AUP: want %.2f, got %.2f", wantAUP, mr.AUP)
 	}
 
-	// TotalCostsGross = AUP + непред + 0 + TotalFOT
-	wantGross := wantAUP + wantUnpred + wantTotalFOT
+	// TotalCostsGross = AUP + непред + projectCosts + TotalFOT
+	wantGross := wantAUP + wantUnpred + wantTickets + wantTotalFOT
 	if math.Abs(mr.TotalCostsGross-wantGross) > 0.1 {
 		t.Errorf("TotalCostsGross: want %.2f, got %.2f", wantGross, mr.TotalCostsGross)
 	}

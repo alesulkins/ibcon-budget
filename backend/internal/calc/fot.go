@@ -56,7 +56,10 @@ func calcFOTMonthly(
 		for i := range emps {
 			fot := employeeFOT(&emps[i], m, startDate)
 			totalFOT += fot
-			switch emps[i].Country {
+			// Excel сравнивает страну через SUMIF, то есть регистронезависимо
+			// (2.Бюджет!H172, H173, H174). Самозанятый не попадает ни в одну
+			// ветку — он платит налоги сам.
+			switch normalizeCountry(emps[i].Country) {
 			case CountryRF:
 				rfNet += fot
 			case CountryKG:
@@ -73,7 +76,9 @@ func calcFOTMonthly(
 				if m <= len(b.MonthlyAmounts) {
 					amount = b.MonthlyAmounts[m-1]
 				}
-				switch b.Country {
+				// Премии облагаются по стране сотрудника так же, как оклад
+				// (4.1!F11 → SUMIF в 2.Бюджет!H172/H173/H174).
+				switch normalizeCountry(b.Country) {
 				case CountryRF:
 					rfBonus += amount
 				case CountryKG:
@@ -112,52 +117,115 @@ func calcFOTMonthly(
 	return
 }
 
-// calcTickets рассчитывает стоимость авиабилетов по месяцам (строка 184 = 4.6!E5).
-// Формула Excel: C5*(E318+E779), где:
-//   E318 — кол-во билетов вахтовиков (авто по графику, строки 168-317):
-//     "4/2" → 2; "К"/"не принят"/без изменений/пусто → 0; смена графика на
-//     непустое значение → 1 (пустая ячейка = COUNTA даёт 0, не "смену")
-//   E779 — кол-во билетов в командировках (строки 629+):
-//     "К" → 2, иначе 0
-func calcTickets(emps []Employee, ticketPrice float64, duration int) []float64 {
-	tickets := make([]float64, duration)
+// scheduleAt возвращает график сотрудника за месяц monthIdx (1-based),
+// пустую строку — если месяц за пределами заполненной сетки.
+func scheduleAt(e *Employee, monthIdx int) string {
+	if monthIdx >= 1 && monthIdx <= len(e.MonthlySchedule) {
+		return e.MonthlySchedule[monthIdx-1]
+	}
+	return ""
+}
+
+// shiftTicketsRowwise — количество билетов вахтовиков за месяц как сумма
+// построчных значений по сотрудникам (Excel: SUM(E168:E317)).
+//
+// Построчная формула 4.6!E168 (одинакова во всех месяцах):
+//
+//	=IF(месяц<=D8, IF(график="4/2", 2,
+//	     IF(OR(график="К", график=предыдущий, график="не принят"), 0,
+//	        COUNTA(график))), 0)
+//
+// Порядок проверок важен: "4/2" даёт 2 билета даже если график не менялся.
+// Для первого месяца «предыдущим» служит поле «Условия» (4.6!C16 = BR16).
+// Пустая ячейка: COUNTA = 0 → билета нет.
+func shiftTicketsRowwise(emps []Employee, monthIdx int) float64 {
+	var count float64
 	for i := range emps {
 		e := &emps[i]
-		for m := 1; m <= duration && m <= len(e.MonthlySchedule); m++ {
-			cur := e.MonthlySchedule[m-1]
+		cur := scheduleAt(e, monthIdx)
 
-			// Билеты командировочные: "К" → 2 (строка E779 в Excel)
-			if cur == ScheduleK {
-				tickets[m-1] += 2 * ticketPrice
-				continue
-			}
-
-			// Билеты вахтовиков: по смене графика (строка E318 в Excel)
-			if cur == ScheduleNotHired {
-				continue
-			}
-			var prev string
-			if m == 1 {
-				prev = e.BaseSchedule
-			} else {
-				prev = e.MonthlySchedule[m-2]
-			}
-			var cnt float64
-			switch {
-			case cur == Schedule42:
-				cnt = 2
-			case cur == prev:
-				cnt = 0
-			case cur == "":
-				// Excel: COUNTA(пустая ячейка) = 0 — незаполненный график
-				// не считается "сменой графика" и не даёт билет
-				// (audit/numeric_baseline.md, 4.6!E168).
-				cnt = 0
-			default:
-				cnt = 1
-			}
-			tickets[m-1] += cnt * ticketPrice
+		if cur == Schedule42 {
+			count += 2
+			continue
 		}
+		prev := e.BaseSchedule
+		if monthIdx > 1 {
+			prev = scheduleAt(e, monthIdx-1)
+		}
+		if cur == ScheduleK || cur == prev || cur == ScheduleNotHired || cur == "" {
+			continue
+		}
+		count++ // COUNTA(непустая ячейка) = 1
+	}
+	return count
+}
+
+// shiftTicketsLastMonth — количество билетов вахтовиков за ПОСЛЕДНИЙ месяц
+// проекта. Считается принципиально иначе: не суммой построчных билетов, а
+// пересчётом всего столбца графиков (Excel: первая ветка 4.6!BL318).
+//
+//	=COUNTA(график) - билеты_К/2 - COUNTIF(график;"не принят") + COUNTIF(график;"4/2")
+//
+// Смысл: в последний месяц проекта домой уезжают ВСЕ, кто на объекте,
+// поэтому билет получает каждый — даже если график не менялся с прошлого
+// месяца (построчная формула в этом случае дала бы 0).
+// Слагаемые: COUNTA считает всех с непустым графиком; вычитаются «не принят»
+// (их на объекте нет) и «К» (их билеты идут отдельной строкой 779,
+// билеты_К/2 = количество «К»); прибавляются «4/2», чтобы у них вышло 2.
+func shiftTicketsLastMonth(emps []Employee, monthIdx int) float64 {
+	var counta, notHired, k, sched42 float64
+	for i := range emps {
+		switch scheduleAt(&emps[i], monthIdx) {
+		case "":
+			// COUNTA пустую ячейку не считает
+		case ScheduleNotHired:
+			counta++
+			notHired++
+		case ScheduleK:
+			counta++
+			k++
+		case Schedule42:
+			counta++
+			sched42++
+		default:
+			counta++
+		}
+	}
+	return counta - k - notHired + sched42
+}
+
+// businessTripTickets — количество билетов в командировках за месяц
+// (Excel: SUM(E629:E778), построчно 4.6!E629 = IF(месяц<=D8, IF(график="К", 2, 0), 0)).
+// Формула единообразна во всех месяцах, включая последний.
+func businessTripTickets(emps []Employee, monthIdx int) float64 {
+	var count float64
+	for i := range emps {
+		if scheduleAt(&emps[i], monthIdx) == ScheduleK {
+			count += 2
+		}
+	}
+	return count
+}
+
+// calcTickets рассчитывает стоимость авиабилетов по месяцам
+// (строка 184 = 4.6!E5 = $C$5*(E318+E779)).
+//
+// Итог билетов вахтовиков (строка 318) считается по двум разным формулам:
+//
+//	месяц < D8  → сумма построчных билетов (shiftTicketsRowwise)
+//	месяц = D8  → пересчёт столбца графиков (shiftTicketsLastMonth)
+//
+// Ветку выбирает само условие IF(месяц=$D$8;...) внутри формы.
+func calcTickets(emps []Employee, ticketPrice float64, duration int) []float64 {
+	tickets := make([]float64, duration)
+	for m := 1; m <= duration; m++ {
+		var shift float64
+		if m == duration {
+			shift = shiftTicketsLastMonth(emps, m)
+		} else {
+			shift = shiftTicketsRowwise(emps, m)
+		}
+		tickets[m-1] = ticketPrice * (shift + businessTripTickets(emps, m))
 	}
 	return tickets
 }

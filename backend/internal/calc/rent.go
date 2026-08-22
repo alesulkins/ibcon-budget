@@ -13,6 +13,18 @@ func sameExecutor(a, b string) bool {
 	return strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b))
 }
 
+// normalizeCountry приводит «Страну НО» к каноническому виду для сравнения
+// с константами CountryRF / CountryKG / CountrySelfEmployed.
+//
+// Нужно потому, что Excel сравнивает страну через SUMIF, а он
+// регистронезависим: в форме записано «Россия», а формула ищет «россия»
+// (2.Бюджет!H172, H173, H174). Без нормализации все налоги обнуляются.
+// У поля 4.6!BS нет выпадающего списка — значение вводится свободным
+// текстом, поэтому пробелы по краям тоже срезаем.
+func normalizeCountry(s string) string {
+	return strings.ToLower(strings.TrimSpace(s))
+}
+
 // intVal возвращает значение из массива по индексу (0-based), 0 если за пределами.
 func intVal(arr []int, idx int) int {
 	if idx >= 0 && idx < len(arr) {
