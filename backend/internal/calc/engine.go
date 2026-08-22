@@ -216,12 +216,24 @@ func Run(inp *BudgetInputs) *CalcResult {
 			revArr[m] = marginArr[m] + totalCosts[m]
 		}
 	}
+	// Операционная прибыль (строка 238).
+	// Формула Excel H238 = IF(H11<=$D$8; IF(H234<>0; 0; H236-H232); 0):
+	// если маржа за месяц ненулевая — прибыль не показывается (она и есть
+	// маржа), иначе прибыль = выручка минус расходы. Проверка «месяц <= D8»
+	// в платформе не нужна: массивы строятся ровно на duration месяцев.
+	//
+	// Важно: при ручной выручке (F236<>0) маржа H234 обнуляется формой,
+	// поэтому работает вторая ветка и прибыль СЧИТАЕТСЯ. Раньше здесь
+	// стояло условие manualRevenue == 0, из-за которого в этом режиме
+	// прибыль оставалась нулём — см. audit/numeric_final.md, ошибка 1.
+	var totalOpProfit, opMarginTotal float64
 	for m := 0; m < n; m++ {
 		totalRevenue += revArr[m]
-		// Операционная прибыль (строка 238)
-		if manualRevenue == 0 && opMarginPct == 0 {
+		if marginArr[m] == 0 {
 			opProfitArr[m] = revArr[m] - totalCosts[m]
 		}
+		totalOpProfit += opProfitArr[m]
+		opMarginTotal += marginArr[m]
 	}
 
 	// Если G251 не задан, берём итоговую выручку
@@ -240,53 +252,54 @@ func Run(inp *BudgetInputs) *CalcResult {
 		}
 	}
 
-	// ── 12. Налог (G240) ──────────────────────────────────────────────────────
+	// ── 12. Налог на прибыль (строка 240) ────────────────────────────────────
+	// Формула Excel G240:
+	//
+	//	=IF($D$10="Айбикон-Проект"; 0;
+	//	 IF($D$10="Айбикон Киргизия"; $G$251/$D$8/100*5 + $G$251*2/$D$8/100;
+	//	 IF(G234<>0; G234*$F$240; G238*$F$240)))
+	//
+	// То есть: «Айбикон-Проект» освобождён; у «Айбикон Киргизия» спецрежим
+	// от стоимости договора; у остальных — ставка F240 либо от маржи
+	// (если она задана), либо от операционной прибыли.
 	var tax float64
-	switch inp.ExecutorName {
-	case ExecutorAibiconProject:
+	switch {
+	case sameExecutor(inp.ExecutorName, ExecutorAibiconProject):
 		tax = 0
-	case ExecutorAibiconKG:
-		// $G$251/$D$8/100*5 + $G$251*2/$D$8/100 (специальный режим)
-		tax = contractValue/float64(n)/100*5*float64(n) +
-			contractValue*2/float64(n)/100*float64(n)
-		// упрощение: 7% от стоимости договора
-		tax = contractValue * 0.07
+
+	case sameExecutor(inp.ExecutorName, ExecutorAibiconKG):
+		// Спецрежим: (5% + 2%) от стоимости договора, делённые на
+		// длительность проекта. Деления на $D$8 в формуле два — по одному
+		// в каждом слагаемом, и умножения на длительность обратно НЕТ.
+		if n > 0 {
+			tax = contractValue/float64(n)/100*5 + contractValue*2/float64(n)/100
+		}
+
 	default: // Айбикон
-		taxRate := 0.25
-		if opMarginPct > 0 {
-			tax = totalRevenue * opMarginPct * taxRate
+		rate := profitTaxRate(inp.ExecutorName)
+		if opMarginTotal != 0 {
+			tax = opMarginTotal * rate
 		} else {
-			// Налог от операционной прибыли
-			for m := 0; m < n; m++ {
-				tax += opProfitArr[m]
-			}
-			tax *= taxRate
+			tax = totalOpProfit * rate
 		}
 	}
 
 	// ── 13. Чистая прибыль и рентабельность ──────────────────────────────────
-	var totalGrossCostsAll, totalOpProfit float64
+	var totalGrossCostsAll float64
 	for m := 0; m < n; m++ {
 		totalGrossCostsAll += totalCosts[m]
-		totalOpProfit += opProfitArr[m]
-	}
-	var opMarginTotal float64
-	for _, v := range marginArr {
-		opMarginTotal += v
 	}
 
-	netProfit := 0.0
-	if opMarginPct > 0 || manualRevenue > 0 {
+	// Чистая прибыль (строка 242).
+	// Формула Excel G242 = IF(G234<>0; G234-G240; G238-G240):
+	// если маржа задана — от неё, иначе — от операционной прибыли.
+	netProfit := totalOpProfit - tax
+	if opMarginTotal != 0 {
 		netProfit = opMarginTotal - tax
-	} else {
-		netProfit = totalOpProfit - tax
-	}
-	if manualRevenue > 0 {
-		netProfit = totalRevenue - totalGrossCostsAll - tax
 	}
 
 	profitability := 0.0
-	if inp.ExecutorName == ExecutorAibiconKG {
+	if sameExecutor(inp.ExecutorName, ExecutorAibiconKG) {
 		var totalRevWithVAT float64
 		for _, v := range revWithVATArr {
 			totalRevWithVAT += v
@@ -401,6 +414,26 @@ func calcBGAdvMonthly(bg BankGuarantee, contractValue float64, n int) []float64 
 		arr[m] = perMonth
 	}
 	return arr
+}
+
+// profitTaxRate — ставка налога на прибыль по исполнителю.
+// Формула Excel 2.Бюджет!F240:
+//
+//	=IF($D$10="Айбикон-Проект"; 0; IF(D10="Айбикон Киргизия"; 6%; 25%))
+//
+// Внимание: для «Айбикон Киргизия» эта ставка в форме НЕ применяется —
+// налог там считается по спецрежиму от стоимости договора (G240, вторая
+// ветка), а значение 6% в ячейке остаётся неиспользованным. Возвращаем
+// его для полноты воспроизведения формулы.
+func profitTaxRate(executor string) float64 {
+	switch {
+	case sameExecutor(executor, ExecutorAibiconProject):
+		return 0
+	case sameExecutor(executor, ExecutorAibiconKG):
+		return 0.06
+	default: // Айбикон
+		return 0.25
+	}
 }
 
 // defaultPerDiemRF — суточные по РФ из Excel: 700 + 300/0.87*1.3

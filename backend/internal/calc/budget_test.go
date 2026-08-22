@@ -241,3 +241,142 @@ func TestRun_VATByExecutor(t *testing.T) {
 		}
 	}
 }
+
+// TestRun_OperatingProfitWithManualRevenue — операционная прибыль (строка 238)
+// должна считаться и в режиме ручной выручки.
+//
+// Формула Excel H238 = IF(H11<=$D$8; IF(H234<>0; 0; H236-H232); 0).
+// При ручной выручке форма обнуляет маржу H234, поэтому работает вторая
+// ветка: прибыль = выручка − расходы. Раньше Go в этом режиме давал 0
+// (audit/numeric_final.md, ошибка 1).
+func TestRun_OperatingProfitWithManualRevenue(t *testing.T) {
+	inp := &BudgetInputs{
+		ProjectStartDate: mustDate(2026, 12, 1),
+		DurationMonths:   2,
+		ExecutorName:     ExecutorAibicon,
+		Internet:         []float64{1_000_000, 1_000_000}, // расходы 1 млн/мес
+		Params: &InputBudgetParams{
+			ManualRevenue: 10_000_000,
+			ContractValue: 10_000_000,
+			OpMarginPct:   25, // задана, но при ручной выручке не применяется
+		},
+	}
+	res := Run(inp)
+
+	for m := 0; m < 2; m++ {
+		// маржа обнулена (H234)
+		if res.Monthly[m].MarginAmount != 0 {
+			t.Errorf("месяц %d: маржа при ручной выручке должна быть 0, got %.2f",
+				m+1, res.Monthly[m].MarginAmount)
+		}
+		// прибыль = выручка − расходы = 5 000 000 − 1 000 000
+		want := 4_000_000.0
+		if got := res.Monthly[m].OperatingProfit; math.Abs(got-want) > 0.01 {
+			t.Errorf("месяц %d: операционная прибыль want %.2f, got %.2f", m+1, want, got)
+		}
+	}
+	if math.Abs(res.OperatingProfit-8_000_000) > 0.01 {
+		t.Errorf("итого операционная прибыль: want 8000000, got %.2f", res.OperatingProfit)
+	}
+}
+
+// TestRun_TaxByExecutor — налог на прибыль (строка 240) по всем трём ветвям
+// формулы Excel G240:
+//
+//	=IF($D$10="Айбикон-Проект"; 0;
+//	 IF($D$10="Айбикон Киргизия"; $G$251/$D$8/100*5 + $G$251*2/$D$8/100;
+//	 IF(G234<>0; G234*$F$240; G238*$F$240)))
+func TestRun_TaxByExecutor(t *testing.T) {
+	mk := func(executor string) *BudgetInputs {
+		return &BudgetInputs{
+			ProjectStartDate: mustDate(2026, 12, 1),
+			DurationMonths:   6,
+			ExecutorName:     executor,
+			Internet:         []float64{1_000_000, 1_000_000, 1_000_000, 1_000_000, 1_000_000, 1_000_000},
+			Params: &InputBudgetParams{
+				ManualRevenue: 200_000_000,
+				ContractValue: 200_000_000,
+			},
+		}
+	}
+
+	// Айбикон: налог = операционная прибыль × 25%
+	res := Run(mk(ExecutorAibicon))
+	wantProfit := 200_000_000.0 - 6_000_000.0
+	if math.Abs(res.OperatingProfit-wantProfit) > 0.01 {
+		t.Fatalf("Айбикон: опер.прибыль want %.2f, got %.2f", wantProfit, res.OperatingProfit)
+	}
+	if want := wantProfit * 0.25; math.Abs(res.Tax-want) > 0.01 {
+		t.Errorf("Айбикон: налог want %.2f, got %.2f", want, res.Tax)
+	}
+
+	// Айбикон-Проект: освобождён
+	if res := Run(mk(ExecutorAibiconProject)); res.Tax != 0 {
+		t.Errorf("Айбикон-Проект: налог должен быть 0, got %.2f", res.Tax)
+	}
+
+	// Айбикон Киргизия: спецрежим от стоимости договора, эталон Excel
+	// G240 = 200000000/6/100*5 + 200000000*2/6/100 = 2 333 333.33
+	// Значение НЕ зависит от расходов и прибыли — только от ТКП и срока.
+	if res := Run(mk(ExecutorAibiconKG)); math.Abs(res.Tax-2_333_333.3333333335) > 0.01 {
+		t.Errorf("Киргизия: налог want 2333333.33 (эталон Excel), got %.2f", res.Tax)
+	}
+
+	// Регистр исполнителя не должен ломать ветвление
+	kgLower := mk(ExecutorAibiconKG)
+	kgLower.ExecutorName = "айбикон киргизия"
+	if res := Run(kgLower); math.Abs(res.Tax-2_333_333.3333333335) > 0.01 {
+		t.Errorf("Киргизия (нижний регистр): налог want 2333333.33, got %.2f", res.Tax)
+	}
+}
+
+// TestRun_TaxFromMarginWhenSet — если маржа задана (ручной выручки нет),
+// налог считается от неё, а не от операционной прибыли (первая ветка
+// внутреннего IF в G240).
+func TestRun_TaxFromMarginWhenSet(t *testing.T) {
+	inp := &BudgetInputs{
+		ProjectStartDate: mustDate(2026, 12, 1),
+		DurationMonths:   2,
+		ExecutorName:     ExecutorAibicon,
+		Internet:         []float64{1_000_000, 1_000_000},
+		Params:           &InputBudgetParams{OpMarginPct: 20}, // ручной выручки нет
+	}
+	res := Run(inp)
+
+	// маржа = расходы × 20% = 200 000/мес, итого 400 000
+	wantMargin := 400_000.0
+	var gotMargin float64
+	for _, m := range res.Monthly {
+		gotMargin += m.MarginAmount
+	}
+	if math.Abs(gotMargin-wantMargin) > 0.01 {
+		t.Fatalf("итого маржа: want %.2f, got %.2f", wantMargin, gotMargin)
+	}
+	// налог от маржи: 400 000 × 25%
+	if want := wantMargin * 0.25; math.Abs(res.Tax-want) > 0.01 {
+		t.Errorf("налог от маржи: want %.2f, got %.2f", want, res.Tax)
+	}
+	// при заданной марже операционная прибыль не показывается (H238 → 0)
+	if res.OperatingProfit != 0 {
+		t.Errorf("при заданной марже опер.прибыль должна быть 0, got %.2f", res.OperatingProfit)
+	}
+}
+
+// TestProfitTaxRate — ставка налога по исполнителю (2.Бюджет!F240).
+func TestProfitTaxRate(t *testing.T) {
+	tests := []struct {
+		executor string
+		want     float64
+	}{
+		{ExecutorAibicon, 0.25},
+		{ExecutorAibiconProject, 0},
+		{ExecutorAibiconKG, 0.06}, // в форме есть, но для КГ не применяется
+		{"айбикон-проект", 0},     // регистронезависимо
+		{"АЙБИКОН КИРГИЗИЯ", 0.06},
+	}
+	for _, tt := range tests {
+		if got := profitTaxRate(tt.executor); math.Abs(got-tt.want) > 1e-9 {
+			t.Errorf("profitTaxRate(%q): want %.2f, got %.2f", tt.executor, tt.want, got)
+		}
+	}
+}
