@@ -51,6 +51,11 @@ func Run(inp *BudgetInputs) *CalcResult {
 		markup            float64
 		manualRevenue     float64
 		contractValue     float64
+		// contractTKP — ИСХОДНАЯ стоимость договора (2.Бюджет!G251), без
+		// подстановки расчётной выручки. От неё считаются банковские
+		// гарантии и налог киргизского спецрежима: и то и другое в форме
+		// привязано строго к ТКП.
+		contractTKP float64
 	)
 	if inp.Params != nil {
 		unpredPct = inp.Params.UnpredictablesPct / 100
@@ -65,6 +70,7 @@ func Run(inp *BudgetInputs) *CalcResult {
 		markup = markupRate(inp.Params.TargetRentPct, inp.ExecutorName)
 		manualRevenue = inp.Params.ManualRevenue
 		contractValue = inp.Params.ContractValue
+		contractTKP = inp.Params.ContractValue
 	}
 
 	// ── 4. Рассчитываем месячные итоги (строки 212, 214-216) ─────────────────
@@ -196,13 +202,9 @@ func Run(inp *BudgetInputs) *CalcResult {
 	// ещё нет. Поэтому берём исходный ContractValue, а не подставленное выше
 	// значение: подстановка расчётной выручки нужна только для «прочих
 	// расходов» в режиме «%» и на БГ распространяться не должна.
-	var bgBase float64
-	if inp.Params != nil {
-		bgBase = inp.Params.ContractValue
-	}
-	bgExecMonthly := calcBGMonthly(bgExec, bgBase, n)
-	bgWarMonthly := calcBGMonthly(bgWar, bgBase, n)
-	bgAdvMonthly := calcBGAdvMonthly(bgAdv, bgBase, n)
+	bgExecMonthly := calcBGMonthly(bgExec, contractTKP, n)
+	bgWarMonthly := calcBGMonthly(bgWar, contractTKP, n)
+	bgAdvMonthly := calcBGAdvMonthly(bgAdv, contractTKP, n)
 
 	// ── 9. Итого расходов без НДС (строка 232) ────────────────────────────────
 	totalCosts := make([]float64, n)
@@ -286,8 +288,11 @@ func Run(inp *BudgetInputs) *CalcResult {
 		// Спецрежим: (5% + 2%) от стоимости договора, делённые на
 		// длительность проекта. Деления на $D$8 в формуле два — по одному
 		// в каждом слагаемом, и умножения на длительность обратно НЕТ.
+		// База — строго ТКП (2.Бюджет!$G$251), как в формуле. Подстановка
+		// расчётной выручки сюда не распространяется: у киргизского филиала
+		// ТКП задаётся всегда, а без договора налог считать не от чего.
 		if n > 0 {
-			tax = contractValue/float64(n)/100*5 + contractValue*2/float64(n)/100
+			tax = contractTKP/float64(n)/100*5 + contractTKP*2/float64(n)/100
 		}
 
 	default: // Айбикон

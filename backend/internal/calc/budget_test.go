@@ -644,3 +644,40 @@ func TestRun_OtherExpensesPctUsesEstimatedRevenue(t *testing.T) {
 		}
 	}
 }
+
+// TestRun_KirgiziaTaxNeedsContractValue — налог киргизского спецрежима
+// считается строго от ТКП (2.Бюджет!$G$251), а не от расчётной выручки.
+//
+// По правилу формы у киргизского филиала ТКП задаётся всегда, поэтому
+// проекта без ТКП быть не может; если он всё же придёт — налог 0, а не
+// посчитанный от подставленной выручки.
+func TestRun_KirgiziaTaxNeedsContractValue(t *testing.T) {
+	base := func(p *InputBudgetParams) *BudgetInputs {
+		return &BudgetInputs{
+			ProjectStartDate: mustDate(2026, 12, 1),
+			DurationMonths:   6,
+			ExecutorName:     ExecutorAibiconKG,
+			Internet:         []float64{1_000_000, 1_000_000, 1_000_000, 1_000_000, 1_000_000, 1_000_000},
+			Params:           p,
+		}
+	}
+
+	// ТКП задан — налог считается: 200 млн × 7% / 6 мес
+	res := Run(base(&InputBudgetParams{
+		ManualRevenue: 200_000_000,
+		ContractValue: 200_000_000,
+	}))
+	if want := 2_333_333.3333333335; math.Abs(res.Tax-want) > 0.01 {
+		t.Errorf("с ТКП: налог want %.2f, got %.2f", want, res.Tax)
+	}
+
+	// ТКП не задан — налог 0, расчётная выручка в базу не подставляется
+	res = Run(base(&InputBudgetParams{TargetRentPct: 27}))
+	if res.Tax != 0 {
+		t.Errorf("без ТКП: налог должен быть 0, got %.2f", res.Tax)
+	}
+	// выручка при этом посчитана (режим наценки работает)
+	if res.TotalRevenue == 0 {
+		t.Error("без ТКП выручка всё равно должна считаться по наценке")
+	}
+}
