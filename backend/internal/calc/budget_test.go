@@ -26,7 +26,7 @@ func TestRun_SimpleOneMonth(t *testing.T) {
 		Params: &InputBudgetParams{
 			UnpredictablesPct: 7,
 			AUPPct:            15,
-			OpMarginPct:       20,
+			TargetRentPct:     20,
 		},
 	}
 
@@ -89,8 +89,11 @@ func TestRun_SimpleOneMonth(t *testing.T) {
 		t.Errorf("TotalCostsGross: want %.2f, got %.2f", wantGross, mr.TotalCostsGross)
 	}
 
-	// Revenue = TotalCosts × 1.20
-	wantRevenue := wantGross * 1.20
+	// Revenue = TotalCosts × (1 + наценка).
+	// Целевая рентабельность 20% при ставке налога «Айбикон» 25%:
+	// markup = 0.20/(1-0.25-0.20) = 0.363636… (2.Бюджет!F234)
+	wantMarkup := 0.20 / (1 - 0.25 - 0.20)
+	wantRevenue := wantGross * (1 + wantMarkup)
 	if math.Abs(mr.Revenue-wantRevenue) > 1 {
 		t.Errorf("Revenue: want %.2f, got %.2f", wantRevenue, mr.Revenue)
 	}
@@ -190,7 +193,7 @@ func TestRun_AibiconProject_NoTax(t *testing.T) {
 		ProjectStartDate: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 		DurationMonths:   1,
 		ExecutorName:     ExecutorAibiconProject,
-		Params:           &InputBudgetParams{OpMarginPct: 10},
+		Params:           &InputBudgetParams{TargetRentPct: 10},
 	}
 	res := Run(inp)
 	if res.Tax != 0 {
@@ -258,7 +261,7 @@ func TestRun_OperatingProfitWithManualRevenue(t *testing.T) {
 		Params: &InputBudgetParams{
 			ManualRevenue: 10_000_000,
 			ContractValue: 10_000_000,
-			OpMarginPct:   25, // задана, но при ручной выручке не применяется
+			TargetRentPct: 25, // задана, но при ручной выручке не применяется
 		},
 	}
 	res := Run(inp)
@@ -339,12 +342,14 @@ func TestRun_TaxFromMarginWhenSet(t *testing.T) {
 		DurationMonths:   2,
 		ExecutorName:     ExecutorAibicon,
 		Internet:         []float64{1_000_000, 1_000_000},
-		Params:           &InputBudgetParams{OpMarginPct: 20}, // ручной выручки нет
+		Params:           &InputBudgetParams{TargetRentPct: 20}, // ручной выручки нет
 	}
 	res := Run(inp)
 
-	// маржа = расходы × 20% = 200 000/мес, итого 400 000
-	wantMargin := 400_000.0
+	// Наценка считается из целевой рентабельности и ставки налога
+	// (2.Бюджет!F234 = E234/(1-F240-E234)): 20% при налоге 25% → 0.363636…
+	markup := 20.0 / 100 / (1 - 0.25 - 20.0/100)
+	wantMargin := 2_000_000.0 * markup
 	var gotMargin float64
 	for _, m := range res.Monthly {
 		gotMargin += m.MarginAmount
@@ -352,9 +357,15 @@ func TestRun_TaxFromMarginWhenSet(t *testing.T) {
 	if math.Abs(gotMargin-wantMargin) > 0.01 {
 		t.Fatalf("итого маржа: want %.2f, got %.2f", wantMargin, gotMargin)
 	}
-	// налог от маржи: 400 000 × 25%
+	// налог от маржи: маржа × 25%
 	if want := wantMargin * 0.25; math.Abs(res.Tax-want) > 0.01 {
 		t.Errorf("налог от маржи: want %.2f, got %.2f", want, res.Tax)
+	}
+
+	// Ключевая проверка смысла формулы: после уплаты налога итоговая
+	// рентабельность должна выйти ровно целевой (20%).
+	if math.Abs(res.Profitability-20) > 0.01 {
+		t.Errorf("итоговая рентабельность: want 20%%, got %.4f%%", res.Profitability)
 	}
 	// при заданной марже операционная прибыль не показывается (H238 → 0)
 	if res.OperatingProfit != 0 {
@@ -378,5 +389,159 @@ func TestProfitTaxRate(t *testing.T) {
 		if got := profitTaxRate(tt.executor); math.Abs(got-tt.want) > 1e-9 {
 			t.Errorf("profitTaxRate(%q): want %.2f, got %.2f", tt.executor, tt.want, got)
 		}
+	}
+}
+
+// TestMarkupRate — коэффициент наценки на расходы.
+// Источник: 2.Бюджет!F234 = E234/(1-F240-E234), где E234 — целевая
+// рентабельность без налога на прибыль, F240 — ставка налога исполнителя.
+func TestMarkupRate(t *testing.T) {
+	tests := []struct {
+		name       string
+		targetRent float64
+		executor   string
+		want       float64
+	}{
+		// Айбикон, налог 25%: 0.29/(1-0.25-0.29) = 0.29/0.46
+		{"Айбикон 29%", 29, ExecutorAibicon, 0.6304347826086957},
+		// Айбикон-Проект, налог 0: 0.70/(1-0-0.70) = 0.70/0.30
+		{"Проект 70%", 70, ExecutorAibiconProject, 2.3333333333333335},
+		// Айбикон-Проект, налог 0: 0.20/(1-0-0.20) = 0.20/0.80
+		{"Проект 20%", 20, ExecutorAibiconProject, 0.25},
+		// Киргизия, налог 6%: 0.27/(1-0.06-0.27) = 0.27/0.67
+		{"Киргизия 27%", 27, ExecutorAibiconKG, 0.40298507462686567},
+		// значения из обновлённых файлов
+		{"Айбикон 27% (файл)", 27, ExecutorAibicon, 0.5625},
+		{"Проект 27% (файл)", 27, ExecutorAibiconProject, 0.3698630136986301},
+		// не задана — наценки нет
+		{"ноль", 0, ExecutorAibicon, 0},
+		// вырожденный случай: 80% + 25% >= 100% → 0 (валидация отсечёт раньше)
+		{"вырожденный", 80, ExecutorAibicon, 0},
+	}
+	for _, tt := range tests {
+		if got := markupRate(tt.targetRent, tt.executor); math.Abs(got-tt.want) > 1e-9 {
+			t.Errorf("%s: markupRate want %.10f, got %.10f", tt.name, tt.want, got)
+		}
+	}
+}
+
+// TestRun_TargetRentabilityIsReached — главная проверка смысла формулы:
+// при режиме наценки итоговая рентабельность должна выйти РОВНО целевой,
+// какой бы ни была ставка налога исполнителя.
+func TestRun_TargetRentabilityIsReached(t *testing.T) {
+	tests := []struct {
+		name       string
+		executor   string
+		targetRent float64
+	}{
+		{"Айбикон 29% (налог 25%)", ExecutorAibicon, 29},
+		{"Проект 70% (налог 0)", ExecutorAibiconProject, 70},
+		{"Проект 20% (налог 0)", ExecutorAibiconProject, 20},
+		{"Айбикон 27% (налог 25%)", ExecutorAibicon, 27},
+	}
+	for _, tt := range tests {
+		inp := &BudgetInputs{
+			ProjectStartDate: mustDate(2026, 12, 1),
+			DurationMonths:   3,
+			ExecutorName:     tt.executor,
+			Internet:         []float64{1_000_000, 2_000_000, 3_000_000},
+			Params:           &InputBudgetParams{TargetRentPct: tt.targetRent},
+		}
+		res := Run(inp)
+
+		if math.Abs(res.Profitability-tt.targetRent) > 0.01 {
+			t.Errorf("%s: итоговая рентабельность want %.2f%%, got %.4f%%",
+				tt.name, tt.targetRent, res.Profitability)
+		}
+
+		// Выручка = расходы × (1 + наценка), маржа = расходы × наценка
+		markup := markupRate(tt.targetRent, tt.executor)
+		var costs, margin float64
+		for _, m := range res.Monthly {
+			costs += m.TotalCosts
+			margin += m.MarginAmount
+		}
+		if want := costs * markup; math.Abs(margin-want) > 0.01 {
+			t.Errorf("%s: маржа want %.2f, got %.2f", tt.name, want, margin)
+		}
+		if want := costs * (1 + markup); math.Abs(res.TotalRevenue-want) > 0.01 {
+			t.Errorf("%s: выручка want %.2f, got %.2f", tt.name, want, res.TotalRevenue)
+		}
+	}
+}
+
+// TestRun_KirgiziaAlwaysManualRevenue — у «Айбикон Киргизия» ТКП задаётся
+// всегда (правило формы), поэтому работает режим ручной выручки, а наценка
+// через целевую рентабельность к ней не применяется: H234 обнуляется.
+func TestRun_KirgiziaAlwaysManualRevenue(t *testing.T) {
+	inp := &BudgetInputs{
+		ProjectStartDate: mustDate(2026, 12, 1),
+		DurationMonths:   3,
+		ExecutorName:     ExecutorAibiconKG,
+		Internet:         []float64{1_000_000, 1_000_000, 1_000_000},
+		Params: &InputBudgetParams{
+			TargetRentPct: 27,          // задана, но не должна применяться
+			ManualRevenue: 100_000_000, // ТКП задан
+			ContractValue: 100_000_000,
+		},
+	}
+	res := Run(inp)
+
+	// Наценка в расчёт не идёт: маржа по всем месяцам нулевая
+	for m, mr := range res.Monthly {
+		if mr.MarginAmount != 0 {
+			t.Errorf("месяц %d: при заданном ТКП маржа должна быть 0, got %.2f",
+				m+1, mr.MarginAmount)
+		}
+	}
+	// Выручка — ровно ТКП, распределённый по месяцам
+	if math.Abs(res.TotalRevenue-100_000_000) > 0.01 {
+		t.Errorf("выручка want 100000000 (ТКП), got %.2f", res.TotalRevenue)
+	}
+	// Рентабельность считается от реальной прибыли, а не от целевой 27%
+	if math.Abs(res.Profitability-27) < 0.01 {
+		t.Errorf("рентабельность не должна совпадать с целевой 27%%: got %.4f%%",
+			res.Profitability)
+	}
+}
+
+// TestValidateBudgetParams_TargetRent — вырожденный случай:
+// целевая рентабельность + ставка налога должны быть строго меньше 100%.
+func TestValidateBudgetParams_TargetRent(t *testing.T) {
+	tests := []struct {
+		name       string
+		targetRent float64
+		executor   string
+		wantErr    bool
+	}{
+		{"29% при налоге 25%", 29, ExecutorAibicon, false},
+		{"74% при налоге 25%", 74, ExecutorAibicon, false},
+		{"75% при налоге 25% — ровно 100%", 75, ExecutorAibicon, true},
+		{"80% при налоге 25%", 80, ExecutorAibicon, true},
+		{"80% при налоге 0 (Проект)", 80, ExecutorAibiconProject, false},
+		{"100% при налоге 0", 100, ExecutorAibiconProject, true},
+		{"94% при налоге 6% (Киргизия)", 94, ExecutorAibiconKG, true},
+		{"не задана", 0, ExecutorAibicon, false},
+		{"отрицательная", -5, ExecutorAibicon, true},
+	}
+	for _, tt := range tests {
+		p := &InputBudgetParams{TargetRentPct: tt.targetRent}
+		err := ValidateBudgetParams(p, tt.executor)
+		if (err != nil) != tt.wantErr {
+			t.Errorf("%s: wantErr=%v, got err=%v", tt.name, tt.wantErr, err)
+		}
+	}
+
+	if err := ValidateBudgetParams(nil, ExecutorAibicon); err != nil {
+		t.Errorf("nil должен проходить: %v", err)
+	}
+
+	// Через диспетчер ValidateInput
+	bad := []byte(`{"target_rent_pct":80}`)
+	if err := ValidateInput(TypeBudgetParams, bad, ExecutorAibicon); err == nil {
+		t.Error("ValidateInput: ожидалась ошибка для 80% при налоге 25%")
+	}
+	if err := ValidateInput(TypeBudgetParams, bad, ExecutorAibiconProject); err != nil {
+		t.Errorf("ValidateInput: 80%% при налоге 0 должно проходить, got %v", err)
 	}
 }

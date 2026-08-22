@@ -215,23 +215,23 @@ func TestValidateRentApartments(t *testing.T) {
 func TestValidateInput(t *testing.T) {
 	// Корректные данные 4.2
 	ok := []byte(`{"price_1room":200000,"count_1room":[1,2],"cleaning_base":40000}`)
-	if err := ValidateInput(TypeRentApartments, ok); err != nil {
+	if err := ValidateInput(TypeRentApartments, ok, ExecutorAibicon); err != nil {
 		t.Errorf("корректные данные 4.2: %v", err)
 	}
 
 	// Отрицательная цена
 	bad := []byte(`{"price_1room":-5}`)
-	if err := ValidateInput(TypeRentApartments, bad); err == nil {
+	if err := ValidateInput(TypeRentApartments, bad, ExecutorAibicon); err == nil {
 		t.Error("отрицательная цена: ожидалась ошибка")
 	}
 
 	// Битый JSON для типа с валидацией
-	if err := ValidateInput(TypeRentApartments, []byte(`{"price_1room":`)); err == nil {
+	if err := ValidateInput(TypeRentApartments, []byte(`{"price_1room":`), ExecutorAibicon); err == nil {
 		t.Error("битый JSON: ожидалась ошибка")
 	}
 
 	// Тип без собственных правил — валидация пропускает
-	if err := ValidateInput(TypeInternet, []byte(`{"monthly_amounts":[1,2]}`)); err != nil {
+	if err := ValidateInput(TypeInternet, []byte(`{"monthly_amounts":[1,2]}`), ExecutorAibicon); err != nil {
 		t.Errorf("тип без правил не должен отклоняться: %v", err)
 	}
 }

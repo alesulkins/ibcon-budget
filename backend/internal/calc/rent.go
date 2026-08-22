@@ -161,9 +161,45 @@ func ValidateRentApartments(in *InputRentApartments) error {
 	return nil
 }
 
+// ValidateBudgetParams проверяет параметры бюджета перед сохранением.
+//
+// Главное правило — целевая рентабельность должна быть достижима при
+// ставке налога исполнителя. Коэффициент наценки считается как
+// E234/(1-F240-E234) (2.Бюджет!F234), поэтому при
+// targetRent + ставка налога >= 1 знаменатель обращается в ноль или
+// становится отрицательным. В форме это дало бы #DIV/0! или
+// отрицательную наценку; в платформе отклоняем ввод с понятной ошибкой,
+// а не пропускаем молча.
+func ValidateBudgetParams(p *InputBudgetParams, executor string) error {
+	if p == nil {
+		return nil
+	}
+
+	r := p.TargetRentPct / 100
+	if r < 0 {
+		return fmt.Errorf("целевая рентабельность не может быть отрицательной (%.2f%%)",
+			p.TargetRentPct)
+	}
+	if r == 0 {
+		return nil // наценка не применяется (например, задан ТКП)
+	}
+
+	t := profitTaxRate(executor)
+	if r+t >= 1 {
+		return fmt.Errorf(
+			"целевая рентабельность слишком высока для этой ставки налога: "+
+				"%.2f%% + налог %.0f%% должно быть строго меньше 100%% "+
+				"(исполнитель «%s»)",
+			p.TargetRentPct, t*100, executor)
+	}
+	return nil
+}
+
 // ValidateInput проверяет входные данные одного типа перед сохранением.
 // Для типов без собственных правил возвращает nil.
-func ValidateInput(inputType string, raw []byte) error {
+//
+// executor нужен для проверок, зависящих от исполнителя (ставка налога).
+func ValidateInput(inputType string, raw []byte, executor string) error {
 	switch inputType {
 	case TypeRentApartments:
 		var v InputRentApartments
@@ -171,6 +207,13 @@ func ValidateInput(inputType string, raw []byte) error {
 			return fmt.Errorf("аренда квартир: некорректный формат данных: %w", err)
 		}
 		return ValidateRentApartments(&v)
+
+	case TypeBudgetParams:
+		var v InputBudgetParams
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return fmt.Errorf("параметры бюджета: некорректный формат данных: %w", err)
+		}
+		return ValidateBudgetParams(&v, executor)
 	}
 	return nil
 }

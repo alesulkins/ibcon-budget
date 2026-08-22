@@ -283,7 +283,13 @@ func (h *Handler) saveInput(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "тело должно быть валидным JSON"})
 		return
 	}
-	if err = calc.ValidateInput(inputType, body); err != nil {
+	// Часть проверок зависит от исполнителя (например, достижимость целевой
+	// рентабельности при его ставке налога), поэтому берём проект версии.
+	var executorName string
+	if proj, perr := h.projectsSvc.Get(v.ProjectID); perr == nil {
+		executorName = proj.ExecutorName
+	}
+	if err = calc.ValidateInput(inputType, body, executorName); err != nil {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
 	}

@@ -48,7 +48,7 @@ func Run(inp *BudgetInputs) *CalcResult {
 		otherMode         string
 		otherVal          float64
 		bgExec, bgWar, bgAdv BankGuarantee
-		opMarginPct       float64
+		markup            float64
 		manualRevenue     float64
 		contractValue     float64
 	)
@@ -60,7 +60,9 @@ func Run(inp *BudgetInputs) *CalcResult {
 		bgExec = inp.Params.BGExecution
 		bgWar = inp.Params.BGWarranty
 		bgAdv = inp.Params.BGAdvance
-		opMarginPct = inp.Params.OpMarginPct / 100
+		// Коэффициент наценки на расходы (2.Бюджет!F234) считается из
+		// целевой рентабельности и ставки налога, а не вводится напрямую.
+		markup = markupRate(inp.Params.TargetRentPct, inp.ExecutorName)
 		manualRevenue = inp.Params.ManualRevenue
 		contractValue = inp.Params.ContractValue
 	}
@@ -170,8 +172,9 @@ func Run(inp *BudgetInputs) *CalcResult {
 			contractValue = manualRevenue
 		}
 	} else {
-		// G232 ≈ totalGrossCosts (без BG). Выручка = costs / (1 - margin%)
-		estimatedRevenue := totalGrossCosts / (1 - opMarginPct)
+		// Выручка в режиме наценки: расходы + наценка на них
+		// (2.Бюджет!H236 = H234 + H232, где H234 = H232 × F234).
+		estimatedRevenue := totalGrossCosts * (1 + markup)
 		if contractValue == 0 {
 			contractValue = estimatedRevenue
 		}
@@ -211,7 +214,8 @@ func Run(inp *BudgetInputs) *CalcResult {
 	} else {
 		for m := 0; m < n; m++ {
 			// Операционная маржинальность (строка 234)
-			marginArr[m] = totalCosts[m] * opMarginPct
+			// Наценка на расходы (строка 234): H234 = H232 × F234
+			marginArr[m] = totalCosts[m] * markup
 			// Выручка = итого расходы + маржа (строка 236)
 			revArr[m] = marginArr[m] + totalCosts[m]
 		}
@@ -414,6 +418,39 @@ func calcBGAdvMonthly(bg BankGuarantee, contractValue float64, n int) []float64 
 		arr[m] = perMonth
 	}
 	return arr
+}
+
+// markupRate — коэффициент наценки на расходы при целевой рентабельности.
+// Формула Excel 2.Бюджет!F234:
+//
+//	=E234/(1-F240-E234)
+//
+// где E234 — целевая рентабельность без налога на прибыль (ручной ввод),
+// F240 — ставка налога на прибыль по исполнителю (см. profitTaxRate).
+// Подпись строки в форме: «Коэффициент наценки на расходы при целевой
+// рент. без НП».
+//
+// Смысл: коэффициент подобран так, чтобы ПОСЛЕ уплаты налога итоговая
+// рентабельность вышла ровно целевой. Проверка на расходах 100 при
+// целевой 27% и налоге 25%: наценка 56.25 → выручка 156.25, налог 14.06,
+// прибыль 42.19, рентабельность 42.19/156.25 = 27%.
+//
+// Применяется только в режиме наценки (ТКП не задан). Если ТКП задан,
+// форма обнуляет H234 и работает режим ручной выручки.
+//
+// Вырожденный случай (targetRent + ставка налога >= 1) должен отсекаться
+// валидацией ValidateBudgetParams; здесь возвращаем 0, чтобы в расчёт
+// не попала отрицательная наценка.
+func markupRate(targetRentPct float64, executor string) float64 {
+	r := targetRentPct / 100
+	if r <= 0 {
+		return 0
+	}
+	denom := 1 - profitTaxRate(executor) - r
+	if denom <= 0 {
+		return 0
+	}
+	return r / denom
 }
 
 // profitTaxRate — ставка налога на прибыль по исполнителю.
