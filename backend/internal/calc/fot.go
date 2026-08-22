@@ -118,9 +118,14 @@ func employeeFOT(emp *Employee, monthIdx int, startDate time.Time) float64 {
 //	ndflArr   — НДФЛ с сотрудников РФ (строка 172)
 //	insRFArr  — взносы с сотрудников РФ 30.2% (строка 173)
 //	insKGArr  — взносы с сотрудников Киргизии 22.25% (строка 174)
+// bonusRF/bonusKG — премии и компенсации по месяцам, уже разложенные по
+// стране сотрудника (результат calcBonuses). Они входят в базу налогов
+// наравне с окладом: 2.Бюджет!H172/H173/H174 суммируют ФОТ из H14:H163
+// и премии из '4.1'!H11:H161.
 func calcFOTMonthly(
 	emps []Employee,
-	bonuses *InputBonuses,
+	bonusRF []float64,
+	bonusKG []float64,
 	overtimeRF []float64,
 	overtimeKG []float64,
 	startDate time.Time,
@@ -148,24 +153,9 @@ func calcFOTMonthly(
 		}
 		fotArr[m-1] = totalFOT
 
-		// Бонусы (4.1) по стране
-		var rfBonus, kgBonus float64
-		if bonuses != nil {
-			for _, b := range bonuses.Employees {
-				var amount float64
-				if m <= len(b.MonthlyAmounts) {
-					amount = b.MonthlyAmounts[m-1]
-				}
-				// Премии облагаются по стране сотрудника так же, как оклад
-				// (4.1!F11 → SUMIF в 2.Бюджет!H172/H173/H174).
-				switch normalizeCountry(b.Country) {
-				case CountryRF:
-					rfBonus += amount
-				case CountryKG:
-					kgBonus += amount
-				}
-			}
-		}
+		// Премии и компенсации (4.1), уже разложенные по стране в calcBonuses
+		rfBonus := lineVal(bonusRF, m-1)
+		kgBonus := lineVal(bonusKG, m-1)
 
 		// Переработки
 		var ovRF, ovKG float64

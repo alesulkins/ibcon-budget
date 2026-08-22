@@ -72,7 +72,7 @@ func TestCalcFOT_TaxRF(t *testing.T) {
 		MonthlySchedule: []string{ScheduleOF},
 	}
 	fot, ndfl, insRF, insKG := calcFOTMonthly(
-		[]Employee{emp}, nil, nil, nil, mustDate(2024, 1, 1), 1,
+		[]Employee{emp}, nil, nil, nil, nil, mustDate(2024, 1, 1), 1,
 	)
 
 	if math.Abs(fot[0]-100_000) > 0.01 {
@@ -104,7 +104,7 @@ func TestCalcFOT_TaxKG(t *testing.T) {
 		MonthlySchedule: []string{ScheduleOF},
 	}
 	_, ndfl, insRF, insKG := calcFOTMonthly(
-		[]Employee{emp}, nil, nil, nil, mustDate(2024, 1, 1), 1,
+		[]Employee{emp}, nil, nil, nil, nil, mustDate(2024, 1, 1), 1,
 	)
 
 	if ndfl[0] != 0 {
@@ -134,7 +134,7 @@ func TestCalcFOT_CountryCaseInsensitive(t *testing.T) {
 			Country: country, BaseSchedule: ScheduleOF,
 			SalaryNet: 100_000, MonthlySchedule: []string{ScheduleOF},
 		}
-		_, ndfl, insRF, _ := calcFOTMonthly([]Employee{emp}, nil, nil, nil, mustDate(2024, 1, 1), 1)
+		_, ndfl, insRF, _ := calcFOTMonthly([]Employee{emp}, nil, nil, nil, nil, mustDate(2024, 1, 1), 1)
 		if math.Abs(ndfl[0]-wantNDFL) > 0.01 {
 			t.Errorf("страна %q: НДФЛ want %.2f, got %.2f", country, wantNDFL, ndfl[0])
 		}
@@ -148,7 +148,7 @@ func TestCalcFOT_CountryCaseInsensitive(t *testing.T) {
 			Country: country, BaseSchedule: ScheduleOF,
 			SalaryNet: 80_000, MonthlySchedule: []string{ScheduleOF},
 		}
-		_, _, _, insKG := calcFOTMonthly([]Employee{emp}, nil, nil, nil, mustDate(2024, 1, 1), 1)
+		_, _, _, insKG := calcFOTMonthly([]Employee{emp}, nil, nil, nil, nil, mustDate(2024, 1, 1), 1)
 		if math.Abs(insKG[0]-80_000*0.2225) > 0.01 {
 			t.Errorf("страна %q: взносы КГ want %.2f, got %.2f",
 				country, 80_000*0.2225, insKG[0])
@@ -167,7 +167,7 @@ func TestCalcFOT_SelfEmployed(t *testing.T) {
 		SalaryNet: 150_000, MonthlySchedule: []string{ScheduleOF},
 	}
 	fot, ndfl, insRF, insKG := calcFOTMonthly(
-		[]Employee{emp}, nil, nil, nil, mustDate(2024, 1, 1), 1)
+		[]Employee{emp}, nil, nil, nil, nil, mustDate(2024, 1, 1), 1)
 
 	if math.Abs(fot[0]-150_000) > 0.01 {
 		t.Errorf("ФОТ самозанятого должен считаться: want 150000, got %.2f", fot[0])
@@ -206,13 +206,12 @@ func TestCalcFOT_ReferenceValues(t *testing.T) {
 		{Country: "Киргизия", BaseSchedule: "офис", SalaryNet: 100_000,
 			MonthlySchedule: []string{ScheduleK}},
 	}
-	// 4.1!H11=100000 (Россия), H12=0 (Россия), H13=50000 (Киргизия)
-	bonuses := &InputBonuses{Employees: []BonusEmployee{
-		{Country: "Россия", MonthlyAmounts: []float64{100_000}},
-		{Country: "Россия", MonthlyAmounts: []float64{0}},
-		{Country: "Киргизия", MonthlyAmounts: []float64{50_000}},
-	}}
-	fot, ndfl, insRF, insKG := calcFOTMonthly(emps, bonuses, nil, nil, mustDate(2026, 12, 1), 1)
+	// Премии месяца 1 из 4.1: 100 000 у сотрудника РФ, 50 000 у КГ.
+	// Передаём уже разложенными по странам — так их отдаёт calcBonuses.
+	bonusRF := []float64{100_000}
+	bonusKG := []float64{50_000}
+	fot, ndfl, insRF, insKG := calcFOTMonthly(
+		emps, bonusRF, bonusKG, nil, nil, mustDate(2026, 12, 1), 1)
 
 	checks := []struct {
 		name string

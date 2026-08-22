@@ -85,25 +85,61 @@ type InputEmployees struct {
 	Employees    []Employee `json:"employees"`
 }
 
-// BonusType — тип премии (лист 4.1, строки 4-5 Excel)
+// Виды премий (лист 4.1, верхняя таблица). «Другое» — произвольная премия,
+// у которой название, месяц и процент задаёт пользователь.
+const (
+	BonusKindBuilderDay = "день_строителя"
+	BonusKindNewYear    = "новый_год"
+	BonusKindOther      = "другое"
+)
+
+// Значения по умолчанию для стандартных премий.
+// Это ДЕФОЛТЫ уровня проекта, а не жёсткие константы: экономист может
+// выставить в проекте свои процент и месяц (CLAUDE.md, отклонение №2).
+const (
+	defaultBuilderDayPct   = 20.0 // % от оклада
+	defaultBuilderDayMonth = 8    // август
+	defaultNewYearPct      = 50.0 // % от оклада
+	defaultNewYearMonth    = 12   // декабрь
+)
+
+// BonusType — один вид премии на уровне проекта (лист 4.1, строки 4-8).
 type BonusType struct {
-	Name      string  `json:"name"`       // название: "День строителя (авг)", "НГ (дек)"
-	MonthNum  int     `json:"month_num"`  // номер месяца в году (1-12)
-	PctOfSalary float64 `json:"pct_of_salary"` // % от оклада "на руки" (0.5 = 50%)
+	Kind string `json:"kind"` // день_строителя / новый_год / другое
+	Name string `json:"name"` // отображаемое название
+	// MonthNum — КАЛЕНДАРНЫЙ месяц начисления (1-12), не месяц проекта.
+	// 0 → взять значение по умолчанию для Kind.
+	MonthNum int `json:"month_num"`
+	// PctOfSalary — процент от оклада ЧИСЛОМ: 20 означает 20%
+	// (как UnpredictablesPct/AUPPct в InputBudgetParams).
+	// 0 → взять значение по умолчанию для Kind.
+	PctOfSalary float64 `json:"pct_of_salary"`
 }
 
-// BonusEmployee — строка премий/компенсаций (лист 4.1)
-type BonusEmployee struct {
-	FullName       string    `json:"full_name"`
-	Country        string    `json:"country"`
-	MonthlyAmounts []float64 `json:"monthly_amounts"` // суммы "на руки" по месяцам
-}
-
-// InputBonuses — данные листа 4.1 (премии и компенсации)
-// BonusTypes используется в UI для ввода, Employees — вычисленные итоги
+// InputBonuses — данные листа 4.1 (премии и компенсации при увольнении).
+// Суммы НЕ приходят готовыми: они считаются в calcBonuses из этих видов
+// премий и списка сотрудников (санкционированное отклонение №2).
 type InputBonuses struct {
-	BonusTypes []BonusType    `json:"bonus_types"` // типы премий (из верхней таблицы 4.1)
-	Employees  []BonusEmployee `json:"employees"`   // вычисленные суммы по сотрудникам
+	BonusTypes []BonusType `json:"bonus_types"`
+}
+
+// BonusConflict — двум и более премиям одного сотрудника выпал один месяц.
+// Не ошибка: начисляются обе (суммируются), но требуется подтверждение
+// пользователя (CLAUDE.md, отклонение №2). UI-подтверждение — этап B.
+type BonusConflict struct {
+	EmployeeName string   `json:"employee_name"`
+	MonthIdx     int      `json:"month_idx"` // месяц проекта, 1-based
+	BonusNames   []string `json:"bonus_names"`
+}
+
+// BonusCalcResult — премии и компенсации по месяцам (2.Бюджет строка 169).
+// Разбивка по странам нужна для налогов: НДФЛ и взносы РФ считаются от
+// сумм сотрудников «россия», взносы КГ — от «киргизия».
+type BonusCalcResult struct {
+	Total     []float64       // все сотрудники, по месяцам
+	RF        []float64       // только сотрудники «россия»
+	KG        []float64       // только сотрудники «киргизия»
+	Conflicts []BonusConflict // где нужно подтверждение пользователя
 }
 
 // InputRentApartments — данные листа 4.2 «Аренда квартир».

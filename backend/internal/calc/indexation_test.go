@@ -195,7 +195,7 @@ func TestAprilIndexation_TaxesFollowIndexedSalary(t *testing.T) {
 		SalaryNet: 200_000, MonthlySchedule: schedule360(ScheduleOF, 12),
 	}}
 
-	fot, ndfl, insRF, _ := calcFOTMonthly(emps, nil, nil, nil, start, 12)
+	fot, ndfl, insRF, _ := calcFOTMonthly(emps, nil, nil, nil, nil, start, 12)
 
 	// Месяц 4 (март 2027) — до индексации
 	wantFOT4 := 200_000.0

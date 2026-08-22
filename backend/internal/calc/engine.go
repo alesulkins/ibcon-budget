@@ -24,8 +24,12 @@ func Run(inp *BudgetInputs) *CalcResult {
 		}
 	}
 
+	// Премии и компенсации при увольнении (4.1) — считаются из видов премий
+	// проекта и списка сотрудников, а не приходят готовой суммой.
+	bonusRes := calcBonuses(emps, inp.Bonuses, inp.ProjectStartDate, n)
+
 	fotArr, ndflArr, insRFArr, insKGArr := calcFOTMonthly(
-		emps, inp.Bonuses, inp.OvertimeRF, inp.OvertimeKG,
+		emps, bonusRes.RF, bonusRes.KG, inp.OvertimeRF, inp.OvertimeKG,
 		inp.ProjectStartDate, n,
 	)
 	ticketsArr := calcTickets(emps, ticketPrice, n)
@@ -35,15 +39,8 @@ func Run(inp *BudgetInputs) *CalcResult {
 	// Строка 178 = аренда, строка 179 = риелтор.
 	rentAptsArr, realtorArr := calcRentApartments(inp.RentApts, inp.ExecutorName, n)
 
-	// ── 2. Месячные бонусы (4.1) суммарно ────────────────────────────────────
-	bonusArr := make([]float64, n)
-	if inp.Bonuses != nil {
-		for _, b := range inp.Bonuses.Employees {
-			for m := 0; m < n && m < len(b.MonthlyAmounts); m++ {
-				bonusArr[m] += b.MonthlyAmounts[m]
-			}
-		}
-	}
+	// ── 2. Премии и компенсации (4.1) суммарно → 2.Бюджет строка 169 ────────
+	bonusArr := bonusRes.Total
 
 	// ── 3. Параметры бюджета ──────────────────────────────────────────────────
 	var (

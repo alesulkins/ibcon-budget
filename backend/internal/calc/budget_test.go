@@ -46,13 +46,19 @@ func TestRun_SimpleOneMonth(t *testing.T) {
 		t.Errorf("FOT: want 100000, got %.2f", mr.FOT)
 	}
 
-	// ФОТ вкл. взносы = 100000 + NDFL + insRF
-	// NDFL = 100000/0.85 - 100000 ≈ 17647.06
-	// insRF = 100000/0.85 × 0.302 ≈ 35529.41
-	// TotalFOT ≈ 153176.47
-	wantNDFL := 100_000.0/0.85 - 100_000.0
-	wantInsRF := 100_000.0 / 0.85 * 0.302
-	wantTotalFOT := 100_000 + wantNDFL + wantInsRF
+	// Компенсация при увольнении (4.1!BO11) начисляется в последнем месяце
+	// проекта, а здесь проект длиной 1 месяц — значит месяц 1 и есть
+	// последний. Формула: итогоФОТ×28/264 + 2×ФОТ последнего месяца.
+	wantSeverance := 100_000.0*28/264 + 2*100_000.0 // ≈ 210 606.06
+	if math.Abs(mr.Bonuses-wantSeverance) > 0.01 {
+		t.Errorf("Bonuses (компенсация): want %.2f, got %.2f", wantSeverance, mr.Bonuses)
+	}
+
+	// ФОТ вкл. взносы: база налогов = оклад + компенсация
+	wantTaxBase := 100_000.0 + wantSeverance
+	wantNDFL := wantTaxBase/0.85 - wantTaxBase
+	wantInsRF := wantTaxBase / 0.85 * 0.302
+	wantTotalFOT := 100_000 + wantSeverance + wantNDFL + wantInsRF
 	if math.Abs(mr.TotalFOT-wantTotalFOT) > 0.1 {
 		t.Errorf("TotalFOT: want %.2f, got %.2f", wantTotalFOT, mr.TotalFOT)
 	}
