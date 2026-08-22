@@ -545,3 +545,102 @@ func TestValidateBudgetParams_TargetRent(t *testing.T) {
 		t.Errorf("ValidateInput: 80%% при налоге 0 должно проходить, got %v", err)
 	}
 }
+
+// TestRun_BankGuaranteesNeedContractValue — банковские гарантии считаются
+// строго от ТКП (стоимости договора), а не от расчётной выручки.
+//
+// Источник: 2.Бюджет!G220 = G251*F220, G224 = G251*F224, G228 = F228*G251,
+// и уже от них G222 / G226 / G230. Если ТКП не задан (режим наценки), эти
+// произведения равны нулю — договора ещё нет, гарантию не от чего считать.
+func TestRun_BankGuaranteesNeedContractValue(t *testing.T) {
+	bg := func() *InputBudgetParams {
+		return &InputBudgetParams{
+			BGExecution: BankGuarantee{Pct: 15, RatePct: 4, RateType: BGRateTotal, DurationMos: 6},
+			BGWarranty:  BankGuarantee{Pct: 33, RatePct: 20, RateType: BGRateTotal, DurationMos: 12},
+			BGAdvance:   BankGuarantee{Pct: 7, RatePct: 9, RateType: BGRatePerYear, DurationMos: 12},
+		}
+	}
+
+	// Режим наценки: ТКП не задан → все БГ нулевые
+	pNac := bg()
+	pNac.TargetRentPct = 27
+	res := Run(&BudgetInputs{
+		ProjectStartDate: mustDate(2026, 12, 1),
+		DurationMonths:   3,
+		ExecutorName:     ExecutorAibicon,
+		Internet:         []float64{1_000_000, 1_000_000, 1_000_000},
+		Params:           pNac,
+	})
+	for m, mr := range res.Monthly {
+		if mr.BGExecution != 0 || mr.BGWarranty != 0 || mr.BGAdvance != 0 {
+			t.Errorf("месяц %d: без ТКП все БГ должны быть 0, got %.2f / %.2f / %.2f",
+				m+1, mr.BGExecution, mr.BGWarranty, mr.BGAdvance)
+		}
+	}
+
+	// Режим ручной выручки: ТКП задан → БГ считаются как раньше
+	pTKP := bg()
+	pTKP.ManualRevenue = 200_000_000
+	pTKP.ContractValue = 200_000_000
+	res = Run(&BudgetInputs{
+		ProjectStartDate: mustDate(2026, 12, 1),
+		DurationMonths:   6,
+		ExecutorName:     ExecutorAibicon,
+		Params:           pTKP,
+	})
+	// Эталоны из заполненного файла: G222 = 1 200 000, G226 = 13 200 000,
+	// G230 = 1 260 000 — распределяются равномерно по месяцам.
+	var gotExec, gotWar, gotAdv float64
+	for _, mr := range res.Monthly {
+		gotExec += mr.BGExecution
+		gotWar += mr.BGWarranty
+		gotAdv += mr.BGAdvance
+	}
+	for _, c := range []struct {
+		name      string
+		got, want float64
+	}{
+		{"БГ исполнение (G222)", gotExec, 1_200_000},
+		{"БГ гарантийный (G226)", gotWar, 13_200_000},
+		{"БГ аванс (G230)", gotAdv, 1_260_000},
+	} {
+		if math.Abs(c.got-c.want) > 0.01 {
+			t.Errorf("%s: want %.2f, got %.2f", c.name, c.want, c.got)
+		}
+	}
+}
+
+// TestRun_OtherExpensesPctUsesEstimatedRevenue — «прочие расходы» в режиме
+// процента продолжают считаться от расчётной выручки, даже когда ТКП не
+// задан. Этот механизм отдельный от БГ и правкой БГ не затронут.
+//
+// Источник: 2.Бюджет!H218 = IF(...; $G$251*$F$218/100/$D$8; ...) — в форме
+// база тоже ТКП, но платформа подставляет расчётную выручку, чтобы статья
+// не обнулялась в режиме наценки.
+func TestRun_OtherExpensesPctUsesEstimatedRevenue(t *testing.T) {
+	res := Run(&BudgetInputs{
+		ProjectStartDate: mustDate(2026, 12, 1),
+		DurationMonths:   2,
+		ExecutorName:     ExecutorAibiconProject, // налог 0 → наценка = 0.25 при цели 20%
+		Internet:         []float64{1_000_000, 1_000_000},
+		Params: &InputBudgetParams{
+			TargetRentPct:     20,
+			OtherExpenseMode:  OtherExpModePct,
+			OtherExpenseValue: 10, // 10% от базы
+		},
+	})
+
+	var other float64
+	for _, mr := range res.Monthly {
+		other += mr.OtherExpenses
+	}
+	if other == 0 {
+		t.Fatal("прочие расходы в режиме % не должны обнуляться при пустом ТКП")
+	}
+	// БГ при этом всё равно нулевые — механизмы независимы
+	for m, mr := range res.Monthly {
+		if mr.BGExecution != 0 || mr.BGWarranty != 0 || mr.BGAdvance != 0 {
+			t.Errorf("месяц %d: БГ должны остаться нулевыми", m+1)
+		}
+	}
+}

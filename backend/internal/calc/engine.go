@@ -188,10 +188,21 @@ func Run(inp *BudgetInputs) *CalcResult {
 		}
 	}
 
-	// ── 8. Банковские гарантии ────────────────────────────────────────────────
-	bgExecMonthly := calcBGMonthly(bgExec, contractValue, n)
-	bgWarMonthly := calcBGMonthly(bgWar, contractValue, n)
-	bgAdvMonthly := calcBGAdvMonthly(bgAdv, contractValue, n)
+	// ── 8. Банковские гарантии (строки 222, 226, 230) ────────────────────────
+	// База для БГ — строго ТКП (стоимость договора), а НЕ расчётная выручка.
+	// В форме: G220 = G251*F220, G224 = G251*F224, G228 = F228*G251, и уже
+	// от них считаются G222 / G226 / G230. Если ТКП не задан (режим наценки),
+	// все эти произведения равны нулю — гарантию не от чего считать, договора
+	// ещё нет. Поэтому берём исходный ContractValue, а не подставленное выше
+	// значение: подстановка расчётной выручки нужна только для «прочих
+	// расходов» в режиме «%» и на БГ распространяться не должна.
+	var bgBase float64
+	if inp.Params != nil {
+		bgBase = inp.Params.ContractValue
+	}
+	bgExecMonthly := calcBGMonthly(bgExec, bgBase, n)
+	bgWarMonthly := calcBGMonthly(bgWar, bgBase, n)
+	bgAdvMonthly := calcBGAdvMonthly(bgAdv, bgBase, n)
 
 	// ── 9. Итого расходов без НДС (строка 232) ────────────────────────────────
 	totalCosts := make([]float64, n)
