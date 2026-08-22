@@ -2,16 +2,31 @@ package calc
 
 import "time"
 
+// interShiftPay — фиксированная выплата за межвахтовый отдых («МВ»).
+// В форме зашита числом прямо в формулу 4.6!BU16
+// (=IF(график="МВ"; 30000/$BT16; ...)), то есть НЕ является долей оклада.
+// Поэтому индексация ФОТ на неё не влияет — см. aprilIndexation.
+const interShiftPay = 30_000.0
+
+// indexationRate — коэффициент ежегодной индексации ФОТ.
+// ТЗ п.6 и критерий приёмки 9.1.15. В эталонной форме индексации НЕТ
+// (4.6!$BT16 — константа), это санкционированное отклонение №1.
+const indexationRate = 1.1
+
 // scheduleMultiplier возвращает долю месяца, за которую начисляется ФОТ.
-// МВ = межвахтовый перерыв (фиксированная выплата 30 000 руб);
-// не принят = 0; всё остальное = полный оклад.
+// Формула Excel 4.6!BU16:
+//
+//	=IF(график="МВ"; 30000/$BT16; IF(график="не принят"; 0; 1))
+//
+// МВ = межвахтовый перерыв (фиксированная выплата 30 000);
+// «не принят» = 0; всё остальное = полный оклад.
 func scheduleMultiplier(schedule string, salaryNet float64) float64 {
 	switch schedule {
 	case ScheduleMV:
 		if salaryNet == 0 {
 			return 0
 		}
-		return 30_000.0 / salaryNet
+		return interShiftPay / salaryNet
 	case ScheduleNotHired:
 		return 0
 	default: // ОФ, 4/2, 4/4, К, ОТП
@@ -19,16 +34,81 @@ func scheduleMultiplier(schedule string, salaryNet float64) float64 {
 	}
 }
 
+// monthDate возвращает календарную дату месяца проекта monthIdx (1-based).
+// time.Date сам нормализует переполнение месяцев, а день фиксируем первым —
+// иначе старт вида «31 января» съезжал бы при сложении месяцев.
+func monthDate(startDate time.Time, monthIdx int) time.Time {
+	return time.Date(
+		startDate.Year(), startDate.Month()+time.Month(monthIdx-1), 1,
+		0, 0, 0, 0, startDate.Location(),
+	)
+}
+
+// hireMonth — номер месяца проекта (1-based), в котором сотрудник появляется
+// впервые: первый месяц, где график не «не принят» и не пустой.
+// Возвращает 0, если сотрудник не принят ни в одном месяце.
+//
+// Если сотрудник уволился и вернулся (ОФ → не принят → ОФ), стаж считается
+// от ПЕРВОГО появления и не обнуляется — решение владельца от 2026-08-22.
+func hireMonth(emp *Employee) int {
+	for m := 1; m <= len(emp.MonthlySchedule); m++ {
+		if s := emp.MonthlySchedule[m-1]; s != "" && s != ScheduleNotHired {
+			return m
+		}
+	}
+	return 0
+}
+
+// aprilIndexation возвращает накопительный коэффициент индексации ФОТ
+// сотрудника на месяц monthIdx (1-based).
+//
+// ЗАПРЕТ: функцию нельзя удалять ни при каких результатах сверки с Excel —
+// в эталонной форме индексации нет, расхождение по ФОТ ожидаемо
+// (CLAUDE.md, правило №4 и санкционированное отклонение №1).
+//
+// Механика (спецификация отклонения №1, НЕ формула Excel):
+//   - считаются апрели СТРОГО ПОСЛЕ месяца приёма сотрудника;
+//   - каждый такой апрель добавляет множитель ×1.1 накопительно:
+//     первый → 1.1, второй → 1.21, третий → 1.331;
+//   - у каждого сотрудника свой отсчёт от собственного месяца приёма.
+//
+// Примеры (старт проекта — декабрь):
+//   - принят с 1-го месяца: апрель = 5-й месяц → ×1.1;
+//   - принят в мае (6-й месяц): апрель того же года пропущен,
+//     первая индексация — в апреле следующего года;
+//   - проект стартует в апреле: этот апрель ×1.0, следующий ×1.1.
+func aprilIndexation(emp *Employee, monthIdx int, startDate time.Time) float64 {
+	hire := hireMonth(emp)
+	if hire == 0 || monthIdx <= hire {
+		return 1
+	}
+
+	mult := 1.0
+	for m := hire + 1; m <= monthIdx; m++ {
+		if monthDate(startDate, m).Month() == time.April {
+			mult *= indexationRate
+		}
+	}
+	return mult
+}
+
 // employeeFOT рассчитывает ФОТ одного сотрудника за один месяц (monthIdx 1-based).
-// Формула Excel: BU16*BT16, где BU16=IF(schedule="МВ",30000/salary,IF(schedule="не принят",0,1))
-// Результат: МВ→30000, "не принят"→0, всё остальное→полный оклад.
-func employeeFOT(emp *Employee, monthIdx int, _ time.Time) float64 {
+// Формула Excel 4.6!ED16 = BU16*$BT16, где BU16 — множитель графика.
+//
+// Индексация вклинивается в «План ФОТ на руки» ($BT16) ДО расчёта множителя.
+// Благодаря этому:
+//   - НДФЛ и взносы считаются от проиндексированной суммы автоматически:
+//     они берут уже посчитанный ФОТ (2.Бюджет!H14:H163), а не оклад;
+//   - выплата за «МВ» остаётся фиксированной 30 000, потому что в формуле
+//     множитель = 30000/оклад, и оклад сокращается: (30000/S)*S = 30000
+//     при любом S.
+func employeeFOT(emp *Employee, monthIdx int, startDate time.Time) float64 {
 	if monthIdx < 1 || monthIdx > len(emp.MonthlySchedule) {
 		return 0
 	}
 	sched := emp.MonthlySchedule[monthIdx-1]
-	mult := scheduleMultiplier(sched, emp.SalaryNet)
-	return mult * emp.SalaryNet
+	salary := emp.SalaryNet * aprilIndexation(emp, monthIdx, startDate)
+	return scheduleMultiplier(sched, salary) * salary
 }
 
 // calcFOTMonthly рассчитывает общий ФОТ и налоги по всем сотрудникам за каждый месяц.
