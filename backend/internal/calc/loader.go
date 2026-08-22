@@ -12,8 +12,10 @@ const (
 	TypeBonuses          = "bonuses"
 	TypeOvertimeRF       = "overtime_rf"
 	TypeOvertimeKG       = "overtime_kg"
+	// TypeRentApartments — лист 4.2. Структура НЕ {monthly_amounts},
+	// а количество квартир по типам + цены (см. InputRentApartments).
+	// Строка «Риелтор» (179) считается отсюда же, отдельного типа ввода нет.
 	TypeRentApartments   = "rent_apartments"
-	TypeRealtor          = "realtor"
 	TypeTransportRental  = "transport_rental"
 	TypeSiteSetup        = "site_setup"
 	TypeOfficeRent       = "office_rent"
@@ -51,8 +53,6 @@ const (
 var simpleMonthlyCostTypes = map[string]func(*BudgetInputs) *[]float64{
 	TypeOvertimeRF:       func(b *BudgetInputs) *[]float64 { return &b.OvertimeRF },
 	TypeOvertimeKG:       func(b *BudgetInputs) *[]float64 { return &b.OvertimeKG },
-	TypeRentApartments:   func(b *BudgetInputs) *[]float64 { return &b.RentApartments },
-	TypeRealtor:          func(b *BudgetInputs) *[]float64 { return &b.Realtor },
 	TypeTransportRental:  func(b *BudgetInputs) *[]float64 { return &b.TransportRental },
 	TypeSiteSetup:        func(b *BudgetInputs) *[]float64 { return &b.SiteSetup },
 	TypeOfficeRent:       func(b *BudgetInputs) *[]float64 { return &b.OfficeRent },
@@ -123,6 +123,13 @@ func LoadInputs(
 				return nil, fmt.Errorf("parse %s: %w", typ, err)
 			}
 			inp.Bonuses = &v
+
+		case TypeRentApartments:
+			var v InputRentApartments
+			if err := json.Unmarshal(raw, &v); err != nil {
+				return nil, fmt.Errorf("parse %s: %w", typ, err)
+			}
+			inp.RentApts = &v
 
 		case TypeBudgetParams:
 			var v InputBudgetParams

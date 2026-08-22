@@ -31,6 +31,10 @@ func Run(inp *BudgetInputs) *CalcResult {
 	ticketsArr := calcTickets(emps, ticketPrice, n)
 	perDiemArr := calcPerDiem(emps, perDiemRF, perDiemOther, n)
 
+	// ── 1a. Лист 4.2: аренда квартир (вкл. уборку) и риелтор ─────────────────
+	// Строка 178 = аренда, строка 179 = риелтор.
+	rentAptsArr, realtorArr := calcRentApartments(inp.RentApts, inp.ExecutorName, n)
+
 	// ── 2. Месячные бонусы (4.1) суммарно ────────────────────────────────────
 	bonusArr := make([]float64, n)
 	if inp.Bonuses != nil {
@@ -80,8 +84,8 @@ func Run(inp *BudgetInputs) *CalcResult {
 
 	// ── 5. Базовые суммы накладных за месяц ───────────────────────────────────
 	overheadLines := [34][]float64{
-		inp.RentApartments,   // 0 → 178
-		inp.Realtor,          // 1 → 179
+		rentAptsArr,          // 0 → 178 Аренда квартир, вкл. уборку (4.2, авторасчёт)
+		realtorArr,           // 1 → 179 Риелтор (4.2, авторасчёт)
 		inp.TransportRental,  // 2 → 180
 		inp.SiteSetup,        // 3 → 181
 		inp.OfficeRent,       // 4 → 182

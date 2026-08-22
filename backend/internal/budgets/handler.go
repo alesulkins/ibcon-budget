@@ -283,6 +283,10 @@ func (h *Handler) saveInput(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "тело должно быть валидным JSON"})
 		return
 	}
+	if err = calc.ValidateInput(inputType, body); err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+		return
+	}
 	if err = h.svc.SaveInput(vid, claims.UserID, inputType, body); err != nil {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
