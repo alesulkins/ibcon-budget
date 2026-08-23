@@ -1,20 +1,33 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Card, Table, Button, Modal, Form, Input, InputNumber,
-  Select, message, Space, Typography, Tag,
+  Select, message, Space, Typography, Alert,
 } from 'antd';
 import { PlusOutlined, DeleteOutlined, SaveOutlined } from '@ant-design/icons';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
-import dayjs from 'dayjs';
 import { budgetsApi } from '../../../api';
-import type { BonusType, InputBonuses, InputEmployees } from '../../../types';
+import {
+  BONUS_KIND_BUILDER_DAY, BONUS_KIND_NEW_YEAR, BONUS_KIND_OTHER,
+} from '../../../types';
+import type { BonusType, InputBonuses } from '../../../types';
 import { extractError } from '../../../api/client';
 
 const { Text } = Typography;
 
 const MONTH_NAMES = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
   'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+
+/** Виды премий и их значения по умолчанию (совпадают с бэкендом). */
+const BONUS_KINDS = [
+  { value: BONUS_KIND_BUILDER_DAY, label: 'День строителя', month: 8, pct: 20 },
+  { value: BONUS_KIND_NEW_YEAR, label: 'Новый год', month: 12, pct: 50 },
+  { value: BONUS_KIND_OTHER, label: 'Другое', month: undefined, pct: undefined },
+];
+
+function kindLabel(kind: string): string {
+  return BONUS_KINDS.find(k => k.value === kind)?.label ?? kind;
+}
 
 interface Props {
   versionId: number;
@@ -23,50 +36,22 @@ interface Props {
   readonly?: boolean;
 }
 
-function monthLabel(startDate: string, idx: number): string {
-  return dayjs(startDate).add(idx, 'month').format('MM.YY');
+interface BonusFormValues {
+  kind: string;
+  name: string;
+  month_num: number;
+  pct_of_salary: number;
 }
 
-// Находит индекс месяца проекта (0-based) по номеру месяца в году
-function findProjectMonthIdx(startDate: string, monthNum: number, duration: number): number | null {
-  for (let i = 0; i < duration; i++) {
-    const m = dayjs(startDate).add(i, 'month').month() + 1; // 1-12
-    if (m === monthNum) return i;
-  }
-  return null;
-}
-
-// Вычисляет суммы премий по сотруднику на основе типов премий
-function computeBonusAmounts(
-  salary: number,
-  bonusTypes: BonusType[],
-  startDate: string,
-  duration: number,
-): number[] {
-  const amounts = Array(duration).fill(0);
-  for (const bt of bonusTypes) {
-    const idx = findProjectMonthIdx(startDate, bt.month_num, duration);
-    if (idx !== null) {
-      amounts[idx] += salary * bt.pct_of_salary;
-    }
-  }
-  return amounts;
-}
-
-export default function BonusesInput({ versionId, duration, startDate, readonly }: Props) {
+export default function BonusesInput({ versionId, readonly }: Props) {
   const [bonusTypes, setBonusTypes] = useState<BonusType[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
-  const [form] = Form.useForm();
+  const [form] = Form.useForm<BonusFormValues>();
 
   const { data: savedBonuses } = useQuery({
     queryKey: ['budget-input', versionId, 'bonuses'],
     queryFn: () => budgetsApi.getInput<InputBonuses>(versionId, 'bonuses'),
-  });
-
-  const { data: savedEmployees } = useQuery({
-    queryKey: ['budget-input', versionId, 'employees'],
-    queryFn: () => budgetsApi.getInput<InputEmployees>(versionId, 'employees'),
   });
 
   useEffect(() => {
@@ -75,31 +60,23 @@ export default function BonusesInput({ versionId, duration, startDate, readonly 
     }
   }, [savedBonuses]);
 
-  const employees = savedEmployees?.employees ?? [];
-
   const saveMutation = useMutation({
     mutationFn: () => {
-      // Вычисляем суммы по каждому сотруднику и сохраняем
-      const computedEmployees = employees.map(emp => ({
-        full_name: emp.full_name || emp.position,
-        country: emp.country,
-        monthly_amounts: computeBonusAmounts(emp.salary_net, bonusTypes, startDate, duration),
-      }));
-      const payload: InputBonuses = {
-        bonus_types: bonusTypes,
-        employees: computedEmployees,
-      };
+      // Передаём только виды премий. Суммы по сотрудникам считает бэкенд
+      // (calcBonuses): процент от проиндексированного оклада в нужный месяц.
+      const payload: InputBonuses = { bonus_types: bonusTypes };
       return budgetsApi.saveInput(versionId, 'bonuses', payload);
     },
     onSuccess: () => message.success('Данные по премиям сохранены'),
     onError: (e) => message.error(extractError(e)),
   });
 
-  function addOrEditBonus(vals: { name: string; month_num: number; pct_of_salary: number }) {
+  function addOrEditBonus(vals: BonusFormValues) {
     const bt: BonusType = {
+      kind: vals.kind,
       name: vals.name,
       month_num: vals.month_num,
-      pct_of_salary: vals.pct_of_salary / 100, // пользователь вводит %, храним долю
+      pct_of_salary: vals.pct_of_salary,
     };
     if (editingIdx !== null) {
       const next = [...bonusTypes];
@@ -113,25 +90,37 @@ export default function BonusesInput({ versionId, duration, startDate, readonly 
     setEditingIdx(null);
   }
 
+  /** Подставляет значения по умолчанию при выборе стандартного вида премии. */
+  function onKindChange(kind: string) {
+    const preset = BONUS_KINDS.find(k => k.value === kind);
+    if (!preset) return;
+    form.setFieldsValue({
+      name: preset.value === BONUS_KIND_OTHER ? '' : preset.label,
+      month_num: preset.month,
+      pct_of_salary: preset.pct,
+    });
+  }
+
   function removeBonus(idx: number) {
     setBonusTypes(bonusTypes.filter((_, i) => i !== idx));
   }
 
-  const bonusTypeColumns: ColumnsType<BonusType> = [
+  const columns: ColumnsType<BonusType> = [
     { title: '№', render: (_, __, i) => i + 1, width: 40 },
-    { title: 'Наименование премии', dataIndex: 'name' },
+    { title: 'Вид', dataIndex: 'kind', width: 150, render: (v: string) => kindLabel(v) },
+    { title: 'Наименование', dataIndex: 'name' },
     {
-      title: 'Мес. (№ в году)',
+      title: 'Месяц начисления',
       dataIndex: 'month_num',
-      width: 130,
+      width: 160,
       render: (v: number) => `${v} — ${MONTH_NAMES[v - 1] ?? ''}`,
     },
     {
-      title: '% от ЗП',
+      title: '% от оклада',
       dataIndex: 'pct_of_salary',
-      width: 100,
+      width: 110,
       align: 'right',
-      render: (v: number) => `${(v * 100).toFixed(0)} %`,
+      render: (v: number) => `${v} %`,
     },
     {
       title: '',
@@ -142,7 +131,7 @@ export default function BonusesInput({ versionId, duration, startDate, readonly 
           <Button
             size="small"
             onClick={() => {
-              form.setFieldsValue({ ...bt, pct_of_salary: bt.pct_of_salary * 100 });
+              form.setFieldsValue(bt as BonusFormValues);
               setEditingIdx(idx);
               setShowAdd(true);
             }}
@@ -155,12 +144,8 @@ export default function BonusesInput({ versionId, duration, startDate, readonly 
     },
   ];
 
-  // Месяцы проекта для заголовков
-  const projectMonths = Array.from({ length: duration }, (_, i) => monthLabel(startDate, i));
-
   return (
     <div>
-      {/* Таблица типов премий — верхняя часть листа 4.1 */}
       <Card
         title="Виды премий — лист 4.1"
         size="small"
@@ -173,7 +158,6 @@ export default function BonusesInput({ versionId, duration, startDate, readonly 
                 type="primary"
                 icon={<PlusOutlined />}
                 onClick={() => { form.resetFields(); setEditingIdx(null); setShowAdd(true); }}
-                style={{ background: '#1a3a6b' }}
               >
                 Добавить вид премии
               </Button>
@@ -189,85 +173,33 @@ export default function BonusesInput({ versionId, duration, startDate, readonly 
           )
         }
       >
-        <Text type="secondary" style={{ display: 'block', marginBottom: 12, fontSize: 12 }}>
-          Укажите все месяцы, в которые предполагается премирование, и % от ЗП сотрудника (лист 4.1 Excel).
-          Суммы по сотрудникам рассчитываются автоматически.
-        </Text>
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="Суммы премий рассчитываются автоматически"
+          description={
+            'Премия начисляется каждому сотруднику, который в этот месяц не имеет ' +
+            'статуса «не принят»: процент от планового ФОТ на руки с учётом ' +
+            'индексации. В проекте длиннее года премия начисляется каждый год. ' +
+            'В последний месяц проекта дополнительно начисляется компенсация ' +
+            'при увольнении.'
+          }
+        />
         <Table
           rowKey={(_, i) => i!}
-          columns={bonusTypeColumns}
+          columns={columns}
           dataSource={bonusTypes}
           size="small"
           pagination={false}
           locale={{ emptyText: 'Нет видов премий. Нажмите «Добавить вид премии».' }}
         />
+        <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
+          Если две премии выпадают одному сотруднику на один месяц, они суммируются —
+          система запросит подтверждение.
+        </Text>
       </Card>
 
-      {/* Расчётная таблица по сотрудникам */}
-      {employees.length > 0 && bonusTypes.length > 0 && (
-        <Card title="Расчётные суммы премий по сотрудникам" size="small">
-          <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
-            Суммы рассчитаны автоматически: Оклад × % от ЗП в указанный месяц.
-          </Text>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%' }}>
-              <thead>
-                <tr>
-                  <th style={{ padding: '4px 8px', textAlign: 'left', minWidth: 160, borderBottom: '1px solid #f0f0f0' }}>
-                    Сотрудник
-                  </th>
-                  <th style={{ padding: '4px 8px', textAlign: 'left', width: 80, borderBottom: '1px solid #f0f0f0' }}>
-                    Страна НО
-                  </th>
-                  {projectMonths.map((m, i) => (
-                    <th key={i} style={{ padding: '4px 6px', textAlign: 'right', minWidth: 80, color: '#888', fontWeight: 400, borderBottom: '1px solid #f0f0f0' }}>
-                      {m}
-                    </th>
-                  ))}
-                  <th style={{ padding: '4px 8px', textAlign: 'right', minWidth: 100, borderBottom: '1px solid #f0f0f0' }}>
-                    Итого
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {employees.map((emp, i) => {
-                  const amounts = computeBonusAmounts(emp.salary_net, bonusTypes, startDate, duration);
-                  const total = amounts.reduce((s, v) => s + v, 0);
-                  return (
-                    <tr key={i} style={{ borderTop: '1px solid #f9f9f9' }}>
-                      <td style={{ padding: '3px 8px' }}>
-                        <div style={{ fontWeight: 500 }}>{emp.position}</div>
-                        {emp.full_name && <div style={{ color: '#888', fontSize: 11 }}>{emp.full_name}</div>}
-                      </td>
-                      <td style={{ padding: '3px 8px' }}>
-                        <Tag color={emp.country === 'россия' ? 'blue' : 'green'} style={{ fontSize: 11 }}>
-                          {emp.country}
-                        </Tag>
-                      </td>
-                      {amounts.map((v, mi) => (
-                        <td key={mi} style={{ padding: '3px 6px', textAlign: 'right', color: v > 0 ? '#1a3a6b' : '#ccc' }}>
-                          {v > 0 ? v.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) : '—'}
-                        </td>
-                      ))}
-                      <td style={{ padding: '3px 8px', textAlign: 'right', fontWeight: 600 }}>
-                        {total > 0 ? total.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) : '—'}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
-
-      {employees.length === 0 && (
-        <Card size="small">
-          <Text type="secondary">Сначала добавьте сотрудников на шаге «Сотрудники». Суммы премий рассчитываются автоматически.</Text>
-        </Card>
-      )}
-
-      {/* Модал добавления/редактирования вида премии */}
       <Modal
         title={editingIdx !== null ? 'Редактировать вид премии' : 'Добавить вид премии'}
         open={showAdd}
@@ -278,10 +210,29 @@ export default function BonusesInput({ versionId, duration, startDate, readonly 
         width={420}
       >
         <Form form={form} layout="vertical" onFinish={addOrEditBonus}>
-          <Form.Item name="name" label="Наименование премии" rules={[{ required: true, message: 'Укажите название' }]}>
-            <Input placeholder="День строителя (авг), НГ (дек)…" />
+          <Form.Item
+            name="kind"
+            label="Вид премии"
+            rules={[{ required: true, message: 'Выберите вид премии' }]}
+          >
+            <Select
+              options={BONUS_KINDS.map(k => ({ value: k.value, label: k.label }))}
+              onChange={onKindChange}
+              placeholder="Выберите вид"
+            />
           </Form.Item>
-          <Form.Item name="month_num" label="Месяц (№ в году)" rules={[{ required: true, message: 'Укажите месяц' }]}>
+          <Form.Item
+            name="name"
+            label="Наименование"
+            rules={[{ required: true, message: 'Укажите название' }]}
+          >
+            <Input placeholder="День строителя" />
+          </Form.Item>
+          <Form.Item
+            name="month_num"
+            label="Месяц начисления"
+            rules={[{ required: true, message: 'Укажите месяц' }]}
+          >
             <Select
               options={MONTH_NAMES.map((name, i) => ({ value: i + 1, label: `${i + 1} — ${name}` }))}
               placeholder="Выберите месяц"
@@ -289,17 +240,11 @@ export default function BonusesInput({ versionId, duration, startDate, readonly 
           </Form.Item>
           <Form.Item
             name="pct_of_salary"
-            label="% от ЗП сотрудника"
+            label="% от оклада"
             rules={[{ required: true, message: 'Укажите %' }]}
-            help="Например: 50 = половина оклада, 100 = полный оклад"
+            help="По умолчанию: День строителя — 20 %, Новый год — 50 %"
           >
-            <InputNumber
-              style={{ width: '100%' }}
-              min={0}
-              max={500}
-              addonAfter="%"
-              placeholder="50"
-            />
+            <InputNumber style={{ width: '100%' }} min={0} max={500} addonAfter="%" placeholder="20" />
           </Form.Item>
         </Form>
       </Modal>

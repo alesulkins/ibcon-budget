@@ -15,6 +15,7 @@ import { fmtMoney, fmtPct, fmtDate } from '../../utils/fmt';
 import { extractError } from '../../api/client';
 import EmployeesInput from './inputs/EmployeesInput';
 import BonusesInput from './inputs/BonusesInput';
+import RentApartmentsInput from './inputs/RentApartmentsInput';
 import SimpleCostInput from './inputs/SimpleCostInput';
 import OverheadInput from './inputs/OverheadInput';
 import BudgetParamsInput from './inputs/BudgetParamsInput';
@@ -114,27 +115,14 @@ export default function BudgetVersionPage() {
           />
         );
       case 'rent_apartments_realtor':
+        // Количество квартир и цены; аренду и риелтора считает бэкенд (4.2).
         return (
-          <div>
-            <SimpleCostInput
-              versionId={versionId}
-              type="rent_apartments"
-              title="Аренда квартир — лист 4.2"
-              duration={duration}
-              startDate={project!.start_date}
-              readonly={isReadonly}
-            />
-            <div style={{ marginTop: 16 }}>
-              <SimpleCostInput
-                versionId={versionId}
-                type="realtor"
-                title="Риелтор — лист 4.2"
-                duration={duration}
-                startDate={project!.start_date}
-                readonly={isReadonly}
-              />
-            </div>
-          </div>
+          <RentApartmentsInput
+            versionId={versionId}
+            duration={duration}
+            startDate={project!.start_date}
+            readonly={isReadonly}
+          />
         );
       case 'transport_garage':
         return (

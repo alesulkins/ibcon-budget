@@ -187,21 +187,45 @@ export interface Employee {
   trip_days_other: number[];
 }
 
+/** Виды премий (лист 4.1). Значения совпадают с константами бэкенда. */
+export const BONUS_KIND_BUILDER_DAY = 'день_строителя';
+export const BONUS_KIND_NEW_YEAR = 'новый_год';
+export const BONUS_KIND_OTHER = 'другое';
+
 export interface BonusType {
+  /** день_строителя / новый_год / другое */
+  kind: string;
   name: string;
+  /** Календарный месяц начисления, 1-12. 0 → дефолт по kind. */
   month_num: number;
+  /** Процент от оклада числом: 20 означает 20%. 0 → дефолт по kind. */
   pct_of_salary: number;
 }
 
-export interface BonusEmployee {
-  full_name: string;
-  country: string;
-  monthly_amounts: number[];
-}
-
+/**
+ * Премии (лист 4.1). Суммы НЕ передаются: их считает бэкенд
+ * (calcBonuses) из видов премий и списка сотрудников.
+ */
 export interface InputBonuses {
   bonus_types: BonusType[];
-  employees: BonusEmployee[];
+}
+
+/**
+ * Аренда квартир (лист 4.2). Передаём количество квартир по типам и
+ * цены, а НЕ готовую сумму: аренду, уборку и риелтора считает
+ * calcRentApartments на бэкенде.
+ */
+export interface InputRentApartments {
+  price_1room: number;
+  price_2room: number;
+  price_3room: number;
+  count_1room: number[];
+  count_2room: number[];
+  count_3room: number[];
+  /** Базовая стоимость уборки одной квартиры за месяц (4.2!B9) */
+  cleaning_base: number;
+  /** Базовая стоимость услуг риелтора за одну квартиру (4.2!B13) */
+  realtor_base: number;
 }
 
 export interface InputEmployees {
@@ -226,7 +250,11 @@ export interface InputBudgetParams {
   bg_execution: BankGuarantee;
   bg_warranty: BankGuarantee;
   bg_advance: BankGuarantee;
-  op_margin_pct: number;
+  /**
+   * Целевая рентабельность без налога на прибыль, % (2.Бюджет!E234).
+   * Коэффициент наценки бэкенд считает сам: E234/(1-F240-E234).
+   */
+  target_rent_pct: number;
   manual_revenue: number;
   contract_value: number;
 }

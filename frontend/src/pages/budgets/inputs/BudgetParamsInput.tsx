@@ -21,7 +21,7 @@ const DEFAULTS: InputBudgetParams = {
   bg_execution: { pct: 0, rate_pct: 0, rate_type: '%/год', duration_mos: 0 },
   bg_warranty: { pct: 0, rate_pct: 0, rate_type: '%/год', duration_mos: 0 },
   bg_advance: { pct: 0, rate_pct: 0, rate_type: '%/год', duration_mos: 0 },
-  op_margin_pct: 0,
+  target_rent_pct: 0,
   manual_revenue: 0,
   contract_value: 0,
 };
@@ -126,23 +126,38 @@ export default function BudgetParamsInput({ versionId, readonly }: Props) {
         ))}
       </Card>
 
-      <Card title="Выручка и маржинальность" size="small" style={{ marginBottom: 16 }}>
+      <Card title="Выручка и рентабельность" size="small" style={{ marginBottom: 16 }}>
         <Row gutter={24}>
           <Col span={8}>
-            <Form.Item name="op_margin_pct" label="Операционная маржинальность, %">
+            <Form.Item
+              name="target_rent_pct"
+              label="Целевая рентабельность без НП, %"
+              tooltip={
+                'Коэффициент наценки на расходы система считает сама из целевой ' +
+                'рентабельности и ставки налога исполнителя. Работает, только ' +
+                'когда стоимость договора (ТКП) не задана.'
+              }
+            >
               <InputNumber min={0} max={100} style={{ width: '100%' }} addonAfter="%" />
             </Form.Item>
           </Col>
           <Col span={8}>
             <Form.Item
               name="manual_revenue"
-              label="Ручная стоимость работ, ₽ (если задана, перекрывает маржу)"
+              label="Ручная стоимость работ, ₽ (если задана, наценка не применяется)"
             >
               <InputNumber min={0} style={{ width: '100%' }} formatter={numFmt} />
             </Form.Item>
           </Col>
           <Col span={8}>
-            <Form.Item name="contract_value" label="Стоимость договора, ₽ (для БГ и налогов)">
+            <Form.Item
+              name="contract_value"
+              label="Стоимость договора (ТКП), ₽"
+              tooltip={
+                'От ТКП считаются банковские гарантии и налог киргизского ' +
+                'спецрежима. Если ТКП не задан — БГ нулевые.'
+              }
+            >
               <InputNumber min={0} style={{ width: '100%' }} formatter={numFmt} />
             </Form.Item>
           </Col>
