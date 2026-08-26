@@ -32,6 +32,19 @@ const NAME_COL = 200;
 const TOTAL_COL = 110;
 const DEL_COL = 40;
 
+/**
+ * Ячейка месяца в таблицах аренды. Левая колонка выше остальных — в ней
+ * название и цена в две строки, — поэтому содержимое прижимаем к верху,
+ * чтобы количества стояли вровень с названием, а не по центру строки.
+ * Паддинг тот же, что у левой ячейки, иначе поля разъезжаются на пару
+ * пикселей.
+ */
+const monthCountCell: React.CSSProperties = {
+  ...monthGridCell,
+  verticalAlign: 'top',
+  padding: '4px',
+};
+
 function emptyPurchase(): CarPurchase {
   return { name: '', month: 0, count: 1, price: 0 };
 }
@@ -209,7 +222,7 @@ export default function TransportInput({ versionId, duration, startDate, readonl
             const isUniform = !!flags[idx];
             return (
               <tr key={idx} style={{ borderTop: '1px solid #f0f0f0' }}>
-                <td style={{ ...monthGridCell, textAlign: 'left', padding: '4px' }}>
+                <td style={{ ...monthCountCell, textAlign: 'left' }}>
                   {readonly ? (
                     <div style={{ fontSize: 12 }}>
                       <div>{r.name || '—'}</div>
@@ -246,7 +259,9 @@ export default function TransportInput({ versionId, duration, startDate, readonl
                   )}
                 </td>
                 {counts.map((v, i) => (
-                  <td key={i} style={monthGridCell}>
+                  // Прижимаем к верху: левая ячейка выше (название + цена),
+                  // и без этого количества съезжали к её середине.
+                  <td key={i} style={monthCountCell}>
                     {readonly ? (
                       <Text style={{ fontSize: 12 }}>{v || '—'}</Text>
                     ) : (
@@ -265,7 +280,7 @@ export default function TransportInput({ versionId, duration, startDate, readonl
                     )}
                   </td>
                 ))}
-                <td style={{ ...monthGridCell, textAlign: 'right', fontWeight: 500, fontSize: 12 }}>
+                <td style={{ ...monthCountCell, textAlign: 'right', fontWeight: 500, fontSize: 12 }}>
                   <div>{rentalTotal(r, duration).toLocaleString('ru-RU')}</div>
                   {!readonly && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
