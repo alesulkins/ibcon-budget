@@ -22,6 +22,7 @@ import RentApartmentsInput from './inputs/RentApartmentsInput';
 import TransportInput from './inputs/TransportInput';
 import WagonciksInput from './inputs/WagonciksInput';
 import OfficeInput from './inputs/OfficeInput';
+import CostLinesInput from './inputs/CostLinesInput';
 import SimpleCostInput from './inputs/SimpleCostInput';
 import OverheadInput from './inputs/OverheadInput';
 import BudgetParamsInput from './inputs/BudgetParamsInput';
@@ -199,13 +200,21 @@ export default function BudgetVersionPage() {
         );
       case 'software':
         return (
-          <SimpleCostInput
+          <CostLinesInput
             versionId={versionId}
-            type="software"
-            title="ПО, лицензии — лист 4.8"
+            type="software_items"
+            title="ПО и лицензии"
             duration={duration}
             startDate={project!.start_date}
             readonly={isReadonly}
+            nameLabel="Наименование ПО"
+            namePlaceholder="например, AutoCAD, годовая лицензия"
+            addLabel="Добавить ПО"
+            emptyLabel="Позиций нет"
+            hint={'Одна строка — одна позиция ПО или лицензия. Стоимость '
+              + 'указывается отдельно по каждому месяцу: пусто или 0 — в этом '
+              + 'месяце позиция не оплачивается. Сумма всех позиций уходит '
+              + 'одной строкой бюджета «Приобретение ПО».'}
           />
         );
       case 'subcontract_ext':

@@ -312,6 +312,25 @@ export function purchaseAllowedMonths(duration: number): number {
   return duration - 2;
 }
 
+/**
+ * Одна позиция листа-списка: наименование и стоимость по месяцам.
+ * Общая структура для 4.8 (ПО), 4.9 (ГПХ внешний) и 4.11 (субподряд) —
+ * листы устроены одинаково, поэтому и форма у них одна.
+ */
+export interface CostLine {
+  name: string;
+  /**
+   * Стоимость по месяцам проекта, индекс 0 = первый месяц. Длина равна
+   * длительности проекта; пусто или 0 — в этом месяце позиции нет.
+   */
+  monthly_amounts: number[];
+}
+
+/** Ввод листа-списка (4.8, 4.9, 4.11). Итог месяца = сумма всех позиций. */
+export interface InputCostLines {
+  lines: CostLine[];
+}
+
 export interface InputEmployees {
   ticket_price: number;
   per_diem_rf: number;

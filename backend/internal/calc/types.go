@@ -229,17 +229,6 @@ type InputTransport struct {
 	GarageRentals []RentedItem  `json:"garage_rentals"`
 }
 
-// InputMonthlyCosts — простые ежемесячные затраты (используется для большинства статей 4.2-4.12)
-// Ключ = название строки, значение = массив сумм по месяцам
-type InputMonthlyCosts struct {
-	Lines []CostLine `json:"lines"`
-}
-
-type CostLine struct {
-	Name           string    `json:"name"`
-	MonthlyAmounts []float64 `json:"monthly_amounts"`
-}
-
 // BankGuarantee — параметры одной банковской гарантии
 type BankGuarantee struct {
 	Pct          float64 `json:"pct"`           // % от стоимости договора (F220/F224/F228)
@@ -319,6 +308,10 @@ type BudgetInputs struct {
 	// 183 (уборка офиса).
 	Office *InputOffice
 
+	// Лист 4.8 — список позиций ПО со стоимостью по месяцам.
+	// Даёт строку 193 (приобретение ПО).
+	SoftwareLines *InputCostLines
+
 	// Накладные расходы (строки 178-211) — двумерный массив по статьям
 	//
 	// TransportRental и GarageRent — СТАРЫЙ формат листа 4.3 (готовые суммы
@@ -339,7 +332,7 @@ type BudgetInputs struct {
 	Training          []float64 // 190
 	Medical           []float64 // 191
 	Uniform           []float64 // 192
-	Software          []float64 // 193 (4.8)
+	Software          []float64 // 193 (4.8), устаревший ввод — см. выше
 	Computers         []float64 // 194 Приобретение ПК + оргтехника
 	Furniture         []float64 // 195
 	OfficeSupplies    []float64 // 196

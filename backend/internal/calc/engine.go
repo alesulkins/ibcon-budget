@@ -68,6 +68,15 @@ func Run(inp *BudgetInputs) *CalcResult {
 		officeRentArr, officeCleaningArr = inp.OfficeRent, inp.OfficeCleaning
 	}
 
+	// ── 1д. Лист 4.8: ПО и лицензии ──────────────────────────────────────────
+	// Строка 193 = сумма стоимостей всех позиций ПО в месяце.
+	softwareArr := calcCostLines(inp.SoftwareLines, n)
+	if inp.SoftwareLines == nil {
+		// Версия сохранена до перехода 4.8 на список позиций.
+		// Удалить вместе с TypeSoftware.
+		softwareArr = inp.Software
+	}
+
 	// ── 2. Премии и компенсации (4.1) суммарно → 2.Бюджет строка 169 ────────
 	bonusArr := bonusRes.Total
 
@@ -135,7 +144,7 @@ func Run(inp *BudgetInputs) *CalcResult {
 		inp.Training,          // 12 → 190
 		inp.Medical,           // 13 → 191
 		inp.Uniform,           // 14 → 192
-		inp.Software,          // 15 → 193
+		softwareArr,           // 15 → 193 Приобретение ПО (4.8, список позиций)
 		inp.Computers,         // 16 → 194
 		inp.Furniture,         // 17 → 195
 		inp.OfficeSupplies,    // 18 → 196

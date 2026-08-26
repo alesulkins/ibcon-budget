@@ -39,8 +39,13 @@ const (
 	// TypeOfficeRent / TypeOfficeCleaning — СТАРЫЙ ввод листа 4.5 готовыми
 	// суммами по месяцам; читаются только ради версий, сохранённых до
 	// перехода на расчёт по формуле.
-	TypeOfficeRent       = "office_rent"
-	TypeOfficeCleaning   = "office_cleaning"
+	TypeOfficeRent     = "office_rent"
+	TypeOfficeCleaning = "office_cleaning"
+	// TypeSoftwareItems — лист 4.8. Список позиций ПО, у каждой наименование
+	// и стоимость по месяцам (см. InputCostLines). Даёт строку 193.
+	// TypeSoftware — тот же лист СТАРЫМ вводом, готовыми суммами по месяцам;
+	// читается только ради версий, сохранённых до перехода на список позиций.
+	TypeSoftwareItems    = "software_items"
 	TypeInternet         = "internet"
 	TypeMobile           = "mobile"
 	TypeLabResearch      = "lab_research"
@@ -172,6 +177,13 @@ func LoadInputs(
 				return nil, fmt.Errorf("parse %s: %w", typ, err)
 			}
 			inp.Office = &v
+
+		case TypeSoftwareItems:
+			var v InputCostLines
+			if err := json.Unmarshal(raw, &v); err != nil {
+				return nil, fmt.Errorf("parse %s: %w", typ, err)
+			}
+			inp.SoftwareLines = &v
 
 		case TypeBudgetParams:
 			var v InputBudgetParams
