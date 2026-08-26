@@ -52,33 +52,28 @@ func calcTransport(in *InputTransport, duration int) (transport, garage []float6
 		transport[p.Month-1] += p.Price * float64(p.Count)
 	}
 
-	// Аренда: цена × количество в каждом выбранном месяце.
-	// В форме это 4.3!C5*$B$6 (авто) и 4.3!C10*$B$11 (гараж), где количество
-	// задаётся отдельно в каждом месяце. Здесь количество принадлежит строке,
-	// а помесячные изменения выражаются несколькими строками.
+	// Аренда: цена × количество в этом месяце, просуммированное по строкам.
+	// Ровно как 4.3!C5*$B$6 (авто) и 4.3!C10*$B$11 (гараж), только строк
+	// может быть несколько и у каждой своя цена.
 	addRentalMonths(transport, in.CarRentals, duration)
 	addRentalMonths(garage, in.GarageRentals, duration)
 
 	return transport, garage
 }
 
-// addRentalMonths начисляет `цена × количество` в каждый выбранный месяц.
-// Повторы месяцев внутри одной строки игнорируются: чекбокс нельзя поставить
-// дважды, а вот в сохранённом JSON дубль теоретически возможен.
+// addRentalMonths начисляет `цена × количество в месяце` по каждой строке.
+// Количества короче duration дополняются нулями, длиннее — обрезаются:
+// месяцев за пределами проекта в платформе не существует.
 func addRentalMonths(dst []float64, items []RentedItem, duration int) {
 	for i := range items {
 		it := &items[i]
-		amount := it.Price * float64(it.Count)
-		if amount == 0 {
+		if it.Price == 0 {
 			continue
 		}
-		seen := make(map[int]bool, len(it.Months))
-		for _, m := range it.Months {
-			if m < 1 || m > duration || seen[m] {
-				continue
+		for m := 0; m < duration; m++ {
+			if c := intVal(it.Counts, m); c != 0 {
+				dst[m] += it.Price * float64(c)
 			}
-			seen[m] = true
-			dst[m-1] += amount
 		}
 	}
 }
@@ -117,29 +112,28 @@ func ValidateTransport(in *InputTransport, duration int) error {
 		}
 	}
 
-	if err := validateRentals("аренда авто", in.CarRentals, duration); err != nil {
+	if err := validateRentals("аренда авто", in.CarRentals); err != nil {
 		return err
 	}
-	return validateRentals("аренда гаража", in.GarageRentals, duration)
+	return validateRentals("аренда гаража", in.GarageRentals)
 }
 
-func validateRentals(what string, items []RentedItem, duration int) error {
+// validateRentals — длину массива количеств не проверяем: лишние месяцы
+// расчёт обрезает, недостающие считает нулями. Границы проекта здесь ни при
+// чём, потому что месяц задан позицией в массиве, а не числом.
+func validateRentals(what string, items []RentedItem) error {
 	for i := range items {
 		it := &items[i]
 		if it.Price < 0 {
 			return fmt.Errorf("%s, строка %d (%s): цена не может быть отрицательной (%.2f)",
 				what, i+1, itemTitle(it.Name), it.Price)
 		}
-		// Ноль допустим: строка есть, но в этот раз ничего не арендуется.
-		if it.Count < 0 {
-			return fmt.Errorf("%s, строка %d (%s): количество не может быть отрицательным (%d)",
-				what, i+1, itemTitle(it.Name), it.Count)
-		}
-		for _, m := range it.Months {
-			if m < 1 || m > duration {
+		for m, c := range it.Counts {
+			// Ноль допустим: в этом месяце просто не арендуем.
+			if c < 0 {
 				return fmt.Errorf(
-					"%s, строка %d (%s): месяц %d вне проекта, допустимо от 1 до %d",
-					what, i+1, itemTitle(it.Name), m, duration)
+					"%s, строка %d (%s): количество в месяце %d не может быть отрицательным (%d)",
+					what, i+1, itemTitle(it.Name), m+1, c)
 			}
 		}
 	}

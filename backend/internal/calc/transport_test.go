@@ -17,39 +17,22 @@ import (
 //	                            мес.5 × 2 шт × 1 950 000
 //	аренда гаража 4.3!B11 = 50 000, кол-во 4.3!C10:BJ10 = 1, 1, 1, 2, 3, 3
 //
-// Таблица покупок ложится на форму строка в строку. Аренда — нет: в форме
-// количество задаётся отдельно в каждом месяце, а здесь принадлежит строке,
-// поэтому меняющееся по месяцам количество набирается несколькими строками
-// (их количества складываются). Итоговые суммы совпадают.
+// Ввод платформы ложится на форму один в один: таблица покупок — строка в
+// строку, аренда — цена за единицу плюс количество в каждом месяце.
 func referenceTransportInput() *InputTransport {
-	const carPrice = 70_000.0    // 4.3!B6
-	const garagePrice = 50_000.0 // 4.3!B11
-
-	car := func(name string, count int, months ...int) RentedItem {
-		return RentedItem{Name: name, Price: carPrice, Count: count, Months: months}
-	}
-	garage := func(name string, count int, months ...int) RentedItem {
-		return RentedItem{Name: name, Price: garagePrice, Count: count, Months: months}
-	}
-
 	return &InputTransport{
-		// 4.3!A17:C18 — один в один со строками таблицы формы
+		// 4.3!A17:C18
 		CarPurchases: []CarPurchase{
 			{Name: "Авто 1", Month: 2, Count: 1, Price: 2_500_000},
 			{Name: "Авто 2", Month: 5, Count: 2, Price: 1_950_000},
 		},
-		// в сумме даёт кол-во по месяцам 1, 2, 3, 3, 3, 6 (4.3!C5:BJ5)
+		// 4.3!B6 и 4.3!C5:BJ5
 		CarRentals: []RentedItem{
-			car("Аренда на весь срок", 1, 1, 2, 3, 4, 5, 6),
-			car("Аренда со 2-го месяца", 1, 2, 3, 4, 5, 6),
-			car("Аренда с 3-го месяца", 1, 3, 4, 5, 6),
-			car("Аренда только в 6-м месяце", 3, 6),
+			{Name: "Аренда авто", Price: 70_000, Counts: []int{1, 2, 3, 3, 3, 6}},
 		},
-		// в сумме даёт кол-во по месяцам 1, 1, 1, 2, 3, 3 (4.3!C10:BJ10)
+		// 4.3!B11 и 4.3!C10:BJ10
 		GarageRentals: []RentedItem{
-			garage("Гараж на весь срок", 1, 1, 2, 3, 4, 5, 6),
-			garage("Гараж с 4-го месяца", 1, 4, 5, 6),
-			garage("Гараж с 5-го месяца", 1, 5, 6),
+			{Name: "Гараж", Price: 50_000, Counts: []int{1, 1, 1, 2, 3, 3}},
 		},
 	}
 }
@@ -178,28 +161,35 @@ func TestCalcTransport_SplitFormulaFixed(t *testing.T) {
 	}
 }
 
-// TestCalcTransport_DuplicateMonths — дубль месяца внутри одной строки
-// аренды не должен удваивать начисление: чекбокс нельзя поставить дважды,
-// но в сохранённом JSON дубль теоретически возможен.
-func TestCalcTransport_DuplicateMonths(t *testing.T) {
+// TestCalcTransport_RentalCountsLength — массив количеств может не совпасть
+// по длине с проектом: короткий добивается нулями, длинный обрезается.
+// Так бывает после смены длительности проекта у уже сохранённой версии.
+func TestCalcTransport_RentalCountsLength(t *testing.T) {
 	transport, _ := calcTransport(&InputTransport{
-		CarRentals: []RentedItem{{Price: 1000, Count: 1, Months: []int{2, 2, 2}}},
+		CarRentals: []RentedItem{
+			{Price: 1000, Counts: []int{1}},             // короче проекта
+			{Price: 1000, Counts: []int{0, 1, 0, 5, 9}}, // длиннее проекта
+		},
 	}, 3)
-	if transport[1] != 1000 {
-		t.Errorf("месяц 2: want 1000, got %.2f", transport[1])
+
+	want := []float64{1000, 1000, 0}
+	for i, w := range want {
+		if transport[i] != w {
+			t.Errorf("месяц %d: want %.0f, got %.0f", i+1, w, transport[i])
+		}
 	}
 }
 
 // TestCalcTransport_Count — количество умножает и аренду, и покупку;
-// ноль — допустимое значение, строка просто ничего не начисляет.
+// ноль в месяце — допустимое значение, ничего не начисляется.
 func TestCalcTransport_Count(t *testing.T) {
 	transport, garage := calcTransport(&InputTransport{
 		CarPurchases: []CarPurchase{{Month: 1, Count: 3, Price: 100}},
 		CarRentals: []RentedItem{
-			{Price: 10, Count: 4, Months: []int{2, 3}},
-			{Price: 10, Count: 0, Months: []int{2, 3}}, // не арендуем
+			{Price: 10, Counts: []int{0, 4, 4}},
+			{Price: 10, Counts: []int{0, 0, 0}}, // не арендуем ни в одном месяце
 		},
-		GarageRentals: []RentedItem{{Price: 50, Count: 2, Months: []int{3}}},
+		GarageRentals: []RentedItem{{Price: 50, Counts: []int{0, 0, 2}}},
 	}, 3)
 
 	want := []float64{300, 40, 40}
@@ -258,18 +248,13 @@ func TestValidateTransport(t *testing.T) {
 			want: "цена не может быть отрицательной",
 		},
 		{
-			name: "месяц аренды авто за пределами проекта",
-			in:   &InputTransport{CarRentals: []RentedItem{{Price: 1, Months: []int{1, 9}}}},
+			name: "отрицательная цена аренды авто",
+			in:   &InputTransport{CarRentals: []RentedItem{{Price: -1, Counts: []int{1}}}},
 			want: "аренда авто",
 		},
 		{
-			name: "месяц аренды гаража за пределами проекта",
-			in:   &InputTransport{GarageRentals: []RentedItem{{Price: 1, Months: []int{0}}}},
-			want: "аренда гаража",
-		},
-		{
-			name: "нулевое количество допустимо",
-			in:   &InputTransport{CarRentals: []RentedItem{{Price: 1, Count: 0, Months: []int{1}}}},
+			name: "нулевые количества допустимы",
+			in:   &InputTransport{CarRentals: []RentedItem{{Price: 1, Counts: []int{0, 0}}}},
 		},
 		{
 			name: "отрицательное количество в покупке",
@@ -277,9 +262,14 @@ func TestValidateTransport(t *testing.T) {
 			want: "количество не может быть отрицательным",
 		},
 		{
-			name: "отрицательное количество в аренде",
-			in:   &InputTransport{CarRentals: []RentedItem{{Price: 1, Count: -1, Months: []int{1}}}},
-			want: "количество не может быть отрицательным",
+			name: "отрицательное количество в аренде авто",
+			in:   &InputTransport{CarRentals: []RentedItem{{Price: 1, Counts: []int{1, -1}}}},
+			want: "количество в месяце 2 не может быть отрицательным",
+		},
+		{
+			name: "отрицательное количество в аренде гаража",
+			in:   &InputTransport{GarageRentals: []RentedItem{{Price: 1, Counts: []int{-3}}}},
+			want: "аренда гаража",
 		},
 	}
 
