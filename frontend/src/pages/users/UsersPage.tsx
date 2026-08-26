@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Table, Button, Tag, Space, Modal, Form, Input, Select,
-  message, Typography, Popconfirm,
+  message, Popconfirm,
 } from 'antd';
 import {
   PlusOutlined, EditOutlined, KeyOutlined, UnlockOutlined, UserAddOutlined,
@@ -13,7 +13,6 @@ import type { User } from '../../types';
 import { ROLES, ROLE_LABELS } from '../../types';
 import { extractError } from '../../api/client';
 
-const { Title } = Typography;
 
 export default function UsersPage() {
   const qc = useQueryClient();
@@ -149,8 +148,7 @@ export default function UsersPage() {
 
   return (
     <div>
-      <Title level={4} style={{ marginBottom: 16 }}>Управление пользователями</Title>
-
+      {/* Название раздела живёт в шапке (AppLayout). */}
       <Button
         type="primary" icon={<PlusOutlined />} style={{ marginBottom: 12, background: '#1a3a6b' }}
         onClick={() => { setShowCreate(true); createForm.resetFields(); }}
@@ -160,11 +158,13 @@ export default function UsersPage() {
 
       <Table
         rowKey="id"
+        className="nowrap-table"
         columns={columns}
         dataSource={users ?? []}
         loading={isLoading}
         size="small"
         pagination={{ pageSize: 20 }}
+        scroll={{ x: 'max-content' }}
       />
 
       {/* Создать */}

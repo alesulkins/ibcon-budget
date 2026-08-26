@@ -10,6 +10,7 @@ import {
   totalsRow, totalsLabelCell, totalsValueCell, totalsGrandCell,
 } from '../../../components/MonthTotals';
 import DeleteRowButton from '../../../components/DeleteRowButton';
+import EmptyBlock from '../../../components/EmptyBlock';
 import { titleWithHint } from '../../../components/InfoHint';
 import { useAutosave } from '../../../hooks/useAutosave';
 
@@ -61,7 +62,6 @@ interface Props {
   nameLabel: string;
   namePlaceholder: string;
   addLabel: string;
-  emptyLabel: string;
   /** Пояснение под заголовком: куда сумма уходит в бюджете. */
   hint: string;
 }
@@ -76,7 +76,7 @@ interface Props {
  */
 export default function CostLinesInput({
   versionId, type, title, duration, startDate, readonly,
-  nameLabel, namePlaceholder, addLabel, emptyLabel, hint,
+  nameLabel, namePlaceholder, addLabel, hint,
 }: Props) {
   const [lines, setLines] = useState<CostLine[]>([]);
   const [hydrated, setHydrated] = useState(false);
@@ -161,7 +161,7 @@ export default function CostLinesInput({
       </Text>}
     >
       {lines.length === 0 ? (
-        <Text type="secondary" style={{ fontSize: 12 }}>{emptyLabel}</Text>
+        <EmptyBlock />
       ) : (
         <MonthGrid
           months={months}

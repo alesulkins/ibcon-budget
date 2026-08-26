@@ -26,7 +26,6 @@ interface Props {
   priceLabel: string;
   countLabel: string;
   addLabel: string;
-  emptyLabel: string;
   hint: string;
 }
 
@@ -41,7 +40,7 @@ interface Props {
 export default function PurchasesInput({
   versionId, type, title, duration, startDate, readonly,
   nameLabel, namePlaceholder, monthColLabel, priceLabel, countLabel,
-  addLabel, emptyLabel, hint,
+  addLabel, hint,
 }: Props) {
   const [items, setItems] = useState<ItemPurchase[]>([]);
   const [hydrated, setHydrated] = useState(false);
@@ -99,7 +98,6 @@ export default function PurchasesInput({
         priceLabel={priceLabel}
         countLabel={countLabel}
         addLabel={addLabel}
-        emptyLabel={emptyLabel}
       />
 
       {/* Пока строк нет, итожить нечего — таблица из прочерков только

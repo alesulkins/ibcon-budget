@@ -98,7 +98,6 @@ export default function OfficeInput({
           headLabel="Офис / цена за ед. в месяц, ₽"
           namePlaceholder="например, Офис на Ленина"
           addLabel="Добавить офис"
-          emptyLabel="Офисов нет"
         />
       </Card>
 

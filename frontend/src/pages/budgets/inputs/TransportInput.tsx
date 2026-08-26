@@ -127,7 +127,6 @@ export default function TransportInput({ versionId, duration, startDate, readonl
           readonly={readonly}
           namePlaceholder="например, Газель NEXT"
           addLabel="Добавить покупку"
-          emptyLabel="Покупок нет"
         />
       </Card>
 
@@ -153,7 +152,6 @@ export default function TransportInput({ versionId, duration, startDate, readonl
           headLabel="Вид / цена за ед. в месяц, ₽"
           namePlaceholder="например, Газель"
           addLabel="Добавить авто"
-          emptyLabel="Строк нет"
         />
       </Card>
 
@@ -176,7 +174,6 @@ export default function TransportInput({ versionId, duration, startDate, readonl
           headLabel="Гараж / цена за ед. в месяц, ₽"
           namePlaceholder="например, Гараж №1"
           addLabel="Добавить гараж"
-          emptyLabel="Строк нет"
         />
       </Card>
 

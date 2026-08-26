@@ -121,7 +121,6 @@ export default function WagonciksInput({ versionId, duration, startDate, readonl
           readonly={readonly}
           namePlaceholder="например, Бытовка 6×2,4"
           addLabel="Добавить покупку"
-          emptyLabel="Покупок нет"
         />
         {purchases.length > 0 && (
           <div style={{ marginTop: 16 }}>

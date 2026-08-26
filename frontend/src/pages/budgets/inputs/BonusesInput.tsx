@@ -12,6 +12,7 @@ import {
 } from '../../../types';
 import type { BonusType, InputBonuses } from '../../../types';
 import DeleteRowButton from '../../../components/DeleteRowButton';
+import EmptyBlock from '../../../components/EmptyBlock';
 import { titleWithHint } from '../../../components/InfoHint';
 import { useAutosave } from '../../../hooks/useAutosave';
 
@@ -186,11 +187,7 @@ export default function BonusesInput({ versionId, readonly }: Props) {
           pagination={false}
           // Пока строк нет, шапка таблицы не нужна — только подсказка.
           showHeader={bonusTypes.length > 0}
-          locale={{
-            emptyText: (
-              <Text type="secondary" style={{ fontSize: 12 }}>Видов премий нет</Text>
-            ),
-          }}
+          locale={{ emptyText: <EmptyBlock /> }}
         />
         <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
           Если две премии выпадают одному сотруднику на один месяц, они суммируются —

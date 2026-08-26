@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Tabs, Table, Button, Tag, Modal, Form, Input, Switch,
-  message, Typography,
+  message,
 } from 'antd';
 import { PlusOutlined, EditOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -11,7 +11,6 @@ import type { Executor, Position, WorkMode } from '../../types';
 import { hasRole } from '../../store/auth';
 import { extractError } from '../../api/client';
 
-const { Title } = Typography;
 const canEdit = () => hasRole('GE');
 
 // ─── Исполнители ────────────────────────────────────────────────────────────
@@ -76,7 +75,7 @@ function ExecutorsTab() {
           Добавить исполнителя
         </Button>
       )}
-      <Table rowKey="id" columns={columns} dataSource={data ?? []} loading={isLoading} size="small" pagination={false} />
+      <Table rowKey="id" columns={columns} className="nowrap-table" scroll={{ x: 'max-content' }} dataSource={data ?? []} loading={isLoading} size="small" pagination={false} />
       <Modal
         title={editing ? 'Редактирование исполнителя' : 'Новый исполнитель'}
         open={showModal}
@@ -153,7 +152,7 @@ function PositionsTab() {
           Добавить должность
         </Button>
       )}
-      <Table rowKey="id" columns={columns} dataSource={data ?? []} loading={isLoading} size="small" pagination={{ pageSize: 25 }} />
+      <Table rowKey="id" columns={columns} className="nowrap-table" scroll={{ x: 'max-content' }} dataSource={data ?? []} loading={isLoading} size="small" pagination={{ pageSize: 25 }} />
       <Modal
         title={editing ? 'Редактирование должности' : 'Новая должность'}
         open={showModal}
@@ -222,7 +221,7 @@ function WorkModesTab() {
           Добавить режим работы
         </Button>
       )}
-      <Table rowKey="id" columns={columns} dataSource={data ?? []} loading={isLoading} size="small" pagination={false} />
+      <Table rowKey="id" columns={columns} className="nowrap-table" scroll={{ x: 'max-content' }} dataSource={data ?? []} loading={isLoading} size="small" pagination={false} />
       <Modal
         title={editing ? 'Редактирование' : 'Новый режим работы'}
         open={showModal}
@@ -246,7 +245,7 @@ function WorkModesTab() {
 export default function ReferencesPage() {
   return (
     <div>
-      <Title level={4} style={{ marginBottom: 16 }}>Справочники</Title>
+      {/* Название раздела живёт в шапке (AppLayout). */}
       <Tabs
         items={[
           { key: 'executors', label: 'Исполнители', children: <ExecutorsTab /> },

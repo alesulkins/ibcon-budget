@@ -5,6 +5,7 @@ import type { RentedItem } from '../types';
 import { thousandFormatter, thousandParser, fmtNum } from '../utils/fmt';
 import MonthGrid, { monthGridCell, monthGridHeadCell } from './MonthGrid';
 import DeleteRowButton from './DeleteRowButton';
+import EmptyBlock from './EmptyBlock';
 
 const { Text } = Typography;
 
@@ -55,7 +56,6 @@ interface Props {
   headLabel: string;
   namePlaceholder: string;
   addLabel: string;
-  emptyLabel: string;
 }
 
 /**
@@ -69,7 +69,7 @@ interface Props {
  * строк может быть несколько, у каждой своя цена.
  */
 export default function RentalGrid({
-  items, onChange, months, readonly, headLabel, namePlaceholder, addLabel, emptyLabel,
+  items, onChange, months, readonly, headLabel, namePlaceholder, addLabel,
 }: Props) {
   const duration = months.length;
   // «Единое значение на все месяцы» — только режим ввода, на сервер не идёт.
@@ -105,7 +105,7 @@ export default function RentalGrid({
   return (
     <div>
       {items.length === 0 ? (
-        <Text type="secondary" style={{ fontSize: 12 }}>{emptyLabel}</Text>
+        <EmptyBlock />
       ) : (
         <MonthGrid
           months={months}

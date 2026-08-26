@@ -4,6 +4,7 @@ import type { ItemPurchase } from '../types';
 import { thousandFormatter, thousandParser, fmtNum } from '../utils/fmt';
 import { monthGridCell, monthGridHeadCell } from './MonthGrid';
 import DeleteRowButton from './DeleteRowButton';
+import EmptyBlock from './EmptyBlock';
 
 const { Text } = Typography;
 
@@ -30,7 +31,6 @@ interface Props {
   readonly?: boolean;
   namePlaceholder?: string;
   addLabel: string;
-  emptyLabel: string;
   /**
    * Заголовок колонки описания. `null` — колонки нет: у корпоратива (4.12)
    * в форме только месяц, количество участников и цена.
@@ -56,7 +56,7 @@ export function emptyPurchase(): ItemPurchase {
  */
 export default function PurchaseTable({
   items, onChange, months, allowedMonths, readonly,
-  namePlaceholder, addLabel, emptyLabel,
+  namePlaceholder, addLabel,
   nameLabel = 'Описание',
   monthColLabel = 'Месяц покупки',
   priceLabel = 'Цена за ед., ₽',
@@ -76,7 +76,7 @@ export default function PurchaseTable({
   if (items.length === 0) {
     return (
       <div>
-        <Text type="secondary" style={{ fontSize: 12 }}>{emptyLabel}</Text>
+        <EmptyBlock />
         {!readonly && (
           <div>
             <Button

@@ -13,6 +13,7 @@ import MonthGrid, {
   monthGridCell, monthGridHeadCell, LABEL_COL_WIDTH,
 } from '../../../components/MonthGrid';
 import DeleteRowButton from '../../../components/DeleteRowButton';
+import EmptyBlock from '../../../components/EmptyBlock';
 import { useAutosave } from '../../../hooks/useAutosave';
 
 const { Text } = Typography;
@@ -315,11 +316,7 @@ export default function EmployeesInput({
           pagination={false}
           // Пока строк нет, шапка таблицы не нужна — только подсказка.
           showHeader={data.employees.length > 0}
-          locale={{
-            emptyText: (
-              <Text type="secondary" style={{ fontSize: 12 }}>Сотрудников нет</Text>
-            ),
-          }}
+          locale={{ emptyText: <EmptyBlock /> }}
         />
       </Card>
 

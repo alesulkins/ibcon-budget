@@ -5,7 +5,7 @@ import {
   Popconfirm,
 } from 'antd';
 import {
-  EditOutlined, PlusOutlined, ArrowLeftOutlined, DownloadOutlined,
+  EditOutlined, PlusOutlined, DownloadOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
@@ -230,6 +230,10 @@ export default function ProjectDetailPage() {
     {
       title: 'Комментарий',
       dataIndex: 'comment',
+      // Ширина обязательна: без неё колонка со свободным текстом при
+      // scroll x: 'max-content' растягивала бы таблицу на всю длину
+      // комментария вместо того, чтобы обрезать его многоточием.
+      width: 260,
       ellipsis: true,
     },
     {
@@ -276,12 +280,7 @@ export default function ProjectDetailPage() {
 
   return (
     <div>
-      <Space style={{ marginBottom: 16 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/projects')}>
-          К реестру
-        </Button>
-      </Space>
-
+      {/* Возврат к реестру — по хлебным крошкам в шапке. */}
       <Card
         title={
           <Space>
@@ -349,13 +348,17 @@ export default function ProjectDetailPage() {
           )
         }
       >
+        {/* Сумма ширин колонок больше рабочей области — без scroll
+            таблица вылезала за край страницы вместо своей прокрутки. */}
         <Table
           rowKey="id"
+          className="nowrap-table"
           columns={versionColumns}
           dataSource={sortedVersions}
           loading={versionsLoading}
           size="small"
           pagination={false}
+          scroll={{ x: 'max-content' }}
         />
       </Card>
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Table, Button, Tag, Space, Input, Select, Typography,
+  Table, Button, Tag, Space, Input, Select,
   Modal, Form, DatePicker, InputNumber, message, Tooltip,
 } from 'antd';
 import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
@@ -22,7 +22,6 @@ import { useStickyState } from '../../hooks/useStickyState';
 import { currentUser } from '../../store/auth';
 import Fireworks, { shouldShowFireworks, markFireworksShown } from '../../components/Fireworks';
 
-const { Title } = Typography;
 
 export default function ProjectsPage() {
   const navigate = useNavigate();
@@ -209,8 +208,9 @@ export default function ProjectsPage() {
     <div>
       {fireworks && <Fireworks onDone={() => setFireworks(false)} />}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>Реестр проектов</Title>
+      {/* Название раздела живёт в шапке (AppLayout), здесь остаётся
+          только действие. */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
         {canCreate && (
           <Button
             type="primary"

@@ -3,9 +3,8 @@ import {
   Card, Button, Space, Tag, Typography, Spin, message,
   Modal, Form, Input, Select, Row, Col, Alert,
 } from 'antd';
-import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { budgetsApi, projectsApi } from '../../api';
 import { BUDGET_STATUS_LABELS, BUDGET_STATUS_COLORS } from '../../types';
 import { hasRole } from '../../store/auth';
@@ -62,7 +61,6 @@ const WIZARD_STEPS = [
 export default function BudgetVersionPage() {
   const { vid } = useParams<{ vid: string }>();
   const versionId = Number(vid);
-  const navigate = useNavigate();
   const qc = useQueryClient();
   // Открытый шаг мастера переживает переход в справочники и обратно
   const [step, setStep] = useStickyState(`wizard-step:${vid}`, 0);
@@ -204,7 +202,6 @@ export default function BudgetVersionPage() {
             priceLabel="Цена за ед., ₽"
             countLabel="Кол-во"
             addLabel="Добавить прибор"
-            emptyLabel="Приборов нет"
             hint={'Одна строка — один прибор. Покупка учитывается целиком в '
               + 'месяц приобретения; доступны все месяцы проекта, включая '
               + 'последние два. Сумма уходит одной строкой бюджета «Приборы '
@@ -223,7 +220,6 @@ export default function BudgetVersionPage() {
             nameLabel="Наименование ПО"
             namePlaceholder="например, AutoCAD, годовая лицензия"
             addLabel="Добавить ПО"
-            emptyLabel="Позиций нет"
             hint={'Одна строка — одна позиция ПО или лицензия. Стоимость '
               + 'указывается отдельно по каждому месяцу: пусто или 0 — в этом '
               + 'месяце позиция не оплачивается. Сумма всех позиций уходит '
@@ -242,7 +238,6 @@ export default function BudgetVersionPage() {
             nameLabel="Контрагент / услуга"
             namePlaceholder="например, ООО «Геодезия», вынос осей"
             addLabel="Добавить контрагента"
-            emptyLabel="Позиций нет"
             hint={'Одна строка — один контрагент или услуга. Стоимость '
               + 'указывается отдельно по каждому месяцу: пусто или 0 — в этом '
               + 'месяце оплаты нет. Сумма всех позиций уходит одной строкой '
@@ -270,7 +265,6 @@ export default function BudgetVersionPage() {
             nameLabel="Наименование работ"
             namePlaceholder="например, Монтаж металлоконструкций"
             addLabel="Добавить работы"
-            emptyLabel="Позиций нет"
             hint={'Одна строка — один вид субподрядных работ. Стоимость '
               + 'указывается отдельно по каждому месяцу: пусто или 0 — в этом '
               + 'месяце оплаты нет. Сумма всех позиций уходит одной строкой '
@@ -291,7 +285,6 @@ export default function BudgetVersionPage() {
             priceLabel="Стоимость за чел., ₽"
             countLabel="Кол-во участников"
             addLabel="Добавить корпоратив"
-            emptyLabel="Корпоративов нет"
             hint={'Одна строка — один корпоратив. Итог строки — количество '
               + 'участников × стоимость за человека, начисляется в месяц '
               + 'проведения. Корпоративов может не быть совсем: пустая '
@@ -331,15 +324,7 @@ export default function BudgetVersionPage() {
 
   return (
     <div>
-      <Space style={{ marginBottom: 16 }}>
-        <Button
-          icon={<ArrowLeftOutlined />}
-          onClick={() => navigate(`/projects/${version.project_id}`)}
-        >
-          К проекту
-        </Button>
-      </Space>
-
+      {/* Возврат к проекту — по хлебным крошкам в шапке. */}
       <Card
         title={
           <Space>
