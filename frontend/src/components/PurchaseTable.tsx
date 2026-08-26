@@ -1,8 +1,9 @@
 import { Input, InputNumber, Select, Button, Typography } from 'antd';
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { PlusOutlined } from '@ant-design/icons';
 import type { ItemPurchase } from '../types';
 import { thousandFormatter, thousandParser, fmtNum } from '../utils/fmt';
 import { monthGridCell, monthGridHeadCell } from './MonthGrid';
+import DeleteRowButton from './DeleteRowButton';
 
 const { Text } = Typography;
 
@@ -65,11 +66,32 @@ export default function PurchaseTable({
   // Месяц выбирается только из доступных — вне диапазона не выбрать в принципе.
   const monthOptions = months.slice(0, allowed).map((label, i) => ({ value: i + 1, label }));
   const withName = nameLabel !== null;
-  // Колонок в строке: (описание) + месяц + цена + количество + итого.
-  const colCount = (withName ? 5 : 4) + (readonly ? 0 : 1);
 
   function patch(idx: number, p: Partial<ItemPurchase>) {
     onChange(items.map((r, i) => (i === idx ? { ...r, ...p } : r)));
+  }
+
+  // Пустая таблица показывается одной серой строкой: заголовки колонок
+  // без единой строки данных только загромождают экран.
+  if (items.length === 0) {
+    return (
+      <div>
+        <Text type="secondary" style={{ fontSize: 12 }}>{emptyLabel}</Text>
+        {!readonly && (
+          <div>
+            <Button
+              size="small"
+              type="dashed"
+              icon={<PlusOutlined />}
+              style={{ marginTop: 8 }}
+              onClick={() => onChange([...items, emptyPurchase()])}
+            >
+              {addLabel}
+            </Button>
+          </div>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -108,16 +130,6 @@ export default function PurchaseTable({
           </tr>
         </thead>
         <tbody>
-          {items.length === 0 && (
-            <tr>
-              <td
-                colSpan={colCount}
-                style={{ ...monthGridCell, color: '#999', fontSize: 12, padding: '10px 4px' }}
-              >
-                {emptyLabel}
-              </td>
-            </tr>
-          )}
           {items.map((p, idx) => (
             <tr key={idx} style={{ borderTop: '1px solid #f0f0f0' }}>
               {withName && (
@@ -184,12 +196,8 @@ export default function PurchaseTable({
               </td>
               {!readonly && (
                 <td style={monthGridCell}>
-                  <Button
-                    size="small"
-                    type="text"
-                    danger
-                    icon={<DeleteOutlined />}
-                    onClick={() => onChange(items.filter((_, i) => i !== idx))}
+                  <DeleteRowButton
+                    onConfirm={() => onChange(items.filter((_, i) => i !== idx))}
                   />
                 </td>
               )}

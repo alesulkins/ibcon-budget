@@ -10,7 +10,8 @@ import { budgetsApi, projectsApi } from '../../api';
 import { BUDGET_STATUS_LABELS, BUDGET_STATUS_COLORS } from '../../types';
 import { hasRole } from '../../store/auth';
 import { resetSaveState } from '../../store/autosave';
-import { fmtMoney, fmtPct, fmtDate } from '../../utils/fmt';
+import { fmtMoney, fmtDate } from '../../utils/fmt';
+import Profitability from '../../components/Profitability';
 import { extractError } from '../../api/client';
 import WizardSteps from '../../components/WizardSteps';
 import { useStickyState } from '../../hooks/useStickyState';
@@ -376,7 +377,7 @@ export default function BudgetVersionPage() {
           {version.profitability != null && (
             <Col>
               <Text type="secondary">Рентабельность: </Text>
-              <Text strong>{fmtPct(version.profitability)}</Text>
+              <Profitability value={version.profitability} />
             </Col>
           )}
         </Row>

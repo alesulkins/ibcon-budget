@@ -5,6 +5,7 @@ import { budgetsApi } from '../../../api';
 import type { InputOffice, RentedItem } from '../../../types';
 import { monthLabel, thousandFormatter, thousandParser, fmtNum } from '../../../utils/fmt';
 import RentalGrid, { padCounts, rentalTotal } from '../../../components/RentalGrid';
+import { titleWithHint } from '../../../components/InfoHint';
 import { useAutosave } from '../../../hooks/useAutosave';
 
 const { Text } = Typography;
@@ -102,19 +103,21 @@ export default function OfficeInput({
       </Card>
 
       <Card
-        title="Уборка офиса"
+        title={titleWithHint(
+          'Уборка офиса',
+          <>
+            Отдельная строка расходов бюджета. Уборка начисляется каждый месяц
+            на каждый арендованный офис, поэтому укажите стоимость уборки
+            <b> одного офиса за месяц</b> — расход месяца считается сам:
+            количество офисов × эта цена. Надбавка на НДФЛ к уборке не
+            применяется.
+          </>,
+        )}
         size="small"
         extra={<Text type="secondary" style={{ fontSize: 12 }}>
           Итого {fmtNum(cleaningTotal)} ₽
         </Text>}
       >
-        <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
-          Отдельная строка расходов бюджета. Уборка начисляется каждый месяц
-          на каждый арендованный офис, поэтому укажите стоимость уборки
-          <b> одного офиса за месяц</b> — расход месяца считается сам:
-          количество офисов × эта цена. Надбавка на НДФЛ к уборке не
-          применяется.
-        </Text>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Text style={{ fontSize: 12 }}>Стоимость уборки одного офиса в месяц:</Text>
           {readonly ? (

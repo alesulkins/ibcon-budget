@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Card, Typography, InputNumber } from 'antd';
+import { Card, InputNumber } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { budgetsApi } from '../../../api';
 import { monthLabel, thousandFormatter, thousandParser, fmtNum } from '../../../utils/fmt';
 import MonthGrid, { monthGridCell, monthGridHeadCell } from '../../../components/MonthGrid';
+import { titleWithHint } from '../../../components/InfoHint';
 import { useAutosave } from '../../../hooks/useAutosave';
-
-const { Text } = Typography;
 
 // Накладные статьи, которые вводятся вручную (строки 186-211 листа 2.Бюджет, исключая рассчитываемые)
 const OVERHEAD_LINES: { key: string; label: string }[] = [
@@ -93,10 +92,14 @@ export default function OverheadInput({ versionId, duration, startDate, readonly
   }
 
   return (
-    <Card title="Прочие накладные расходы" size="small">
-      <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-        Введите суммы по каждой статье помесячно. Пустые строки не войдут в итоговый расчёт.
-      </Text>
+    <Card
+      title={titleWithHint(
+        'Прочие накладные расходы',
+        'Введите суммы по каждой статье помесячно. Пустые строки не войдут '
+        + 'в итоговый расчёт.',
+      )}
+      size="small"
+    >
       <MonthGrid
         months={Array.from({ length: duration }, (_, i) => monthLabel(startDate, i))}
         labelWidth={240}

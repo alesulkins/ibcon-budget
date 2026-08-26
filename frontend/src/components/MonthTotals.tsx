@@ -7,6 +7,36 @@ const { Text } = Typography;
 const LABEL_COL = 160;
 const TOTAL_COL = 130;
 
+/**
+ * Оформление строки помесячных итогов, вынесенное отдельно: тот же вид
+ * нужен в подвале таблиц, которые строят сетку месяцев сами (листы-списки
+ * 4.8/4.9/4.11). Эталон вида — лист 4.7.
+ */
+export const totalsRow: React.CSSProperties = {
+  background: '#fafafa',
+  borderTop: '2px solid #e8e8e8',
+};
+
+export const totalsLabelCell: React.CSSProperties = {
+  ...monthGridCell,
+  textAlign: 'left',
+  fontSize: 12,
+  fontWeight: 600,
+};
+
+export const totalsValueCell: React.CSSProperties = {
+  ...monthGridCell,
+  fontSize: 12,
+  fontWeight: 500,
+};
+
+export const totalsGrandCell: React.CSSProperties = {
+  ...monthGridCell,
+  textAlign: 'right',
+  fontSize: 12,
+  fontWeight: 700,
+};
+
 interface Props {
   /** Подписи месяцев проекта по порядку. */
   months: string[];
@@ -47,18 +77,16 @@ export default function MonthTotals({ months, values, label }: Props) {
       )}
     >
       <tbody>
-        <tr style={{ background: '#fafafa' }}>
-          <td style={{ ...monthGridCell, textAlign: 'left' }}>
+        <tr style={totalsRow}>
+          <td style={{ ...totalsLabelCell, fontWeight: 400 }}>
             <Text type="secondary" style={{ fontSize: 12 }}>расход месяца</Text>
           </td>
           {months.map((_, i) => (
-            <td key={i} style={{ ...monthGridCell, fontSize: 12, fontWeight: 500 }}>
+            <td key={i} style={totalsValueCell}>
               {values[i] ? fmtNum(values[i]) : '—'}
             </td>
           ))}
-          <td style={{ ...monthGridCell, textAlign: 'right', fontSize: 12, fontWeight: 700 }}>
-            {fmtNum(total)}
-          </td>
+          <td style={totalsGrandCell}>{fmtNum(total)}</td>
         </tr>
       </tbody>
     </MonthGrid>

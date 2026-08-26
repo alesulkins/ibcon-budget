@@ -1,17 +1,24 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Card, Input, InputNumber, Button, Switch, Typography } from 'antd';
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { PlusOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { budgetsApi } from '../../../api';
 import type { CostLine, InputCostLines } from '../../../types';
 import { monthLabel, thousandFormatter, thousandParser, fmtNum } from '../../../utils/fmt';
 import MonthGrid, { monthGridCell, monthGridHeadCell } from '../../../components/MonthGrid';
+import {
+  totalsRow, totalsLabelCell, totalsValueCell, totalsGrandCell,
+} from '../../../components/MonthTotals';
+import DeleteRowButton from '../../../components/DeleteRowButton';
+import { titleWithHint } from '../../../components/InfoHint';
 import { useAutosave } from '../../../hooks/useAutosave';
 
 const { Text } = Typography;
 
 const NAME_COL = 220;
-const SWITCH_COL = 130;
+// Крайняя колонка держит тумблер, подпись к нему и кнопку удаления, а в
+// подвале — итог за проект.
+const SWITCH_COL = 175;
 
 /**
  * Ячейка месяца. Левая колонка выше остальных — в ней наименование и
@@ -147,16 +154,12 @@ export default function CostLinesInput({
 
   return (
     <Card
-      title={title}
+      title={titleWithHint(title, hint)}
       size="small"
       extra={<Text type="secondary" style={{ fontSize: 12 }}>
         Итого {fmtNum(grandTotal)} ₽
       </Text>}
     >
-      <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
-        {hint}
-      </Text>
-
       {lines.length === 0 ? (
         <Text type="secondary" style={{ fontSize: 12 }}>{emptyLabel}</Text>
       ) : (
@@ -187,21 +190,12 @@ export default function CostLinesInput({
                     {readonly ? (
                       <Text style={{ fontSize: 12 }}>{l.name || '—'}</Text>
                     ) : (
-                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                        <Input
-                          size="small"
-                          value={l.name}
-                          placeholder={namePlaceholder}
-                          onChange={e => patch(idx, { name: e.target.value })}
-                        />
-                        <Button
-                          size="small"
-                          type="text"
-                          danger
-                          icon={<DeleteOutlined />}
-                          onClick={() => setLines(prev => prev.filter((_, i) => i !== idx))}
-                        />
-                      </div>
+                      <Input
+                        size="small"
+                        value={l.name}
+                        placeholder={namePlaceholder}
+                        onChange={e => patch(idx, { name: e.target.value })}
+                      />
                     )}
                   </td>
                   {amounts.map((v, i) => (
@@ -225,6 +219,8 @@ export default function CostLinesInput({
                       )}
                     </td>
                   ))}
+                  {/* Тумблер и удаление — последними в строке, как в
+                      таблицах покупок и на листе «Сотрудники». */}
                   <td style={switchCell}>
                     {!readonly && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
@@ -234,6 +230,9 @@ export default function CostLinesInput({
                           onChange={c => toggleUniform(idx, c)}
                         />
                         <span style={{ fontSize: 10, color: '#888', fontWeight: 400 }}>одна стоимость</span>
+                        <DeleteRowButton
+                          onConfirm={() => setLines(prev => prev.filter((_, i) => i !== idx))}
+                        />
                       </div>
                     )}
                   </td>
@@ -241,18 +240,15 @@ export default function CostLinesInput({
               );
             })}
           </tbody>
+          {/* Вид строки итогов — общий с листом 4.7 (MonthTotals): итог за
+              весь проект стоит правее всех месяцев, в колонке тумблеров. */}
           <tfoot>
-            <tr style={{ borderTop: '2px solid #e8e8e8', background: '#fafafa' }}>
-              <td style={{ ...monthGridCell, textAlign: 'left', fontWeight: 600, fontSize: 12 }}>
-                Итого за месяц
-              </td>
+            <tr style={totalsRow}>
+              <td style={totalsLabelCell}>Итого за месяц</td>
               {monthTotals.map((v, i) => (
-                <td key={i} style={{ ...monthGridCell, fontWeight: 500, fontSize: 12 }}>
-                  {v ? fmtNum(v) : '—'}
-                </td>
+                <td key={i} style={totalsValueCell}>{v ? fmtNum(v) : '—'}</td>
               ))}
-              {/* Итог за весь проект показан в заголовке карточки. */}
-              <td style={monthGridCell} />
+              <td style={totalsGrandCell}>{fmtNum(grandTotal)}</td>
             </tr>
           </tfoot>
         </MonthGrid>

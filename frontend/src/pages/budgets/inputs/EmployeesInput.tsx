@@ -3,7 +3,7 @@ import {
   Card, Table, Button, Modal, Form, Input, Select, InputNumber,
   Space, Typography, Tooltip,
 } from 'antd';
-import { PlusOutlined, DeleteOutlined, EditOutlined, ScheduleOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, ScheduleOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
 import { budgetsApi } from '../../../api';
@@ -12,6 +12,7 @@ import { monthLabel, thousandFormatter, thousandParser, fmtNum } from '../../../
 import MonthGrid, {
   monthGridCell, monthGridHeadCell, LABEL_COL_WIDTH,
 } from '../../../components/MonthGrid';
+import DeleteRowButton from '../../../components/DeleteRowButton';
 import { useAutosave } from '../../../hooks/useAutosave';
 
 const { Text } = Typography;
@@ -233,7 +234,11 @@ export default function EmployeesInput({
                   setShowAddModal(true);
                 }}
               />
-              <Button size="small" danger icon={<DeleteOutlined />} onClick={() => removeEmployee(idx)} />
+              <DeleteRowButton
+                variant="default"
+                title="Удалить сотрудника?"
+                onConfirm={() => removeEmployee(idx)}
+              />
             </>
           )}
         </Space>
@@ -308,7 +313,13 @@ export default function EmployeesInput({
           loading={isLoading}
           size="small"
           pagination={false}
-          locale={{ emptyText: 'Нет сотрудников. Нажмите «Добавить сотрудника».' }}
+          // Пока строк нет, шапка таблицы не нужна — только подсказка.
+          showHeader={data.employees.length > 0}
+          locale={{
+            emptyText: (
+              <Text type="secondary" style={{ fontSize: 12 }}>Сотрудников нет</Text>
+            ),
+          }}
         />
       </Card>
 

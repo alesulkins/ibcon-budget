@@ -8,7 +8,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
 import { budgetsApi } from '../../api';
 import type { MonthlyResult } from '../../types';
-import { fmtMoney, fmtPct, monthLabel, fmtNum } from '../../utils/fmt';
+import { fmtMoney, monthLabel, fmtNum } from '../../utils/fmt';
+import { profitabilityGrade } from '../../utils/profitability';
+import Profitability from '../../components/Profitability';
 import { extractError } from '../../api/client';
 
 const { Title, Text } = Typography;
@@ -50,7 +52,11 @@ export default function CalcResults({ versionId, projectId, duration, startDate 
     { label: 'Операционная прибыль', value: fmtMoney(r.operating_profit) },
     { label: 'Налог на прибыль', value: fmtMoney(r.tax) },
     { label: 'Чистая прибыль', value: fmtMoney(r.net_profit), highlight: true },
-    { label: 'Рентабельность', value: fmtPct(r.profitability), highlight: true },
+    {
+      label: 'Рентабельность',
+      value: <Profitability value={r.profitability} />,
+      highlight: true,
+    },
   ] : [];
 
   const monthlyColumns: ColumnsType<MonthlyResult> = [
@@ -120,7 +126,11 @@ export default function CalcResults({ versionId, projectId, duration, startDate 
                   value={r.profitability}
                   precision={2}
                   suffix="%"
-                  valueStyle={{ color: r.profitability >= 0 ? '#52c41a' : '#ff4d4f', fontWeight: 700 }}
+                  // Цвет — по единой шкале, той же, что в реестре проектов.
+                  valueStyle={{
+                    color: profitabilityGrade(r.profitability).color,
+                    fontWeight: 700,
+                  }}
                 />
               </Card>
             </Col>

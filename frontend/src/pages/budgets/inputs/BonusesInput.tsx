@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   Card, Table, Button, Modal, Form, Input, InputNumber,
-  Select, Space, Typography, Tooltip,
+  Select, Space, Typography,
 } from 'antd';
-import { PlusOutlined, DeleteOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
 import { budgetsApi } from '../../../api';
@@ -11,6 +11,8 @@ import {
   BONUS_KIND_BUILDER_DAY, BONUS_KIND_NEW_YEAR, BONUS_KIND_OTHER,
 } from '../../../types';
 import type { BonusType, InputBonuses } from '../../../types';
+import DeleteRowButton from '../../../components/DeleteRowButton';
+import { titleWithHint } from '../../../components/InfoHint';
 import { useAutosave } from '../../../hooks/useAutosave';
 
 const { Text } = Typography;
@@ -129,19 +131,23 @@ export default function BonusesInput({ versionId, readonly }: Props) {
       title: '',
       key: 'actions',
       width: 80,
+      // Иконки те же, что на листе «Сотрудники» — эталон для всех листов.
       render: (_, bt, idx) => !readonly && (
         <Space size={4}>
           <Button
             size="small"
+            icon={<EditOutlined />}
             onClick={() => {
               form.setFieldsValue(bt as BonusFormValues);
               setEditingIdx(idx);
               setShowAdd(true);
             }}
-          >
-            ✏
-          </Button>
-          <Button size="small" danger icon={<DeleteOutlined />} onClick={() => removeBonus(idx)} />
+          />
+          <DeleteRowButton
+            variant="default"
+            title="Удалить вид премии?"
+            onConfirm={() => removeBonus(idx)}
+          />
         </Space>
       ),
     },
@@ -150,21 +156,13 @@ export default function BonusesInput({ versionId, readonly }: Props) {
   return (
     <div>
       <Card
-        title={
-          <Space size={6}>
-            <span>Виды премий</span>
-            <Tooltip
-              title={
-                'Премии и компенсации при увольнении рассчитываются автоматически. '
-                + 'Премия начисляется каждому сотруднику, который в этот месяц '
-                + 'является сотрудником. Дополнительно начисляется компенсация '
-                + 'при увольнении.'
-              }
-            >
-              <InfoCircleOutlined style={{ color: '#8c8c8c', fontSize: 14 }} />
-            </Tooltip>
-          </Space>
-        }
+        title={titleWithHint(
+          'Виды премий',
+          'Премии и компенсации при увольнении рассчитываются автоматически. '
+          + 'Премия начисляется каждому сотруднику, который в этот месяц '
+          + 'является сотрудником. Дополнительно начисляется компенсация '
+          + 'при увольнении.',
+        )}
         size="small"
         style={{ marginBottom: 16 }}
         extra={
@@ -186,7 +184,13 @@ export default function BonusesInput({ versionId, readonly }: Props) {
           dataSource={bonusTypes}
           size="small"
           pagination={false}
-          locale={{ emptyText: 'Нет видов премий. Нажмите «Добавить вид премии».' }}
+          // Пока строк нет, шапка таблицы не нужна — только подсказка.
+          showHeader={bonusTypes.length > 0}
+          locale={{
+            emptyText: (
+              <Text type="secondary" style={{ fontSize: 12 }}>Видов премий нет</Text>
+            ),
+          }}
         />
         <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
           Если две премии выпадают одному сотруднику на один месяц, они суммируются —

@@ -13,7 +13,8 @@ import type { ProjectListItem } from '../../types';
 import {
   PROJECT_STATUS_LABELS, PROJECT_STATUS_COLORS, BUDGET_STATUS_LABELS, BUDGET_STATUS_COLORS,
 } from '../../types';
-import { fmtDate, fmtMoney, fmtPct } from '../../utils/fmt';
+import { fmtDate, fmtMoney } from '../../utils/fmt';
+import Profitability from '../../components/Profitability';
 import { capitalizeFirst, normalizeFullName, shortName } from '../../utils/names';
 import { hasRole } from '../../store/auth';
 import { extractError } from '../../api/client';
@@ -116,11 +117,18 @@ export default function ProjectsPage() {
     (!budgetStatusFilter || p.budget_status === budgetStatusFilter)
     && (!executorFilter || p.executor_name === executorFilter));
 
+  /**
+   * Порядок колонок задан владельцем 2026-08-27 и менять его нельзя.
+   * «№» — не колонка данных, а номер записи, поэтому стоит перед ними.
+   *
+   * Ширины не задаём: колонка должна быть ровно такой, чтобы значение
+   * помещалось в одну строку (nowrap в index.css), а лишняя ширина
+   * уходит в горизонтальную прокрутку — scroll x: 'max-content'.
+   */
   const columns: ColumnsType<ProjectListItem> = [
     {
       title: '№',
       dataIndex: 'id',
-      width: 60,
       sorter: (a, b) => a.id - b.id,
     },
     {
@@ -139,22 +147,6 @@ export default function ProjectsPage() {
     {
       title: 'Исполнитель',
       dataIndex: 'executor_name',
-    },
-    {
-      title: 'Директор',
-      dataIndex: 'director',
-    },
-    {
-      title: 'Руководитель',
-      dataIndex: 'manager',
-    },
-    {
-      title: 'Администратор',
-      dataIndex: 'administrator',
-    },
-    {
-      title: 'Экономист',
-      dataIndex: 'economist',
     },
     {
       title: 'Статус проекта',
@@ -180,9 +172,25 @@ export default function ProjectsPage() {
     {
       title: 'Рентабельность',
       dataIndex: 'profitability',
-      render: fmtPct,
+      render: (v: number | null | undefined) => <Profitability value={v} />,
       align: 'right',
       sorter: (a, b) => (a.profitability ?? 0) - (b.profitability ?? 0),
+    },
+    {
+      title: 'Директор',
+      dataIndex: 'director',
+    },
+    {
+      title: 'Руководитель',
+      dataIndex: 'manager',
+    },
+    {
+      title: 'Администратор',
+      dataIndex: 'administrator',
+    },
+    {
+      title: 'Экономист',
+      dataIndex: 'economist',
     },
     {
       title: 'Дата создания',
@@ -258,10 +266,14 @@ export default function ProjectsPage() {
 
       <Table
         rowKey="id"
+        className="nowrap-table"
         columns={columns}
         dataSource={rows}
         loading={isLoading}
-        scroll={{ x: 1400 }}
+        // max-content, а не фиксированная ширина: таблица становится ровно
+        // такой, чтобы ни одно значение не переносилось, независимо от
+        // масштаба окна.
+        scroll={{ x: 'max-content' }}
         size="small"
         pagination={{
           current: page,

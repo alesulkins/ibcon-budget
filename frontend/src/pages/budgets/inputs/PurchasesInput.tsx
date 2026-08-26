@@ -6,6 +6,7 @@ import type { InputPurchases, ItemPurchase } from '../../../types';
 import { monthLabel, fmtNum } from '../../../utils/fmt';
 import PurchaseTable from '../../../components/PurchaseTable';
 import MonthTotals from '../../../components/MonthTotals';
+import { titleWithHint } from '../../../components/InfoHint';
 import { useAutosave } from '../../../hooks/useAutosave';
 
 const { Text } = Typography;
@@ -81,16 +82,12 @@ export default function PurchasesInput({
 
   return (
     <Card
-      title={title}
+      title={titleWithHint(title, hint)}
       size="small"
       extra={<Text type="secondary" style={{ fontSize: 12 }}>
         Итого {fmtNum(grandTotal)} ₽
       </Text>}
     >
-      <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
-        {hint}
-      </Text>
-
       <PurchaseTable
         items={items}
         onChange={setItems}
@@ -105,9 +102,13 @@ export default function PurchasesInput({
         emptyLabel={emptyLabel}
       />
 
-      <div style={{ marginTop: 16 }}>
-        <MonthTotals months={months} values={monthTotals} label="Итого по месяцам" />
-      </div>
+      {/* Пока строк нет, итожить нечего — таблица из прочерков только
+          мешает (правило пустых состояний). */}
+      {items.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <MonthTotals months={months} values={monthTotals} label="Итого по месяцам" />
+        </div>
+      )}
     </Card>
   );
 }

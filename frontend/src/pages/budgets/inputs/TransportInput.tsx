@@ -6,6 +6,7 @@ import type { InputTransport, ItemPurchase, RentedItem } from '../../../types';
 import { monthLabel, thousandFormatter, thousandParser, fmtNum } from '../../../utils/fmt';
 import PurchaseTable from '../../../components/PurchaseTable';
 import RentalGrid, { padCounts, rentalTotal } from '../../../components/RentalGrid';
+import { titleWithHint } from '../../../components/InfoHint';
 import { useAutosave } from '../../../hooks/useAutosave';
 
 const { Text } = Typography;
@@ -107,18 +108,18 @@ export default function TransportInput({ versionId, duration, startDate, readonl
       )}
 
       <Card
-        title="Покупка авто"
+        title={titleWithHint(
+          'Покупка авто',
+          'Разовая покупка учитывается целиком в месяц приобретения. Месяц — '
+          + 'обязателен: строка без месяца в расчёт не попадёт и не сохранится. '
+          + 'Итог строки — цена × количество.',
+        )}
         size="small"
         style={{ marginBottom: 16 }}
         extra={<Text type="secondary" style={{ fontSize: 12 }}>
           Итого {fmtNum(purchasesTotal)} ₽
         </Text>}
       >
-        <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
-          Разовая покупка учитывается целиком в месяц приобретения. Месяц —
-          обязателен: строка без месяца в расчёт не попадёт и не сохранится.
-          Итог строки — цена × количество.
-        </Text>
         <PurchaseTable
           items={purchases}
           onChange={setPurchases}
@@ -131,19 +132,19 @@ export default function TransportInput({ versionId, duration, startDate, readonl
       </Card>
 
       <Card
-        title="Аренда авто"
+        title={titleWithHint(
+          'Аренда авто',
+          'Одна строка — один вид авто со своей ценой. В каждом месяце укажите '
+          + 'количество арендованных единиц; пусто или 0 — в этом месяце не '
+          + 'арендуем. Расход месяца — цена × количество, просуммированное по '
+          + 'всем видам.',
+        )}
         size="small"
         style={{ marginBottom: 16 }}
         extra={<Text type="secondary" style={{ fontSize: 12 }}>
           Итого {fmtNum(carsTotal)} ₽
         </Text>}
       >
-        <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
-          Одна строка — один вид авто со своей ценой. В каждом месяце укажите
-          количество арендованных единиц; пусто или 0 — в этом месяце не
-          арендуем. Расход месяца — цена × количество, просуммированное по
-          всем видам.
-        </Text>
         <RentalGrid
           items={cars}
           onChange={setCars}
@@ -157,16 +158,16 @@ export default function TransportInput({ versionId, duration, startDate, readonl
       </Card>
 
       <Card
-        title="Аренда гаража"
+        title={titleWithHint(
+          'Аренда гаража',
+          'Отдельная строка расходов бюджета — «Аренда гаража». Считается так '
+          + 'же: цена × количество в каждом месяце.',
+        )}
         size="small"
         extra={<Text type="secondary" style={{ fontSize: 12 }}>
           Итого {fmtNum(garagesTotal)} ₽
         </Text>}
       >
-        <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
-          Отдельная строка расходов бюджета — «Аренда гаража». Считается так
-          же: цена × количество в каждом месяце.
-        </Text>
         <RentalGrid
           items={garages}
           onChange={setGarages}

@@ -7,6 +7,7 @@ import { monthLabel } from '../../../utils/fmt';
 import MonthGrid, {
   monthGridCell, monthGridHeadCell, LABEL_COL_WIDTH,
 } from '../../../components/MonthGrid';
+import { titleWithHint } from '../../../components/InfoHint';
 import { useAutosave } from '../../../hooks/useAutosave';
 
 const { Text } = Typography;
@@ -138,7 +139,17 @@ export default function RentApartmentsInput({ versionId, duration, startDate, re
 
   return (
     <div>
-      <Card title="Аренда квартир" size="small" style={{ marginBottom: 16 }}>
+      <Card
+        title={titleWithHint(
+          'Аренда квартир',
+          '«Единое значение» — одно количество на все месяцы проекта. '
+          + 'Выключено — количество задаётся для каждого месяца отдельно. '
+          + 'Уборка начисляется только в отмеченных месяцах; если не отмечен '
+          + 'ни один — уборка за весь период равна нулю.',
+        )}
+        size="small"
+        style={{ marginBottom: 16 }}
+      >
         <MonthGrid
           months={months}
           labelWidth={LABEL_COL_WIDTH}
@@ -231,12 +242,6 @@ export default function RentApartmentsInput({ versionId, duration, startDate, re
             </tr>
           </tbody>
         </MonthGrid>
-        <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
-          «Единое значение» — одно количество на все месяцы проекта. Выключено —
-          количество задаётся для каждого месяца отдельно.
-          Уборка начисляется только в отмеченных месяцах; если не отмечен ни
-          один — уборка за весь период равна нулю.
-        </Text>
       </Card>
 
       <Space size={16} align="start" wrap>
@@ -258,10 +263,13 @@ export default function RentApartmentsInput({ versionId, duration, startDate, re
           />
         </Card>
 
-        <Card title="Риелтор" size="small">
-          <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
-            Стоимость услуг риелтора за одну квартиру. Отдельная строка бюджета.
-          </Text>
+        <Card
+          title={titleWithHint(
+            'Риелтор',
+            'Стоимость услуг риелтора за одну квартиру. Отдельная строка бюджета.',
+          )}
+          size="small"
+        >
           <InputNumber
             min={0}
             value={realtorBase}

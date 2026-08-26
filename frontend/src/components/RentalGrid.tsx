@@ -1,14 +1,17 @@
 import { useState } from 'react';
 import { Input, InputNumber, Button, Switch, Typography } from 'antd';
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { PlusOutlined } from '@ant-design/icons';
 import type { RentedItem } from '../types';
 import { thousandFormatter, thousandParser, fmtNum } from '../utils/fmt';
 import MonthGrid, { monthGridCell, monthGridHeadCell } from './MonthGrid';
+import DeleteRowButton from './DeleteRowButton';
 
 const { Text } = Typography;
 
 const NAME_COL = 200;
-const TOTAL_COL = 110;
+// В крайней колонке — итог строки, тумблер и кнопка удаления, поэтому
+// она шире, чем нужно одному только числу.
+const TOTAL_COL = 150;
 
 /**
  * Ячейка месяца. Левая колонка выше остальных — в ней название и цена в
@@ -142,25 +145,16 @@ export default function RentalGrid({
                           placeholder={namePlaceholder}
                           onChange={e => patch(idx, { name: e.target.value })}
                         />
-                        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                          <InputNumber
-                            size="small"
-                            style={{ width: '100%' }}
-                            min={0}
-                            value={r.price || null}
-                            placeholder="цена"
-                            onChange={v => patch(idx, { price: v ?? 0 })}
-                            formatter={thousandFormatter}
-                            parser={thousandParser}
-                          />
-                          <Button
-                            size="small"
-                            type="text"
-                            danger
-                            icon={<DeleteOutlined />}
-                            onClick={() => onChange(items.filter((_, i) => i !== idx))}
-                          />
-                        </div>
+                        <InputNumber
+                          size="small"
+                          style={{ width: '100%' }}
+                          min={0}
+                          value={r.price || null}
+                          placeholder="цена"
+                          onChange={v => patch(idx, { price: v ?? 0 })}
+                          formatter={thousandFormatter}
+                          parser={thousandParser}
+                        />
                       </div>
                     )}
                   </td>
@@ -184,6 +178,8 @@ export default function RentalGrid({
                       )}
                     </td>
                   ))}
+                  {/* Кнопка удаления — последняя в строке, как в таблицах
+                      покупок и на листе «Сотрудники». */}
                   <td style={{ ...monthCountCell, textAlign: 'right', fontWeight: 500, fontSize: 12 }}>
                     <div>{fmtNum(rentalTotal(r, duration))}</div>
                     {!readonly && (
@@ -194,6 +190,9 @@ export default function RentalGrid({
                           onChange={c => toggleUniform(idx, c)}
                         />
                         <span style={{ fontSize: 10, color: '#888', fontWeight: 400 }}>единое</span>
+                        <DeleteRowButton
+                          onConfirm={() => onChange(items.filter((_, i) => i !== idx))}
+                        />
                       </div>
                     )}
                   </td>

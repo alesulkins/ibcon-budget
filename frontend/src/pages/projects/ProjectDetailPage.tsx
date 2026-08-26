@@ -16,7 +16,8 @@ import type { BudgetVersion } from '../../types';
 import {
   PROJECT_STATUS_LABELS, PROJECT_STATUS_COLORS, BUDGET_STATUS_LABELS, BUDGET_STATUS_COLORS,
 } from '../../types';
-import { fmtDate, fmtMoney, fmtPct } from '../../utils/fmt';
+import { fmtDate, fmtMoney } from '../../utils/fmt';
+import Profitability from '../../components/Profitability';
 import { hasRole } from '../../store/auth';
 import { shortName } from '../../utils/names';
 import { extractError } from '../../api/client';
@@ -223,7 +224,7 @@ export default function ProjectDetailPage() {
       title: 'Рентабельность, %',
       dataIndex: 'profitability',
       width: 150,
-      render: fmtPct,
+      render: (v: number | null | undefined) => <Profitability value={v} />,
       align: 'right',
     },
     {

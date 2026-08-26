@@ -5,6 +5,7 @@ import { budgetsApi } from '../../../api';
 import type { InputGphEmployees } from '../../../types';
 import { monthLabel, thousandFormatter, thousandParser, fmtNum } from '../../../utils/fmt';
 import MonthTotals from '../../../components/MonthTotals';
+import { titleWithHint } from '../../../components/InfoHint';
 import { useAutosave } from '../../../hooks/useAutosave';
 
 const { Text } = Typography;
@@ -55,18 +56,18 @@ export default function GphEmployeesInput({ versionId, duration, startDate, read
 
   return (
     <Card
-      title="ГПХ сотрудников"
+      title={titleWithHint(
+        'ГПХ сотрудников',
+        'Достаточно двух чисел на весь проект: расход каждого месяца '
+        + 'считается сам — среднее количество × средняя стоимость. Сумма '
+        + 'уходит одной строкой бюджета «Субподрядные работы '
+        + '(ГПХ сотрудников)».',
+      )}
       size="small"
       extra={<Text type="secondary" style={{ fontSize: 12 }}>
         Итого {fmtNum(perMonth * duration)} ₽
       </Text>}
     >
-      <Text type="secondary" style={{ display: 'block', marginBottom: 12, fontSize: 12 }}>
-        Достаточно двух чисел на весь проект: расход каждого месяца считается
-        сам — среднее количество × средняя стоимость. Сумма уходит одной
-        строкой бюджета «Субподрядные работы (ГПХ сотрудников)».
-      </Text>
-
       <Row gutter={16} style={{ marginBottom: 16 }} align="bottom">
         <Col>
           <Text style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>

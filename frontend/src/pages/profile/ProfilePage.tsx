@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   Card, Avatar, Typography, Button, Input, Space, message, Modal,
-  Form, Row, Col, Descriptions, Upload, Tag, Alert,
+  Form, Row, Col, Descriptions, Upload, Tag, Alert, Popconfirm,
 } from 'antd';
 import {
   LockOutlined, UploadOutlined, SaveOutlined, DeleteOutlined,
@@ -14,7 +14,7 @@ import type { Profile } from '../../types';
 import { initials } from '../../utils/names';
 import { extractError } from '../../api/client';
 
-const { Title, Text, Paragraph } = Typography;
+const { Text, Paragraph } = Typography;
 const { TextArea } = Input;
 
 const BRAND = '#1a3a6b';
@@ -103,9 +103,8 @@ export default function ProfilePage() {
   const isImage = avatar.startsWith('data:');
 
   return (
+    // Заголовок «Личный кабинет» живёт в шапке (AppLayout), здесь его нет.
     <div style={{ maxWidth: 980 }}>
-      <Title level={4} style={{ marginBottom: 16 }}>Личный кабинет</Title>
-
       <Row gutter={16} align="stretch">
         {/* ── Аватар и реквизиты ─────────────────────────────────── */}
         <Col xs={24} md={10}>
@@ -125,13 +124,15 @@ export default function ProfilePage() {
                     <Button size="small" icon={<UploadOutlined />}>Загрузить фото</Button>
                   </Upload>
                   {avatar && (
-                    <Button
-                      size="small"
-                      icon={<DeleteOutlined />}
-                      onClick={() => updateMutation.mutate({ avatar: '' })}
+                    <Popconfirm
+                      title="Убрать аватар?"
+                      okText="Да"
+                      cancelText="Нет"
+                      okButtonProps={{ danger: true }}
+                      onConfirm={() => updateMutation.mutate({ avatar: '' })}
                     >
-                      Убрать
-                    </Button>
+                      <Button size="small" icon={<DeleteOutlined />}>Убрать</Button>
+                    </Popconfirm>
                   )}
                 </Space>
               </div>
