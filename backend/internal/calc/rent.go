@@ -305,12 +305,13 @@ func ValidateInput(inputType string, raw []byte, executor string, duration int) 
 		}
 		return ValidateOffice(&v)
 
-	case TypeSoftwareItems:
+	case TypeSoftwareItems, TypeSubcontractExtItems, TypeSubcontractGenItems:
+		title := costLinesTitle(inputType)
 		var v InputCostLines
 		if err := json.Unmarshal(raw, &v); err != nil {
-			return fmt.Errorf("ПО и лицензии: некорректный формат данных: %w", err)
+			return fmt.Errorf("%s: некорректный формат данных: %w", title, err)
 		}
-		return ValidateCostLines("ПО и лицензии", &v)
+		return ValidateCostLines(title, &v)
 	}
 	return nil
 }

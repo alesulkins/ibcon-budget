@@ -308,9 +308,11 @@ type BudgetInputs struct {
 	// 183 (уборка офиса).
 	Office *InputOffice
 
-	// Лист 4.8 — список позиций ПО со стоимостью по месяцам.
-	// Даёт строку 193 (приобретение ПО).
-	SoftwareLines *InputCostLines
+	// Листы-списки: позиции с наименованием и стоимостью по месяцам,
+	// расчёт у всех трёх общий — calcCostLines.
+	SoftwareLines       *InputCostLines // 4.8  → строка 193 приобретение ПО
+	SubcontractExtLines *InputCostLines // 4.9  → строка 200 ГПХ внешний
+	SubcontractGenLines *InputCostLines // 4.11 → строка 202 субподряд
 
 	// Накладные расходы (строки 178-211) — двумерный массив по статьям
 	//
@@ -339,9 +341,9 @@ type BudgetInputs struct {
 	Postal            []float64 // 197
 	Fuel              []float64 // 198 ГСМ
 	TransportServices []float64 // 199
-	SubcontractExt    []float64 // 200 (4.9)
+	SubcontractExt    []float64 // 200 (4.9), устаревший ввод — см. выше
 	SubcontractEmp    []float64 // 201 (4.10)
-	SubcontractGen    []float64 // 202 (4.11)
+	SubcontractGen    []float64 // 202 (4.11), устаревший ввод — см. выше
 	SubcontractOrg    []float64 // 203
 	Representative    []float64 // 204
 	CorporateEvents   []float64 // 205 (4.12)

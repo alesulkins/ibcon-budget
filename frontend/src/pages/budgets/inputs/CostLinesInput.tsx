@@ -11,7 +11,7 @@ import { useAutosave } from '../../../hooks/useAutosave';
 const { Text } = Typography;
 
 const NAME_COL = 220;
-const TOTAL_COL = 140;
+const SWITCH_COL = 130;
 
 /**
  * Ячейка месяца. Левая колонка выше остальных — в ней наименование и
@@ -24,15 +24,22 @@ const cell: React.CSSProperties = {
   padding: '4px',
 };
 
+/**
+ * Ячейка тумблера. В отличие от соседних, содержит один элемент, поэтому
+ * центрируется по вертикали, а не прижимается к верху: иначе тумблер
+ * висел бы выше строки полей, к которой относится.
+ */
+const switchCell: React.CSSProperties = {
+  ...monthGridCell,
+  verticalAlign: 'middle',
+  padding: '4px',
+};
+
 /** Приводит массив сумм к длине проекта; бэкенд поступает так же. */
 function padAmounts(amounts: number[] | undefined, duration: number): number[] {
   const out: number[] = Array(duration).fill(0);
   (amounts ?? []).slice(0, duration).forEach((v, i) => { out[i] = v || 0; });
   return out;
-}
-
-function lineTotal(l: CostLine, duration: number): number {
-  return padAmounts(l.monthly_amounts, duration).reduce((s, v) => s + v, 0);
 }
 
 interface Props {
@@ -156,7 +163,7 @@ export default function CostLinesInput({
         <MonthGrid
           months={months}
           labelWidth={NAME_COL}
-          trailingWidth={TOTAL_COL}
+          trailingWidth={SWITCH_COL}
           head={(
             <thead>
               <tr>
@@ -164,9 +171,8 @@ export default function CostLinesInput({
                   {nameLabel}
                 </th>
                 {months.map((m, i) => <th key={i} style={monthGridHeadCell}>{m}</th>)}
-                <th style={{ ...monthGridHeadCell, textAlign: 'right', color: '#333', fontWeight: 500 }}>
-                  Итого
-                </th>
+                {/* Колонка тумблеров — без заголовка. */}
+                <th style={monthGridHeadCell} />
               </tr>
             </thead>
           )}
@@ -219,10 +225,9 @@ export default function CostLinesInput({
                       )}
                     </td>
                   ))}
-                  <td style={{ ...cell, textAlign: 'right', fontWeight: 500, fontSize: 12 }}>
-                    <div>{fmtNum(lineTotal(l, duration))}</div>
+                  <td style={switchCell}>
                     {!readonly && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
                         <Switch
                           size="small"
                           checked={isUniform}
@@ -246,9 +251,8 @@ export default function CostLinesInput({
                   {v ? fmtNum(v) : '—'}
                 </td>
               ))}
-              <td style={{ ...monthGridCell, textAlign: 'right', fontWeight: 700, fontSize: 12 }}>
-                {fmtNum(grandTotal)}
-              </td>
+              {/* Итог за весь проект показан в заголовке карточки. */}
+              <td style={monthGridCell} />
             </tr>
           </tfoot>
         </MonthGrid>

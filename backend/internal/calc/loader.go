@@ -41,12 +41,17 @@ const (
 	// перехода на расчёт по формуле.
 	TypeOfficeRent     = "office_rent"
 	TypeOfficeCleaning = "office_cleaning"
-	// TypeSoftwareItems — лист 4.8. Список позиций ПО, у каждой наименование
-	// и стоимость по месяцам (см. InputCostLines). Даёт строку 193.
-	// TypeSoftware — тот же лист СТАРЫМ вводом, готовыми суммами по месяцам;
-	// читается только ради версий, сохранённых до перехода на список позиций.
-	TypeSoftwareItems    = "software_items"
-	TypeInternet         = "internet"
+	// Листы-списки 4.8, 4.9 и 4.11: позиции с наименованием и стоимостью по
+	// месяцам (см. InputCostLines). Дают строки 193, 200 и 202.
+	//
+	// Ключи без суффикса — TypeSoftware, TypeSubcontractExt,
+	// TypeSubcontractGen — это те же листы СТАРЫМ вводом, готовыми суммами
+	// по месяцам. Читаются только ради версий, сохранённых до перехода на
+	// список позиций; новые данные пишутся в ключи с `_items`.
+	TypeSoftwareItems       = "software_items"
+	TypeSubcontractExtItems = "subcontract_ext_items"
+	TypeSubcontractGenItems = "subcontract_gen_items"
+	TypeInternet            = "internet"
 	TypeMobile           = "mobile"
 	TypeLabResearch      = "lab_research"
 	TypeControlEquipment = "control_equipment"
@@ -178,12 +183,19 @@ func LoadInputs(
 			}
 			inp.Office = &v
 
-		case TypeSoftwareItems:
+		case TypeSoftwareItems, TypeSubcontractExtItems, TypeSubcontractGenItems:
 			var v InputCostLines
 			if err := json.Unmarshal(raw, &v); err != nil {
 				return nil, fmt.Errorf("parse %s: %w", typ, err)
 			}
-			inp.SoftwareLines = &v
+			switch typ {
+			case TypeSoftwareItems:
+				inp.SoftwareLines = &v
+			case TypeSubcontractExtItems:
+				inp.SubcontractExtLines = &v
+			case TypeSubcontractGenItems:
+				inp.SubcontractGenLines = &v
+			}
 
 		case TypeBudgetParams:
 			var v InputBudgetParams

@@ -54,6 +54,19 @@ func calcCostLines(in *InputCostLines, duration int) []float64 {
 	return out
 }
 
+// costLinesTitle — название листа для текста ошибки валидации. Экономист
+// видит его в тосте, поэтому это подпись шага мастера, а не ключ ввода.
+func costLinesTitle(inputType string) string {
+	switch inputType {
+	case TypeSubcontractExtItems:
+		return "ГПХ внешний"
+	case TypeSubcontractGenItems:
+		return "субподрядные работы"
+	default:
+		return "ПО и лицензии"
+	}
+}
+
 // ValidateCostLines проверяет ввод листа-списка: стоимость не может быть
 // отрицательной. Ноль допустим — в этом месяце позиции просто нет.
 //

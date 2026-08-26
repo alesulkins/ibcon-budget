@@ -68,13 +68,25 @@ func Run(inp *BudgetInputs) *CalcResult {
 		officeRentArr, officeCleaningArr = inp.OfficeRent, inp.OfficeCleaning
 	}
 
-	// ── 1д. Лист 4.8: ПО и лицензии ──────────────────────────────────────────
-	// Строка 193 = сумма стоимостей всех позиций ПО в месяце.
+	// ── 1д. Листы-списки 4.8, 4.9, 4.11 ──────────────────────────────────────
+	// Устроены одинаково: итог месяца = сумма стоимостей всех позиций.
+	//   4.8  → строка 193 приобретение ПО
+	//   4.9  → строка 200 ГПХ внешний
+	//   4.11 → строка 202 субподряд
+	// Если списка позиций нет, версия сохранена до перехода на него — берём
+	// старые готовые суммы, чтобы её итоги не обнулились. Удалить вместе с
+	// TypeSoftware / TypeSubcontractExt / TypeSubcontractGen.
 	softwareArr := calcCostLines(inp.SoftwareLines, n)
 	if inp.SoftwareLines == nil {
-		// Версия сохранена до перехода 4.8 на список позиций.
-		// Удалить вместе с TypeSoftware.
 		softwareArr = inp.Software
+	}
+	subExtArr := calcCostLines(inp.SubcontractExtLines, n)
+	if inp.SubcontractExtLines == nil {
+		subExtArr = inp.SubcontractExt
+	}
+	subGenArr := calcCostLines(inp.SubcontractGenLines, n)
+	if inp.SubcontractGenLines == nil {
+		subGenArr = inp.SubcontractGen
 	}
 
 	// ── 2. Премии и компенсации (4.1) суммарно → 2.Бюджет строка 169 ────────
@@ -151,9 +163,9 @@ func Run(inp *BudgetInputs) *CalcResult {
 		inp.Postal,            // 19 → 197
 		inp.Fuel,              // 20 → 198
 		inp.TransportServices, // 21 → 199
-		inp.SubcontractExt,    // 22 → 200
+		subExtArr,             // 22 → 200 ГПХ внешний (4.9, список позиций)
 		inp.SubcontractEmp,    // 23 → 201
-		inp.SubcontractGen,    // 24 → 202
+		subGenArr,             // 24 → 202 Субподряд (4.11, список позиций)
 		inp.SubcontractOrg,    // 25 → 203
 		inp.Representative,    // 26 → 204
 		inp.CorporateEvents,   // 27 → 205

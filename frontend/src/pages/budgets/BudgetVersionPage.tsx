@@ -219,13 +219,21 @@ export default function BudgetVersionPage() {
         );
       case 'subcontract_ext':
         return (
-          <SimpleCostInput
+          <CostLinesInput
             versionId={versionId}
-            type="subcontract_ext"
-            title="ГПХ внешний (контрагенты/услуги)"
+            type="subcontract_ext_items"
+            title="ГПХ внешний"
             duration={duration}
             startDate={project!.start_date}
             readonly={isReadonly}
+            nameLabel="Контрагент / услуга"
+            namePlaceholder="например, ООО «Геодезия», вынос осей"
+            addLabel="Добавить контрагента"
+            emptyLabel="Позиций нет"
+            hint={'Одна строка — один контрагент или услуга. Стоимость '
+              + 'указывается отдельно по каждому месяцу: пусто или 0 — в этом '
+              + 'месяце оплаты нет. Сумма всех позиций уходит одной строкой '
+              + 'бюджета «ГПХ внешний».'}
           />
         );
       case 'subcontract_emp':
@@ -241,13 +249,21 @@ export default function BudgetVersionPage() {
         );
       case 'subcontract_gen':
         return (
-          <SimpleCostInput
+          <CostLinesInput
             versionId={versionId}
-            type="subcontract_gen"
+            type="subcontract_gen_items"
             title="Субподрядные работы"
             duration={duration}
             startDate={project!.start_date}
             readonly={isReadonly}
+            nameLabel="Наименование работ"
+            namePlaceholder="например, Монтаж металлоконструкций"
+            addLabel="Добавить работы"
+            emptyLabel="Позиций нет"
+            hint={'Одна строка — один вид субподрядных работ. Стоимость '
+              + 'указывается отдельно по каждому месяцу: пусто или 0 — в этом '
+              + 'месяце оплаты нет. Сумма всех позиций уходит одной строкой '
+              + 'бюджета «Субподрядные работы».'}
           />
         );
       case 'corporate_events':

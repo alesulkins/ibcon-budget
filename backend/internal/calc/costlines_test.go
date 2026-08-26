@@ -1,6 +1,7 @@
 package calc
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -180,6 +181,94 @@ func TestSoftwareLinesOverrideLegacy(t *testing.T) {
 	for m, w := range []float64{7000, 0, 0} {
 		if got := res.Monthly[m].Overhead[15]; got != w {
 			t.Errorf("месяц %d, строка 193: получено %.2f, ожидалось %.2f", m+1, got, w)
+		}
+	}
+}
+
+// ── 4.9 «ГПХ внешний» и 4.11 «Субподряд» ────────────────────────────────────
+//
+// Расчёт у них тот же самый, проверяем главное: каждый лист попадает в СВОЮ
+// строку накладных и не задевает соседние. Перепутанные индексы — самая
+// вероятная ошибка при добавлении листа в overheadLines.
+
+func TestSubcontractExtLinesReachOverheadRow200(t *testing.T) {
+	inp := costLinesInputs(3)
+	inp.SubcontractExtLines = &InputCostLines{Lines: []CostLine{
+		{Name: "ООО «Геодезия», вынос осей", MonthlyAmounts: []float64{80000, 0, 0}},
+		{Name: "ИП Петров, авторский надзор", MonthlyAmounts: []float64{30000, 30000, 30000}},
+	}}
+
+	res := Run(inp)
+	for m, w := range []float64{110000, 30000, 30000} {
+		if got := res.Monthly[m].Overhead[22]; got != w {
+			t.Errorf("месяц %d, строка 200: получено %.2f, ожидалось %.2f", m+1, got, w)
+		}
+	}
+	// Соседние строки листа не касаются: 201 — это 4.10, 202 — это 4.11.
+	for m := range res.Monthly {
+		if got := res.Monthly[m].Overhead[23]; got != 0 {
+			t.Errorf("месяц %d, строка 201 не должна меняться, получено %.2f", m+1, got)
+		}
+		if got := res.Monthly[m].Overhead[24]; got != 0 {
+			t.Errorf("месяц %d, строка 202 не должна меняться, получено %.2f", m+1, got)
+		}
+	}
+}
+
+func TestSubcontractGenLinesReachOverheadRow202(t *testing.T) {
+	inp := costLinesInputs(3)
+	inp.SubcontractGenLines = &InputCostLines{Lines: []CostLine{
+		{Name: "Монтаж металлоконструкций", MonthlyAmounts: []float64{0, 500000, 500000}},
+	}}
+
+	res := Run(inp)
+	for m, w := range []float64{0, 500000, 500000} {
+		if got := res.Monthly[m].Overhead[24]; got != w {
+			t.Errorf("месяц %d, строка 202: получено %.2f, ожидалось %.2f", m+1, got, w)
+		}
+	}
+	for m := range res.Monthly {
+		if got := res.Monthly[m].Overhead[22]; got != 0 {
+			t.Errorf("месяц %d, строка 200 не должна меняться, получено %.2f", m+1, got)
+		}
+	}
+}
+
+func TestSubcontractLegacyFallback(t *testing.T) {
+	inp := costLinesInputs(3)
+	inp.SubcontractExt = []float64{100, 200, 300}
+	inp.SubcontractGen = []float64{400, 500, 600}
+
+	res := Run(inp)
+	for m, w := range []float64{100, 200, 300} {
+		if got := res.Monthly[m].Overhead[22]; got != w {
+			t.Errorf("месяц %d, строка 200: получено %.2f, ожидалось %.2f", m+1, got, w)
+		}
+	}
+	for m, w := range []float64{400, 500, 600} {
+		if got := res.Monthly[m].Overhead[24]; got != w {
+			t.Errorf("месяц %d, строка 202: получено %.2f, ожидалось %.2f", m+1, got, w)
+		}
+	}
+}
+
+// Текст ошибки должен называть тот лист, на котором экономист сейчас стоит,
+// иначе тост уводит не туда.
+func TestValidateInputCostLinesTitles(t *testing.T) {
+	bad := []byte(`{"lines":[{"name":"X","monthly_amounts":[-1]}]}`)
+	cases := map[string]string{
+		TypeSoftwareItems:       "ПО и лицензии",
+		TypeSubcontractExtItems: "ГПХ внешний",
+		TypeSubcontractGenItems: "субподрядные работы",
+	}
+	for typ, want := range cases {
+		err := ValidateInput(typ, bad, ExecutorAibicon, 1)
+		if err == nil {
+			t.Errorf("%s: отрицательная стоимость должна отклоняться", typ)
+			continue
+		}
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: в ошибке нет «%s»: %v", typ, want, err)
 		}
 	}
 }
