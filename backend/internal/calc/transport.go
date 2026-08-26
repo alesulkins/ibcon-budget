@@ -48,32 +48,37 @@ func calcTransport(in *InputTransport, duration int) (transport, garage []float6
 		if p.Month < 1 || p.Month > duration {
 			continue
 		}
-		transport[p.Month-1] += p.Price
+		// 4.3!D17 = IF(A17<=$D$8, C17*B17, 0) — стоимость × количество
+		transport[p.Month-1] += p.Price * float64(p.Count)
 	}
 
-	// Аренда: цена за месяц × месяцы, в которых предмет арендуется.
-	// В форме это `кол-во в месяце × единая цена` (4.3!C5*$B$6 и 4.3!C10*$B$11);
-	// в платформе каждый арендуемый предмет — своя строка со своей ценой,
-	// поэтому «количество в месяце» = число строк, включивших этот месяц.
+	// Аренда: цена × количество в каждом выбранном месяце.
+	// В форме это 4.3!C5*$B$6 (авто) и 4.3!C10*$B$11 (гараж), где количество
+	// задаётся отдельно в каждом месяце. Здесь количество принадлежит строке,
+	// а помесячные изменения выражаются несколькими строками.
 	addRentalMonths(transport, in.CarRentals, duration)
 	addRentalMonths(garage, in.GarageRentals, duration)
 
 	return transport, garage
 }
 
-// addRentalMonths начисляет цену каждого предмета в каждый выбранный месяц.
+// addRentalMonths начисляет `цена × количество` в каждый выбранный месяц.
 // Повторы месяцев внутри одной строки игнорируются: чекбокс нельзя поставить
 // дважды, а вот в сохранённом JSON дубль теоретически возможен.
 func addRentalMonths(dst []float64, items []RentedItem, duration int) {
 	for i := range items {
 		it := &items[i]
+		amount := it.Price * float64(it.Count)
+		if amount == 0 {
+			continue
+		}
 		seen := make(map[int]bool, len(it.Months))
 		for _, m := range it.Months {
 			if m < 1 || m > duration || seen[m] {
 				continue
 			}
 			seen[m] = true
-			dst[m-1] += it.Price
+			dst[m-1] += amount
 		}
 	}
 }
@@ -96,6 +101,10 @@ func ValidateTransport(in *InputTransport, duration int) error {
 		if p.Price < 0 {
 			return fmt.Errorf("покупка авто, строка %d (%s): цена не может быть отрицательной (%.2f)",
 				i+1, itemTitle(p.Name), p.Price)
+		}
+		if p.Count < 0 {
+			return fmt.Errorf("покупка авто, строка %d (%s): количество не может быть отрицательным (%d)",
+				i+1, itemTitle(p.Name), p.Count)
 		}
 		if p.Month == 0 {
 			continue // строка не заполнена — игнорируется целиком
@@ -120,6 +129,11 @@ func validateRentals(what string, items []RentedItem, duration int) error {
 		if it.Price < 0 {
 			return fmt.Errorf("%s, строка %d (%s): цена не может быть отрицательной (%.2f)",
 				what, i+1, itemTitle(it.Name), it.Price)
+		}
+		// Ноль допустим: строка есть, но в этот раз ничего не арендуется.
+		if it.Count < 0 {
+			return fmt.Errorf("%s, строка %d (%s): количество не может быть отрицательным (%d)",
+				what, i+1, itemTitle(it.Name), it.Count)
 		}
 		for _, m := range it.Months {
 			if m < 1 || m > duration {

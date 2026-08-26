@@ -28,17 +28,23 @@ const table: React.CSSProperties = {
   borderCollapse: 'collapse',
 };
 
-const NAME_COL = 200;
-const PRICE_COL = 130;
+const NAME_COL = 180;
+const PRICE_COL = 120;
+const COUNT_COL = 70;
 const TOTAL_COL = 110;
 const DEL_COL = 40;
 
 function emptyPurchase(): CarPurchase {
-  return { name: '', month: 0, price: 0 };
+  return { name: '', month: 0, count: 1, price: 0 };
 }
 
 function emptyRental(): RentedItem {
-  return { name: '', price: 0, months: [] };
+  return { name: '', price: 0, count: 1, months: [] };
+}
+
+/** Итог строки аренды: цена × количество × число выбранных месяцев. */
+function rentalTotal(r: RentedItem): number {
+  return r.price * r.count * r.months.length;
 }
 
 export default function TransportInput({ versionId, duration, startDate, readonly }: Props) {
@@ -130,6 +136,7 @@ export default function TransportInput({ versionId, duration, startDate, readonl
         <colgroup>
           <col style={{ width: NAME_COL }} />
           <col style={{ width: PRICE_COL }} />
+          <col style={{ width: COUNT_COL }} />
           {months.map((_, i) => <col key={i} />)}
           <col style={{ width: TOTAL_COL }} />
           {!readonly && <col style={{ width: DEL_COL }} />}
@@ -140,7 +147,10 @@ export default function TransportInput({ versionId, duration, startDate, readonl
               Название
             </th>
             <th style={{ ...monthGridHeadCell, color: '#333', fontWeight: 500 }}>
-              Цена в месяц, ₽
+              Цена за ед. в месяц, ₽
+            </th>
+            <th style={{ ...monthGridHeadCell, color: '#333', fontWeight: 500 }}>
+              Кол-во
             </th>
             {months.map((m, i) => <th key={i} style={monthGridHeadCell}>{m}</th>)}
             <th style={{ ...monthGridHeadCell, textAlign: 'right', color: '#333', fontWeight: 500 }}>
@@ -153,7 +163,7 @@ export default function TransportInput({ versionId, duration, startDate, readonl
           {items.length === 0 && (
             <tr>
               <td
-                colSpan={2 + duration + 1 + (readonly ? 0 : 1)}
+                colSpan={3 + duration + 1 + (readonly ? 0 : 1)}
                 style={{ ...monthGridCell, color: '#999', fontSize: 12, padding: '10px 4px' }}
               >
                 Строк нет
@@ -189,6 +199,20 @@ export default function TransportInput({ versionId, duration, startDate, readonl
                   />
                 )}
               </td>
+              <td style={monthGridCell}>
+                {readonly ? (
+                  <Text style={{ fontSize: 12 }}>{r.count}</Text>
+                ) : (
+                  <InputNumber
+                    size="small"
+                    style={{ width: '100%' }}
+                    min={0}
+                    // Ноль допустим: строка есть, но в этот раз не арендуем.
+                    value={r.count}
+                    onChange={v => patchRental(set, idx, { count: v ?? 0 })}
+                  />
+                )}
+              </td>
               {months.map((_, i) => (
                 <td key={i} style={monthGridCell}>
                   <Checkbox
@@ -199,7 +223,7 @@ export default function TransportInput({ versionId, duration, startDate, readonl
                 </td>
               ))}
               <td style={{ ...monthGridCell, textAlign: 'right', fontWeight: 500, fontSize: 12 }}>
-                {(r.price * r.months.length).toLocaleString('ru-RU')}
+                {rentalTotal(r).toLocaleString('ru-RU')}
               </td>
               {!readonly && (
                 <td style={monthGridCell}>
@@ -221,9 +245,9 @@ export default function TransportInput({ versionId, duration, startDate, readonl
 
   const purchasesTotal = purchases
     .filter(p => p.month >= 1 && p.month <= duration)
-    .reduce((s, p) => s + (p.price || 0), 0);
-  const carsTotal = cars.reduce((s, r) => s + r.price * r.months.length, 0);
-  const garagesTotal = garages.reduce((s, r) => s + r.price * r.months.length, 0);
+    .reduce((s, p) => s + p.price * p.count, 0);
+  const carsTotal = cars.reduce((s, r) => s + rentalTotal(r), 0);
+  const garagesTotal = garages.reduce((s, r) => s + rentalTotal(r), 0);
 
   return (
     <div>
@@ -253,13 +277,15 @@ export default function TransportInput({ versionId, duration, startDate, readonl
         <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
           Разовая покупка учитывается целиком в месяц приобретения. Месяц —
           обязателен: строка без месяца в расчёт не попадёт и не сохранится.
-          Две одинаковые машины — две строки.
+          Итог строки — цена × количество.
         </Text>
         <table style={table}>
           <colgroup>
             <col />
             <col style={{ width: 180 }} />
-            <col style={{ width: 180 }} />
+            <col style={{ width: 160 }} />
+            <col style={{ width: COUNT_COL }} />
+            <col style={{ width: TOTAL_COL }} />
             {!readonly && <col style={{ width: DEL_COL }} />}
           </colgroup>
           <thead>
@@ -271,7 +297,13 @@ export default function TransportInput({ versionId, duration, startDate, readonl
                 Месяц покупки
               </th>
               <th style={{ ...monthGridHeadCell, color: '#333', fontWeight: 500 }}>
-                Цена, ₽
+                Цена за ед., ₽
+              </th>
+              <th style={{ ...monthGridHeadCell, color: '#333', fontWeight: 500 }}>
+                Кол-во
+              </th>
+              <th style={{ ...monthGridHeadCell, textAlign: 'right', color: '#333', fontWeight: 500 }}>
+                Итого
               </th>
               {!readonly && <th style={monthGridHeadCell} />}
             </tr>
@@ -280,7 +312,7 @@ export default function TransportInput({ versionId, duration, startDate, readonl
             {purchases.length === 0 && (
               <tr>
                 <td
-                  colSpan={3 + (readonly ? 0 : 1)}
+                  colSpan={5 + (readonly ? 0 : 1)}
                   style={{ ...monthGridCell, color: '#999', fontSize: 12, padding: '10px 4px' }}
                 >
                   Покупок нет
@@ -341,6 +373,24 @@ export default function TransportInput({ versionId, duration, startDate, readonl
                     />
                   )}
                 </td>
+                <td style={monthGridCell}>
+                  {readonly ? (
+                    <Text style={{ fontSize: 12 }}>{p.count}</Text>
+                  ) : (
+                    <InputNumber
+                      size="small"
+                      style={{ width: '100%' }}
+                      min={0}
+                      value={p.count}
+                      onChange={v => setPurchases(prev => prev.map(
+                        (r, i) => (i === idx ? { ...r, count: v ?? 0 } : r),
+                      ))}
+                    />
+                  )}
+                </td>
+                <td style={{ ...monthGridCell, textAlign: 'right', fontWeight: 500, fontSize: 12 }}>
+                  {(p.price * p.count).toLocaleString('ru-RU')}
+                </td>
                 {!readonly && (
                   <td style={monthGridCell}>
                     <Button
@@ -378,8 +428,10 @@ export default function TransportInput({ versionId, duration, startDate, readonl
         </Text>}
       >
         <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
-          Одна строка — один арендуемый автомобиль со своей ценой. Отметьте
-          месяцы, в которых он арендуется. Две одинаковые машины — две строки.
+          Одна строка — один вид авто со своей ценой и количеством. Отметьте
+          месяцы, в которых оно арендуется: итог строки — цена × количество ×
+          число отмеченных месяцев. Если количество меняется по месяцам,
+          заведите несколько строк — их количества складываются.
         </Text>
         {renderRentalTable(cars, setCars, 'например, Газель')}
         {!readonly && (
@@ -403,7 +455,8 @@ export default function TransportInput({ versionId, duration, startDate, readonl
         </Text>}
       >
         <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
-          Отдельная строка расходов бюджета — «Аренда гаража».
+          Отдельная строка расходов бюджета — «Аренда гаража». Считается так
+          же: цена × количество × число отмеченных месяцев.
         </Text>
         {renderRentalTable(garages, setGarages, 'например, Гараж №1')}
         {!readonly && (
