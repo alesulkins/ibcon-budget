@@ -58,6 +58,16 @@ func Run(inp *BudgetInputs) *CalcResult {
 		wagonciksArr = inp.SiteSetup
 	}
 
+	// ── 1г. Лист 4.5: офис ────────────────────────────────────────────────────
+	// Строка 182 = аренда офиса (с gross-up на НДФЛ, кроме Киргизии),
+	// строка 183 = уборка офиса (без gross-up).
+	officeRentArr, officeCleaningArr := calcOffice(inp.Office, inp.ExecutorName, n)
+	if inp.Office == nil {
+		// Версия сохранена до перехода 4.5 на расчёт по формуле.
+		// Удалить вместе с TypeOfficeRent / TypeOfficeCleaning.
+		officeRentArr, officeCleaningArr = inp.OfficeRent, inp.OfficeCleaning
+	}
+
 	// ── 2. Премии и компенсации (4.1) суммарно → 2.Бюджет строка 169 ────────
 	bonusArr := bonusRes.Total
 
@@ -114,8 +124,8 @@ func Run(inp *BudgetInputs) *CalcResult {
 		realtorArr,            // 1 → 179 Риелтор (4.2, авторасчёт)
 		transportArr,          // 2 → 180 Аренда транспорта + покупка авто (4.3, авторасчёт)
 		wagonciksArr,          // 3 → 181 Вагончики: аренда + покупка (4.4, авторасчёт)
-		inp.OfficeRent,        // 4 → 182
-		inp.OfficeCleaning,    // 5 → 183
+		officeRentArr,         // 4 → 182 Аренда офиса (4.5, авторасчёт)
+		officeCleaningArr,     // 5 → 183 Уборка офиса (4.5, авторасчёт)
 		ticketsArr,            // 6 → 184 Билеты (авторасчёт)
 		perDiemArr,            // 7 → 185 Командировочные (авторасчёт)
 		inp.Internet,          // 8 → 186

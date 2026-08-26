@@ -21,6 +21,7 @@ import BonusesInput from './inputs/BonusesInput';
 import RentApartmentsInput from './inputs/RentApartmentsInput';
 import TransportInput from './inputs/TransportInput';
 import WagonciksInput from './inputs/WagonciksInput';
+import OfficeInput from './inputs/OfficeInput';
 import SimpleCostInput from './inputs/SimpleCostInput';
 import OverheadInput from './inputs/OverheadInput';
 import BudgetParamsInput from './inputs/BudgetParamsInput';
@@ -174,27 +175,16 @@ export default function BudgetVersionPage() {
           />
         );
       case 'office':
+        // Аренда и уборка офиса; суммы считает бэкенд (calcOffice, лист 4.5).
+        // Исполнитель нужен: аренда делится на 0.87, кроме Киргизии.
         return (
-          <div>
-            <SimpleCostInput
-              versionId={versionId}
-              type="office_rent"
-              title="Аренда офиса — лист 4.5"
-              duration={duration}
-              startDate={project!.start_date}
-              readonly={isReadonly}
-            />
-            <div style={{ marginTop: 16 }}>
-              <SimpleCostInput
-                versionId={versionId}
-                type="office_cleaning"
-                title="Уборка офиса — лист 4.5"
-                duration={duration}
-                startDate={project!.start_date}
-                readonly={isReadonly}
-              />
-            </div>
-          </div>
+          <OfficeInput
+            versionId={versionId}
+            duration={duration}
+            startDate={project!.start_date}
+            executor={project!.executor_name}
+            readonly={isReadonly}
+          />
         );
       case 'control_equipment':
         return (

@@ -31,7 +31,14 @@ const (
 	// TypeSiteSetup — СТАРЫЙ ввод листа 4.4 готовыми суммами по месяцам.
 	// Читается только ради версий, сохранённых до перехода на расчёт по
 	// формуле; новые данные пишутся в TypeWagonciks.
-	TypeSiteSetup        = "site_setup"
+	TypeSiteSetup = "site_setup"
+	// TypeOffice — лист 4.5. Список офисов (цена + количество по месяцам)
+	// и стоимость уборки одного офиса (см. InputOffice).
+	// Даёт строки 182 (аренда) и 183 (уборка).
+	TypeOffice = "office"
+	// TypeOfficeRent / TypeOfficeCleaning — СТАРЫЙ ввод листа 4.5 готовыми
+	// суммами по месяцам; читаются только ради версий, сохранённых до
+	// перехода на расчёт по формуле.
 	TypeOfficeRent       = "office_rent"
 	TypeOfficeCleaning   = "office_cleaning"
 	TypeInternet         = "internet"
@@ -158,6 +165,13 @@ func LoadInputs(
 				return nil, fmt.Errorf("parse %s: %w", typ, err)
 			}
 			inp.Wagonciks = &v
+
+		case TypeOffice:
+			var v InputOffice
+			if err := json.Unmarshal(raw, &v); err != nil {
+				return nil, fmt.Errorf("parse %s: %w", typ, err)
+			}
+			inp.Office = &v
 
 		case TypeBudgetParams:
 			var v InputBudgetParams

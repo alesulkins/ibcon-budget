@@ -315,6 +315,10 @@ type BudgetInputs struct {
 	// стройплощадки: аренда вагончиков + покупка вагончиков одной суммой).
 	Wagonciks *InputWagonciks
 
+	// Лист 4.5 — считается по формуле. Даёт строки 182 (аренда офиса) и
+	// 183 (уборка офиса).
+	Office *InputOffice
+
 	// Накладные расходы (строки 178-211) — двумерный массив по статьям
 	//
 	// TransportRental и GarageRent — СТАРЫЙ формат листа 4.3 (готовые суммы
@@ -324,8 +328,8 @@ type BudgetInputs struct {
 	// останется.
 	TransportRental   []float64 // 180 Аренда транспорта (4.3), устаревший ввод
 	SiteSetup         []float64 // 181 Обустройство стройплощадки (4.4), устаревший ввод
-	OfficeRent        []float64 // 182 Аренда офиса (4.5)
-	OfficeCleaning    []float64 // 183 Уборка офиса (4.5)
+	OfficeRent        []float64 // 182 Аренда офиса (4.5), устаревший ввод
+	OfficeCleaning    []float64 // 183 Уборка офиса (4.5), устаревший ввод
 	// 184 Билеты — рассчитывается из Employee.MonthlySchedule
 	// 185 Командировочные — рассчитывается из Employee.TripDays
 	Internet          []float64 // 186
