@@ -8,7 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
 import { budgetsApi } from '../../../api';
 import type { Employee, InputEmployees } from '../../../types';
-import { monthLabel, thousandFormatter, thousandParser } from '../../../utils/fmt';
+import { monthLabel, thousandFormatter, thousandParser, fmtNum } from '../../../utils/fmt';
 import MonthGrid, {
   monthGridCell, monthGridHeadCell, LABEL_COL_WIDTH,
 } from '../../../components/MonthGrid';
@@ -207,7 +207,7 @@ export default function EmployeesInput({
     {
       title: 'План ФОТ на руки, ₽',
       dataIndex: 'salary_net',
-      render: (v) => v.toLocaleString('ru-RU'),
+      render: (v) => fmtNum(v),
       align: 'right',
       width: 150,
     },
@@ -257,7 +257,7 @@ export default function EmployeesInput({
                 min={0}
                 disabled={readonly}
                 style={{ width: 150 }}
-                placeholder={`по умолчанию ${fallback.toLocaleString('ru-RU')}`}
+                placeholder={`по умолчанию ${fmtNum(fallback)}`}
                 // Раньше здесь стояло `v ?? fallback`, из-за чего стирание
                 // последнего символа мгновенно возвращало значение по
                 // умолчанию и поле нельзя было очистить. 0 означает

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Card, InputNumber, Button, Row, Col, Typography, Switch } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { budgetsApi } from '../../../api';
-import { monthLabel, thousandFormatter, thousandParser } from '../../../utils/fmt';
+import { monthLabel, thousandFormatter, thousandParser, fmtNum } from '../../../utils/fmt';
 import MonthGrid, { monthGridCell, monthGridHeadCell } from '../../../components/MonthGrid';
 import { useAutosave } from '../../../hooks/useAutosave';
 
@@ -110,7 +110,7 @@ export default function SimpleCostInput({ versionId, type, title, duration, read
             {amounts.map((v, i) => (
               <td key={i} style={monthGridCell}>
                 {readonly ? (
-                  <Text>{v ? v.toLocaleString('ru-RU') : '—'}</Text>
+                  <Text>{v ? fmtNum(v) : '—'}</Text>
                 ) : (
                   <InputNumber
                     size="small"
@@ -129,7 +129,7 @@ export default function SimpleCostInput({ versionId, type, title, duration, read
               </td>
             ))}
             <td style={{ ...monthGridCell, textAlign: 'right', fontWeight: 600 }}>
-              {total.toLocaleString('ru-RU')} ₽
+              {fmtNum(total)} ₽
             </td>
           </tr>
         </tbody>

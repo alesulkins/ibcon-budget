@@ -3,7 +3,7 @@ import { Card, InputNumber, Typography } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { budgetsApi } from '../../../api';
 import type { InputOffice, RentedItem } from '../../../types';
-import { monthLabel, thousandFormatter, thousandParser } from '../../../utils/fmt';
+import { monthLabel, thousandFormatter, thousandParser, fmtNum } from '../../../utils/fmt';
 import RentalGrid, { padCounts, rentalTotal } from '../../../components/RentalGrid';
 import { useAutosave } from '../../../hooks/useAutosave';
 
@@ -76,7 +76,7 @@ export default function OfficeInput({
         size="small"
         style={{ marginBottom: 16 }}
         extra={<Text type="secondary" style={{ fontSize: 12 }}>
-          Итого {rentTotal.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽
+          Итого {fmtNum(rentTotal)} ₽
         </Text>}
       >
         <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
@@ -86,8 +86,8 @@ export default function OfficeInput({
           {isKG
             ? ' Для киргизского филиала сумма идёт в бюджет как есть.'
             : ` В бюджет сумма попадает с надбавкой на НДФЛ: делится на ${GROSS_UP}`
-              + ` (стоимость офисов ${officeCosts.toLocaleString('ru-RU')} ₽ →`
-              + ` ${rentTotal.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽).`}
+              + ` (стоимость офисов ${fmtNum(officeCosts)} ₽ →`
+              + ` ${fmtNum(rentTotal)} ₽).`}
         </Text>
         <RentalGrid
           items={offices}
@@ -105,7 +105,7 @@ export default function OfficeInput({
         title="Уборка офиса"
         size="small"
         extra={<Text type="secondary" style={{ fontSize: 12 }}>
-          Итого {cleaningTotal.toLocaleString('ru-RU')} ₽
+          Итого {fmtNum(cleaningTotal)} ₽
         </Text>}
       >
         <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
@@ -118,7 +118,7 @@ export default function OfficeInput({
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Text style={{ fontSize: 12 }}>Стоимость уборки одного офиса в месяц:</Text>
           {readonly ? (
-            <Text strong>{cleaningPrice.toLocaleString('ru-RU')} ₽</Text>
+            <Text strong>{fmtNum(cleaningPrice)} ₽</Text>
           ) : (
             <InputNumber
               size="small"

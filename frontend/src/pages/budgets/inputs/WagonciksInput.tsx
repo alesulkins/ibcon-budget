@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { budgetsApi } from '../../../api';
 import type { InputWagonciks, MonthlyQty, ItemPurchase } from '../../../types';
 import { purchaseAllowedMonths } from '../../../types';
-import { monthLabel, thousandFormatter, thousandParser } from '../../../utils/fmt';
+import { monthLabel, thousandFormatter, thousandParser, fmtNum } from '../../../utils/fmt';
 import MonthGrid, { monthGridCell, monthGridHeadCell } from '../../../components/MonthGrid';
 import PurchaseTable from '../../../components/PurchaseTable';
 import { useAutosave } from '../../../hooks/useAutosave';
@@ -88,7 +88,7 @@ export default function WagonciksInput({ versionId, duration, startDate, readonl
         size="small"
         style={{ marginBottom: 16 }}
         extra={<Text type="secondary" style={{ fontSize: 12 }}>
-          Итого {purchasesTotal.toLocaleString('ru-RU')} ₽
+          Итого {fmtNum(purchasesTotal)} ₽
         </Text>}
       >
         <Alert
@@ -121,13 +121,13 @@ export default function WagonciksInput({ versionId, duration, startDate, readonl
         title="Аренда вагончиков"
         size="small"
         extra={<Text type="secondary" style={{ fontSize: 12 }}>
-          Итого {rentalTotal.toLocaleString('ru-RU')} ₽
+          Итого {fmtNum(rentalTotal)} ₽
         </Text>}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
           <Text style={{ fontSize: 12 }}>Цена аренды одного вагончика в месяц:</Text>
           {readonly ? (
-            <Text strong>{rental.price.toLocaleString('ru-RU')} ₽</Text>
+            <Text strong>{fmtNum(rental.price)} ₽</Text>
           ) : (
             <InputNumber
               size="small"
@@ -185,7 +185,7 @@ export default function WagonciksInput({ versionId, duration, startDate, readonl
                 </td>
               ))}
               <td style={{ ...monthGridCell, textAlign: 'right', fontWeight: 500, fontSize: 12 }}>
-                {rentalTotal.toLocaleString('ru-RU')} ₽
+                {fmtNum(rentalTotal)} ₽
               </td>
             </tr>
           </tbody>
@@ -195,7 +195,7 @@ export default function WagonciksInput({ versionId, duration, startDate, readonl
       <Text type="secondary" style={{ display: 'block', marginTop: 12, fontSize: 12 }}>
         Покупка и аренда складываются в одну строку бюджета «Обустройство
         строительной площадки (вагончики)» —{' '}
-        {(rentalTotal + purchasesTotal).toLocaleString('ru-RU')} ₽ за проект.
+        {fmtNum(rentalTotal + purchasesTotal)} ₽ за проект.
       </Text>
     </div>
   );

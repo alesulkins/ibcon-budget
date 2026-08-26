@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { budgetsApi } from '../../../api';
 import type { InputBudgetParams } from '../../../types';
 import { useAutosave } from '../../../hooks/useAutosave';
+import { fmtNum } from '../../../utils/fmt';
 
 const { Text } = Typography;
 
@@ -81,7 +82,7 @@ export default function BudgetParamsInput({ versionId, executor, readonly }: Pro
     ? (values.contract_value ?? 0) / 1.22
     : (values.contract_value ?? 0);
   const netRevenueHint = withVAT
-    ? `ТКП задан с НДС. Стоимость работ без НДС = ${net.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽ (ТКП / 1.22) — именно она идёт в расчёт выручки.`
+    ? `ТКП задан с НДС. Стоимость работ без НДС = ${fmtNum(net)} ₽ (ТКП / 1.22) — именно она идёт в расчёт выручки.`
     : 'ТКП задан без НДС — стоимость работ равна ему, деление на НДС не применяется.';
 
   return (

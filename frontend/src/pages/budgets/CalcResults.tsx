@@ -8,7 +8,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
 import { budgetsApi } from '../../api';
 import type { MonthlyResult } from '../../types';
-import { fmtMoney, fmtPct, monthLabel } from '../../utils/fmt';
+import { fmtMoney, fmtPct, monthLabel, fmtNum } from '../../utils/fmt';
 import { extractError } from '../../api/client';
 
 const { Title, Text } = Typography;
@@ -108,7 +108,7 @@ export default function CalcResults({ versionId, projectId, duration, startDate 
                 <Statistic
                   title="Стоимость работ без НДС (G236)"
                   value={r.total_revenue}
-                  formatter={(v) => `${Number(v).toLocaleString('ru-RU')} ₽`}
+                  formatter={(v) => `${fmtNum(Number(v))} ₽`}
                   valueStyle={{ color: '#1a3a6b', fontWeight: 700 }}
                 />
               </Card>
@@ -118,7 +118,7 @@ export default function CalcResults({ versionId, projectId, duration, startDate 
                 <Statistic
                   title="Рентабельность (G244)"
                   value={r.profitability}
-                  precision={1}
+                  precision={2}
                   suffix="%"
                   valueStyle={{ color: r.profitability >= 0 ? '#52c41a' : '#ff4d4f', fontWeight: 700 }}
                 />
@@ -129,7 +129,7 @@ export default function CalcResults({ versionId, projectId, duration, startDate 
                 <Statistic
                   title="Чистая прибыль"
                   value={r.net_profit}
-                  formatter={(v) => `${Number(v).toLocaleString('ru-RU')} ₽`}
+                  formatter={(v) => `${fmtNum(Number(v))} ₽`}
                   valueStyle={{ color: r.net_profit >= 0 ? '#52c41a' : '#ff4d4f' }}
                 />
               </Card>
@@ -139,7 +139,7 @@ export default function CalcResults({ versionId, projectId, duration, startDate 
                 <Statistic
                   title="ФОТ (вкл. взносы)"
                   value={r.total_fot}
-                  formatter={(v) => `${Number(v).toLocaleString('ru-RU')} ₽`}
+                  formatter={(v) => `${fmtNum(Number(v))} ₽`}
                 />
               </Card>
             </Col>

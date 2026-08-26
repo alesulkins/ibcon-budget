@@ -1,7 +1,7 @@
 import { Input, InputNumber, Select, Button, Typography } from 'antd';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ItemPurchase } from '../types';
-import { thousandFormatter, thousandParser } from '../utils/fmt';
+import { thousandFormatter, thousandParser, fmtNum } from '../utils/fmt';
 import { monthGridCell, monthGridHeadCell } from './MonthGrid';
 
 const { Text } = Typography;
@@ -131,7 +131,7 @@ export default function PurchaseTable({
               </td>
               <td style={monthGridCell}>
                 {readonly ? (
-                  <Text style={{ fontSize: 12 }}>{p.price.toLocaleString('ru-RU')}</Text>
+                  <Text style={{ fontSize: 12 }}>{fmtNum(p.price)}</Text>
                 ) : (
                   <InputNumber
                     size="small"
@@ -158,7 +158,7 @@ export default function PurchaseTable({
                 )}
               </td>
               <td style={{ ...monthGridCell, textAlign: 'right', fontWeight: 500, fontSize: 12 }}>
-                {(p.price * p.count).toLocaleString('ru-RU')}
+                {fmtNum(p.price * p.count)}
               </td>
               {!readonly && (
                 <td style={monthGridCell}>

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Input, InputNumber, Button, Switch, Typography } from 'antd';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import type { RentedItem } from '../types';
-import { thousandFormatter, thousandParser } from '../utils/fmt';
+import { thousandFormatter, thousandParser, fmtNum } from '../utils/fmt';
 import MonthGrid, { monthGridCell, monthGridHeadCell } from './MonthGrid';
 
 const { Text } = Typography;
@@ -132,7 +132,7 @@ export default function RentalGrid({
                     {readonly ? (
                       <div style={{ fontSize: 12 }}>
                         <div>{r.name || '—'}</div>
-                        <div style={{ color: '#888' }}>{r.price.toLocaleString('ru-RU')} ₽</div>
+                        <div style={{ color: '#888' }}>{fmtNum(r.price)} ₽</div>
                       </div>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -185,7 +185,7 @@ export default function RentalGrid({
                     </td>
                   ))}
                   <td style={{ ...monthCountCell, textAlign: 'right', fontWeight: 500, fontSize: 12 }}>
-                    <div>{rentalTotal(r, duration).toLocaleString('ru-RU')}</div>
+                    <div>{fmtNum(rentalTotal(r, duration))}</div>
                     {!readonly && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
                         <Switch

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Card, Typography, InputNumber } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { budgetsApi } from '../../../api';
-import { monthLabel, thousandFormatter, thousandParser } from '../../../utils/fmt';
+import { monthLabel, thousandFormatter, thousandParser, fmtNum } from '../../../utils/fmt';
 import MonthGrid, { monthGridCell, monthGridHeadCell } from '../../../components/MonthGrid';
 import { useAutosave } from '../../../hooks/useAutosave';
 
@@ -126,7 +126,7 @@ export default function OverheadInput({ versionId, duration, startDate, readonly
                 return (
                   <td key={monthIdx} style={monthGridCell}>
                     {readonly ? (
-                      <span style={{ fontSize: 12 }}>{val ? val.toLocaleString('ru-RU') : '—'}</span>
+                      <span style={{ fontSize: 12 }}>{val ? fmtNum(val) : '—'}</span>
                     ) : (
                       <InputNumber
                         size="small"
@@ -142,7 +142,7 @@ export default function OverheadInput({ versionId, duration, startDate, readonly
                 );
               })}
               <td style={{ ...monthGridCell, textAlign: 'right', fontWeight: 500, fontSize: 12 }}>
-                {lineTotal(line.key).toLocaleString('ru-RU')}
+                {fmtNum(lineTotal(line.key))}
               </td>
             </tr>
           ))}

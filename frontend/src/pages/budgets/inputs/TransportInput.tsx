@@ -3,7 +3,7 @@ import { Card, Typography, Alert, Space } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { budgetsApi } from '../../../api';
 import type { InputTransport, ItemPurchase, RentedItem } from '../../../types';
-import { monthLabel, thousandFormatter, thousandParser } from '../../../utils/fmt';
+import { monthLabel, thousandFormatter, thousandParser, fmtNum } from '../../../utils/fmt';
 import PurchaseTable from '../../../components/PurchaseTable';
 import RentalGrid, { padCounts, rentalTotal } from '../../../components/RentalGrid';
 import { useAutosave } from '../../../hooks/useAutosave';
@@ -111,7 +111,7 @@ export default function TransportInput({ versionId, duration, startDate, readonl
         size="small"
         style={{ marginBottom: 16 }}
         extra={<Text type="secondary" style={{ fontSize: 12 }}>
-          Итого {purchasesTotal.toLocaleString('ru-RU')} ₽
+          Итого {fmtNum(purchasesTotal)} ₽
         </Text>}
       >
         <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
@@ -135,7 +135,7 @@ export default function TransportInput({ versionId, duration, startDate, readonl
         size="small"
         style={{ marginBottom: 16 }}
         extra={<Text type="secondary" style={{ fontSize: 12 }}>
-          Итого {carsTotal.toLocaleString('ru-RU')} ₽
+          Итого {fmtNum(carsTotal)} ₽
         </Text>}
       >
         <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
@@ -160,7 +160,7 @@ export default function TransportInput({ versionId, duration, startDate, readonl
         title="Аренда гаража"
         size="small"
         extra={<Text type="secondary" style={{ fontSize: 12 }}>
-          Итого {garagesTotal.toLocaleString('ru-RU')} ₽
+          Итого {fmtNum(garagesTotal)} ₽
         </Text>}
       >
         <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
@@ -182,8 +182,8 @@ export default function TransportInput({ versionId, duration, startDate, readonl
       <Space style={{ marginTop: 12 }}>
         <Text type="secondary" style={{ fontSize: 12 }}>
           Покупка и аренда авто складываются в одну строку бюджета «Аренда
-          транспорта» ({(purchasesTotal + carsTotal).toLocaleString('ru-RU')} ₽);
-          гараж идёт отдельной строкой ({garagesTotal.toLocaleString('ru-RU')} ₽).
+          транспорта» ({fmtNum(purchasesTotal + carsTotal)} ₽);
+          гараж идёт отдельной строкой ({fmtNum(garagesTotal)} ₽).
         </Text>
       </Space>
     </div>

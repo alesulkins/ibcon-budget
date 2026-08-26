@@ -10,16 +10,36 @@ export function fmtDateTime(d: string | null | undefined): string {
   return dayjs(d).format('DD.MM.YYYY HH:mm');
 }
 
+/**
+ * Денежная сумма без знака валюты: разряды пробелами, РОВНО два знака
+ * после запятой.
+ *
+ * Два знака обязательны и там, где сумма круглая: в форме встречаются
+ * значения с копейками (аренда после gross-up на НДФЛ — 143 678.16), и
+ * колонка, где часть чисел с копейками, а часть без, не читается. Кроме
+ * того, сверка с Excel идёт до копейки, и «1 189 655,172» на экране
+ * сбивало с толку.
+ *
+ * Округление здесь ТОЛЬКО для показа. В расчёте округлений нет: Excel
+ * тоже считает в полной точности и округляет лишь при выводе, а любое
+ * промежуточное округление увело бы итоги от эталона.
+ */
+export function fmtNum(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n)) return '—';
+  return new Intl.NumberFormat('ru-RU', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n);
+}
+
 export function fmtMoney(n: number | null | undefined): string {
   if (n == null) return '—';
-  return new Intl.NumberFormat('ru-RU', {
-    maximumFractionDigits: 0,
-  }).format(n) + ' ₽';
+  return fmtNum(n) + ' ₽';
 }
 
 export function fmtPct(n: number | null | undefined): string {
   if (n == null) return '—';
-  return n.toFixed(1) + ' %';
+  return n.toFixed(2) + ' %';
 }
 
 /**
