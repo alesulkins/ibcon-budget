@@ -26,8 +26,19 @@ createRoot(document.getElementById('root')!).render(
       <ConfigProvider
         locale={ruRU}
         theme={{
+          // cssVar переводит antd на CSS-переменные: стили считаются один
+          // раз, а не пересобираются рантайм-движком на каждую новую
+          // комбинацию компонентов. hashed: false убирает хеш-классы —
+          // меньше работы стилевому движку и чище инспектор.
+          cssVar: { key: 'ibcon' },
+          hashed: false,
           token: {
             colorPrimary: '#1a3a6b',
+            // Совпадает с --ibcon-bg в index.css: иначе на краях страницы
+            // виден стык двух почти одинаковых серых.
+            colorBgLayout: '#f2f4f7',
+            borderRadius: 8,
+            fontSize: 14,
           },
         }}
       >

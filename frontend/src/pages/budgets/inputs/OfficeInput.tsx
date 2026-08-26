@@ -73,23 +73,21 @@ export default function OfficeInput({
   return (
     <div>
       <Card
-        title="Аренда офиса"
+        title={titleWithHint(
+          'Аренда офиса',
+          'Одна строка — один офис со своей ценой. В каждом месяце укажите '
+          + 'количество арендованных офисов; пусто или 0 — в этом месяце офис '
+          + 'не арендуем.'
+          + (isKG
+            ? ' Для киргизского филиала сумма идёт в бюджет как есть.'
+            : ` В бюджет сумма попадает с надбавкой на НДФЛ: делится на ${GROSS_UP}.`),
+        )}
         size="small"
         style={{ marginBottom: 16 }}
         extra={<Text type="secondary" style={{ fontSize: 12 }}>
           Итого {fmtNum(rentTotal)} ₽
         </Text>}
       >
-        <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
-          Одна строка — один офис со своей ценой. В каждом месяце укажите
-          количество арендованных офисов; пусто или 0 — в этом месяце офис не
-          арендуем.
-          {isKG
-            ? ' Для киргизского филиала сумма идёт в бюджет как есть.'
-            : ` В бюджет сумма попадает с надбавкой на НДФЛ: делится на ${GROSS_UP}`
-              + ` (стоимость офисов ${fmtNum(officeCosts)} ₽ →`
-              + ` ${fmtNum(rentTotal)} ₽).`}
-        </Text>
         <RentalGrid
           items={offices}
           onChange={setOffices}
@@ -99,6 +97,14 @@ export default function OfficeInput({
           namePlaceholder="например, Офис на Ленина"
           addLabel="Добавить офис"
         />
+        {/* Надбавка на НДФЛ — живой результат с текущими суммами, поэтому
+            остаётся на виду, а не прячется в подсказку. */}
+        {!isKG && officeCosts > 0 && (
+          <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
+            Стоимость офисов {fmtNum(officeCosts)} ₽ → в бюджет{' '}
+            {fmtNum(rentTotal)} ₽ (÷ {GROSS_UP}).
+          </Text>
+        )}
       </Card>
 
       <Card

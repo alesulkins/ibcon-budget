@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Table, Button, Tag, Space, Input, Select,
   Modal, Form, DatePicker, InputNumber, message, Tooltip,
@@ -41,6 +41,10 @@ export default function ProjectsPage() {
   useEffect(() => {
     if (fireworks) markFireworksShown();
   }, [fireworks]);
+  // Стабильная ссылка обязательна: Fireworks держит onDone в зависимостях
+  // эффекта, и новая функция на каждый рендер перезапускала анимацию —
+  // холст пересоздавался вместе с циклом requestAnimationFrame.
+  const hideFireworks = useCallback(() => setFireworks(false), []);
 
   const { data, isLoading } = useQuery({
     queryKey: ['projects', search, statusFilter, page],
@@ -206,24 +210,18 @@ export default function ProjectsPage() {
 
   return (
     <div>
-      {fireworks && <Fireworks onDone={() => setFireworks(false)} />}
+      {fireworks && <Fireworks onDone={hideFireworks} />}
 
-      {/* Название раздела живёт в шапке (AppLayout), здесь остаётся
-          только действие. */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
-        {canCreate && (
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => setShowCreate(true)}
-            style={{ background: '#1a3a6b' }}
-          >
-            Создать проект
-          </Button>
-        )}
-      </div>
-
-      <Space style={{ marginBottom: 16 }} wrap>
+      {/* Название раздела живёт в шапке (AppLayout). Фильтры и кнопка
+          стоят одной строкой: у всех контролов одна высота, кнопка
+          прижата к правому краю. */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        flexWrap: 'wrap',
+        marginBottom: 16,
+      }}>
         <Input
           prefix={<SearchOutlined />}
           placeholder="Поиск по проекту, заказчику..."
@@ -262,7 +260,20 @@ export default function ProjectsPage() {
         >
           Сбросить фильтры
         </Button>
-      </Space>
+
+        {canCreate && (
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => setShowCreate(true)}
+            // marginLeft: auto — кнопка уходит вправо, а фильтры остаются
+            // слева; при переносе строки она встаёт в конец последней.
+            style={{ background: '#1a3a6b', marginLeft: 'auto' }}
+          >
+            Создать проект
+          </Button>
+        )}
+      </div>
 
       <Table
         rowKey="id"

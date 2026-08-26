@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Tabs, Table, Button, Tag, Modal, Form, Input, Switch,
   message,
@@ -13,12 +13,38 @@ import { extractError } from '../../api/client';
 
 const canEdit = () => hasRole('GE');
 
+/**
+ * Кнопка «Добавить …» вынесена в панель вкладок, чтобы таблица начиналась
+ * на той же высоте, что и в реестре проектов. Нажатие приходит во вкладку
+ * счётчиком: активная вкладка одна (destroyOnHidden), поэтому сигнал
+ * получает ровно та, что на экране.
+ */
+interface TabProps { addSignal: number }
+
+function useAddSignal(addSignal: number, open: () => void) {
+  // Значение на момент монтирования пропускаем: при переключении вкладки
+  // счётчик уже не нулевой, и форма открывалась бы сама собой.
+  const seen = useRef(addSignal);
+  useEffect(() => {
+    if (addSignal === seen.current) return;
+    seen.current = addSignal;
+    open();
+  }, [addSignal, open]);
+}
+
 // ─── Исполнители ────────────────────────────────────────────────────────────
-function ExecutorsTab() {
+function ExecutorsTab({ addSignal }: TabProps) {
   const qc = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Executor | null>(null);
   const [form] = Form.useForm();
+
+  const openAdd = useCallback(() => {
+    setEditing(null);
+    form.resetFields();
+    setShowModal(true);
+  }, [form]);
+  useAddSignal(addSignal, openAdd);
 
   const { data, isLoading } = useQuery({
     queryKey: ['executors-all'],
@@ -69,12 +95,6 @@ function ExecutorsTab() {
 
   return (
     <>
-      {canEdit() && (
-        <Button type="primary" icon={<PlusOutlined />} style={{ marginBottom: 12, background: '#1a3a6b' }}
-          onClick={() => { setEditing(null); form.resetFields(); setShowModal(true); }}>
-          Добавить исполнителя
-        </Button>
-      )}
       <Table rowKey="id" columns={columns} className="nowrap-table" scroll={{ x: 'max-content' }} dataSource={data ?? []} loading={isLoading} size="small" pagination={false} />
       <Modal
         title={editing ? 'Редактирование исполнителя' : 'Новый исполнитель'}
@@ -103,11 +123,18 @@ function ExecutorsTab() {
 }
 
 // ─── Должности ──────────────────────────────────────────────────────────────
-function PositionsTab() {
+function PositionsTab({ addSignal }: TabProps) {
   const qc = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Position | null>(null);
   const [form] = Form.useForm();
+
+  const openAdd = useCallback(() => {
+    setEditing(null);
+    form.resetFields();
+    setShowModal(true);
+  }, [form]);
+  useAddSignal(addSignal, openAdd);
 
   const { data, isLoading } = useQuery({ queryKey: ['positions-all'], queryFn: refsApi.positions });
 
@@ -146,12 +173,6 @@ function PositionsTab() {
 
   return (
     <>
-      {canEdit() && (
-        <Button type="primary" icon={<PlusOutlined />} style={{ marginBottom: 12, background: '#1a3a6b' }}
-          onClick={() => { setEditing(null); form.resetFields(); setShowModal(true); }}>
-          Добавить должность
-        </Button>
-      )}
       <Table rowKey="id" columns={columns} className="nowrap-table" scroll={{ x: 'max-content' }} dataSource={data ?? []} loading={isLoading} size="small" pagination={{ pageSize: 25 }} />
       <Modal
         title={editing ? 'Редактирование должности' : 'Новая должность'}
@@ -171,11 +192,18 @@ function PositionsTab() {
 }
 
 // ─── Режимы работы ──────────────────────────────────────────────────────────
-function WorkModesTab() {
+function WorkModesTab({ addSignal }: TabProps) {
   const qc = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<WorkMode | null>(null);
   const [form] = Form.useForm();
+
+  const openAdd = useCallback(() => {
+    setEditing(null);
+    form.resetFields();
+    setShowModal(true);
+  }, [form]);
+  useAddSignal(addSignal, openAdd);
 
   const { data, isLoading } = useQuery({ queryKey: ['work-modes-all'], queryFn: refsApi.workModes });
 
@@ -215,12 +243,6 @@ function WorkModesTab() {
 
   return (
     <>
-      {canEdit() && (
-        <Button type="primary" icon={<PlusOutlined />} style={{ marginBottom: 12, background: '#1a3a6b' }}
-          onClick={() => { setEditing(null); form.resetFields(); setShowModal(true); }}>
-          Добавить режим работы
-        </Button>
-      )}
       <Table rowKey="id" columns={columns} className="nowrap-table" scroll={{ x: 'max-content' }} dataSource={data ?? []} loading={isLoading} size="small" pagination={false} />
       <Modal
         title={editing ? 'Редактирование' : 'Новый режим работы'}
@@ -243,14 +265,38 @@ function WorkModesTab() {
 }
 
 export default function ReferencesPage() {
+  const [tab, setTab] = useState('executors');
+  const [addSignal, setAddSignal] = useState(0);
+
+  const ADD_LABELS: Record<string, string> = {
+    executors: 'Добавить исполнителя',
+    positions: 'Добавить должность',
+    'work-modes': 'Добавить режим работы',
+  };
+
   return (
     <div>
       {/* Название раздела живёт в шапке (AppLayout). */}
       <Tabs
+        activeKey={tab}
+        onChange={setTab}
+        // Неактивные вкладки размонтируются: тогда сигнал «добавить»
+        // получает ровно одна вкладка — та, что на экране.
+        destroyOnHidden
+        tabBarExtraContent={canEdit() && (
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            style={{ background: '#1a3a6b' }}
+            onClick={() => setAddSignal(s => s + 1)}
+          >
+            {ADD_LABELS[tab]}
+          </Button>
+        )}
         items={[
-          { key: 'executors', label: 'Исполнители', children: <ExecutorsTab /> },
-          { key: 'positions', label: 'Должности', children: <PositionsTab /> },
-          { key: 'work-modes', label: 'Режимы работы', children: <WorkModesTab /> },
+          { key: 'executors', label: 'Исполнители', children: <ExecutorsTab addSignal={addSignal} /> },
+          { key: 'positions', label: 'Должности', children: <PositionsTab addSignal={addSignal} /> },
+          { key: 'work-modes', label: 'Режимы работы', children: <WorkModesTab addSignal={addSignal} /> },
         ]}
       />
     </div>

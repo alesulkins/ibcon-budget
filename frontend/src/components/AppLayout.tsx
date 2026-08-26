@@ -5,9 +5,9 @@ import {
   HistoryOutlined, LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
   RightOutlined,
 } from '@ant-design/icons';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { profileApi, projectsApi, budgetsApi } from '../api';
-import type { Profile } from '../types';
+import type { Profile, ProjectListItem, PaginatedResponse } from '../types';
 import { ROLE_LABELS } from '../types';
 import { shortName, initials } from '../utils/names';
 import { useNavigate, useLocation, useMatch, Outlet } from 'react-router-dom';
@@ -50,9 +50,22 @@ function ProfileAvatar({ profile, fullName, size }: {
   );
 }
 
-/** Раздел, из которого умеем возвращаться на прежний экран. */
-const RETURNABLE_FROM = '/references';
-const RETURN_TO_KEY = 'references:returnTo';
+/**
+ * Вспомогательные разделы: в них заходят посмотреть значение и
+ * возвращаются к работе. Клик по «Проекты» из любого из них должен
+ * вернуть туда, откуда ушли.
+ */
+const SERVICE_SECTIONS = ['/references', '/users', '/audit'];
+const RETURN_TO_KEY = 'projects:returnTo';
+
+/**
+ * Экран конкретного проекта или версии бюджета — только с такого экрана
+ * есть смысл возвращаться. Уход в справочники из самого реестра ничего
+ * не запоминает: реестр и так открывается по «Проектам».
+ */
+function isWorkScreen(path: string): boolean {
+  return /^\/projects\/\d+/.test(path) || /^\/budget-versions\/\d+/.test(path);
+}
 
 export default function AppLayout() {
   const navigate = useNavigate();
@@ -125,60 +138,91 @@ export default function AppLayout() {
     enabled: !!projectId,
   });
 
+  /**
+   * Название проекта для крошки.
+   *
+   * Пока запрос карточки в полёте, берём имя из уже загруженного реестра:
+   * при переходе «реестр → проект» оно известно сразу, и подпись не
+   * успевает мигнуть заглушкой. Если проекта в кэше нет (зашли по прямой
+   * ссылке), показываем пустое место, а не другое слово — мигание чем-то
+   * посторонним и было жалобой.
+   */
+  const qc = useQueryClient();
+  const projectName = crumbProject?.name ?? (() => {
+    if (!projectId) return '';
+    const cached = qc.getQueriesData<PaginatedResponse<ProjectListItem>>({
+      queryKey: ['projects'],
+    });
+    for (const [, data] of cached) {
+      const hit = data?.items?.find(p => p.id === projectId);
+      if (hit) return hit.name;
+    }
+    return '';
+  })();
+
   // Последний элемент цепочки — текущий экран, он не ссылка.
   const crumbs: { title: string; to?: string }[] = (() => {
     if (budgetMatch) {
       return [
         { title: 'Проекты', to: '/projects' },
         {
-          title: crumbProject?.name ?? 'Проект',
+          title: projectName,
           to: projectId ? `/projects/${projectId}` : undefined,
         },
         // ТЗ, таблица 4: бюджеты нумеруются «ID проекта.номер версии».
         {
           title: crumbVersion
             ? `Бюджет ${crumbVersion.project_id}.${crumbVersion.version_no}`
-            : 'Бюджет',
+            : '',
         },
       ];
     }
     if (projectMatch) {
       return [
         { title: 'Проекты', to: '/projects' },
-        { title: crumbProject?.name ?? 'Проект' },
+        { title: projectName },
       ];
     }
     return [{ title: SECTION_TITLES[selectedKey] ?? 'Проекты' }];
   })();
 
   /**
-   * Возврат из справочников туда, откуда пользователь в них ушёл.
+   * Возврат из вспомогательного раздела туда, откуда пользователь ушёл.
    *
-   * «Справочники» — вспомогательный раздел: в него заходят посмотреть
-   * значение и возвращаются к работе. Клик по «Проекты» должен вернуть
-   * на конкретный экран (карточку, шаг мастера), а не на реестр.
-   * Адрес запоминаем в момент ухода, а не при возврате — иначе он уже
-   * потерян.
+   * Правило узкое и срабатывает только по цепочке «экран проекта или
+   * версии бюджета → справочники / пользователи / история → Проекты».
+   * Обычное хождение по пунктам меню (реестр → справочники → Проекты)
+   * возврата не включает: там возвращаться не к чему, и открывать вместо
+   * реестра давнюю карточку было бы неожиданно. Адрес запоминаем в
+   * момент ухода — при возврате он уже потерян.
    */
   function onMenuClick(key: string) {
-    if (key === RETURNABLE_FROM && selectedKey !== RETURNABLE_FROM) {
-      // Уходим в справочники — запомним, откуда.
+    const from = location.pathname + location.search;
+    const inService = SERVICE_SECTIONS.includes(selectedKey);
+
+    if (SERVICE_SECTIONS.includes(key)) {
       try {
-        sessionStorage.setItem(RETURN_TO_KEY, location.pathname + location.search);
+        if (isWorkScreen(from)) {
+          sessionStorage.setItem(RETURN_TO_KEY, from);
+        } else if (!inService) {
+          // Пришли не с рабочего экрана — прошлую метку гасим, иначе она
+          // сработала бы много позже и не к месту. Переход между самими
+          // вспомогательными разделами метку сохраняет.
+          sessionStorage.removeItem(RETURN_TO_KEY);
+        }
       } catch { /* приватный режим — просто не запомним */ }
       navigate(key);
       return;
     }
 
-    if (key === '/projects' && selectedKey === RETURNABLE_FROM) {
-      // Возвращаемся из справочников — если есть куда, идём туда.
+    if (key === '/projects') {
       let back: string | null = null;
       try {
         back = sessionStorage.getItem(RETURN_TO_KEY);
         sessionStorage.removeItem(RETURN_TO_KEY);
       } catch { /* нет доступа к хранилищу — уйдём в реестр */ }
 
-      if (back && back.startsWith('/') && back !== RETURNABLE_FROM) {
+      if (inService && back && isWorkScreen(back)) {
         navigate(back);
         return;
       }
@@ -201,11 +245,18 @@ export default function AppLayout() {
         theme="dark"
         // Липкий сайдбар на всю высоту экрана: длинная страница мастера
         // раньше уводила блок ЛК (он прижат к низу) в самый низ документа.
+        //
+        // Вместо плоской заливки — вертикальная растяжка от светлого верха
+        // к тёмному низу, тонкая светлая грань справа и мягкая тень на
+        // контент. Панель перестаёт выглядеть наклейкой и получает объём.
         style={{
-          background: IBCON_COLOR,
+          background: `linear-gradient(170deg, #24487f 0%, ${IBCON_COLOR} 42%, #14294c 100%)`,
           position: 'sticky',
           top: 0,
           height: '100vh',
+          borderRight: '1px solid rgba(255,255,255,0.08)',
+          boxShadow: '3px 0 18px rgba(12, 26, 51, 0.16)',
+          zIndex: 30,
         }}
         trigger={null}
       >
@@ -219,6 +270,10 @@ export default function AppLayout() {
           fontSize: collapsed ? 14 : 16,
           letterSpacing: 1,
           padding: '0 16px',
+          // Разделитель в две грани: тёмная линия и светлый блик под ней —
+          // так край читается как рельеф, а не как нарисованная черта.
+          borderBottom: '1px solid rgba(0,0,0,0.18)',
+          boxShadow: '0 1px 0 rgba(255,255,255,0.06)',
         }}>
           {collapsed ? 'IB' : 'IBCON Бюджет'}
         </div>
@@ -226,7 +281,9 @@ export default function AppLayout() {
           theme="dark"
           mode="inline"
           selectedKeys={[selectedKey]}
-          style={{ background: IBCON_COLOR, borderRight: 0 }}
+          // Прозрачное меню поверх растяжки сайдбара: со своей заливкой
+          // оно ложилось ровным прямоугольником и гасило градиент.
+          style={{ background: 'transparent', borderRight: 0, marginTop: 8 }}
           items={menuItems}
           onClick={({ key }) => onMenuClick(key)}
         />
@@ -241,7 +298,10 @@ export default function AppLayout() {
             left: 0,
             right: 0,
             padding: collapsed ? '12px 8px' : '12px 16px',
-            borderTop: '1px solid rgba(255,255,255,0.15)',
+            borderTop: '1px solid rgba(255,255,255,0.10)',
+            // Матовая полка: подсветка сверху вниз плюс размытие того,
+            // что за ней, — блок отделяется от панели, не разрезая её.
+            backdropFilter: 'blur(10px)',
             display: 'flex',
             alignItems: 'center',
             // В свёрнутом виде остаётся один аватар — ставим его по центру
@@ -249,8 +309,9 @@ export default function AppLayout() {
             justifyContent: collapsed ? 'center' : 'flex-start',
             gap: collapsed ? 0 : 10,
             cursor: 'pointer',
+            transition: 'background 0.2s ease',
             background: location.pathname === '/profile'
-              ? 'rgba(255,255,255,0.12)'
+              ? 'rgba(255,255,255,0.14)'
               : 'transparent',
           }}
         >
@@ -280,14 +341,21 @@ export default function AppLayout() {
       {/* minWidth: 0 — иначе широкая таблица растягивает колонку целиком
           и «выталкивает» сайдбар вместо того, чтобы прокручиваться. */}
       <Layout style={{ minWidth: 0 }}>
+        {/* Шапка липкая: раньше при прокрутке она уезжала и на её месте
+            обнажался край рабочей области. */}
         <Header style={{
-          background: '#fff',
+          background: 'rgba(255,255,255,0.86)',
+          backdropFilter: 'blur(12px)',
           padding: '0 24px',
+          position: 'sticky',
+          top: 0,
+          zIndex: 20,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: 16,
-          borderBottom: '1px solid #f0f0f0',
+          borderBottom: '1px solid rgba(0,0,0,0.06)',
+          boxShadow: '0 1px 2px rgba(16, 30, 54, 0.04)',
         }}>
           <div style={{
             display: 'flex',
@@ -304,9 +372,19 @@ export default function AppLayout() {
             <Breadcrumb
               style={{ fontSize: 14, minWidth: 0 }}
               items={crumbs.map((c, i) => ({
+                // Пустая подпись — данные ещё грузятся. Держим место
+                // прочерком: подставлять слово-заглушку нельзя, иначе оно
+                // мигнёт вместо названия проекта.
                 title: c.to
-                  ? <a onClick={() => navigate(c.to!)}>{c.title}</a>
-                  : <span style={{ color: '#262626', fontWeight: 500 }}>{c.title}</span>,
+                  ? <a onClick={() => navigate(c.to!)}>{c.title || '…'}</a>
+                  : (
+                    <span style={{
+                      color: c.title ? '#262626' : 'transparent',
+                      fontWeight: 500,
+                    }}>
+                      {c.title || '…'}
+                    </span>
+                  ),
                 key: i,
               }))}
             />

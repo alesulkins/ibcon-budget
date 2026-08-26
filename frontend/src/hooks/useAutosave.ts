@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { markSaving, markSaved, markSaveError } from '../store/autosave';
 import { extractError } from '../api/client';
 
@@ -63,22 +63,33 @@ export function useAutosave<T>({ data, ready, save, enabled = true }: Options<T>
     }
   }, [enabled]);
 
+  /**
+   * Слепок текущего состояния формы.
+   *
+   * Формы собирают payload заново на каждый рендер, поэтому по ссылке
+   * `data` всегда «новый» объект. Сравнивать надо содержимое — и делать
+   * это один раз за рендер: раньше JSON.stringify вызывался дважды, а
+   * эффект дебаунса срабатывал на каждый рендер и снимал-ставил таймер
+   * даже когда в форме ничего не менялось.
+   */
+  const snapshot = useMemo(() => JSON.stringify(data), [data]);
+
   // Первичный слепок — как только данные пришли с сервера.
   useEffect(() => {
     if (ready && baseline.current === null) {
-      baseline.current = JSON.stringify(latest.current);
+      baseline.current = snapshot;
     }
-  }, [ready, data]);
+  }, [ready, snapshot]);
 
   // Дебаунс на каждое изменение.
   useEffect(() => {
     if (!enabled || !ready || baseline.current === null) return;
-    if (JSON.stringify(data) === baseline.current) return;
+    if (snapshot === baseline.current) return;
 
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(flush, DEBOUNCE_MS);
     return () => window.clearTimeout(timer.current);
-  }, [data, enabled, ready, flush]);
+  }, [snapshot, enabled, ready, flush]);
 
   // Периодическое сохранение — на случай, если дебаунс не сработал
   // (например, вкладка была неактивна).
