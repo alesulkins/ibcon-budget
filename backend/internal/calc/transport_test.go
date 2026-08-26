@@ -22,7 +22,7 @@ import (
 func referenceTransportInput() *InputTransport {
 	return &InputTransport{
 		// 4.3!A17:C18
-		CarPurchases: []CarPurchase{
+		CarPurchases: []ItemPurchase{
 			{Name: "Авто 1", Month: 2, Count: 1, Price: 2_500_000},
 			{Name: "Авто 2", Month: 5, Count: 2, Price: 1_950_000},
 		},
@@ -127,7 +127,7 @@ func TestCalcTransport_LegacyFallback(t *testing.T) {
 		TransportRental: []float64{100, 200, 300},
 		GarageRent:      []float64{10, 20, 30},
 		Transport: &InputTransport{
-			CarPurchases: []CarPurchase{{Month: 1, Count: 1, Price: 999}},
+			CarPurchases: []ItemPurchase{{Month: 1, Count: 1, Price: 999}},
 		},
 	})
 	if got := res.Monthly[0].Overhead[2]; got != 999 {
@@ -146,7 +146,7 @@ func TestCalcTransport_LegacyFallback(t *testing.T) {
 // таблицы попал ввод. Здесь правило одно для всех строк: покупка вне
 // проекта не считается, каким бы номером строка ни была.
 func TestCalcTransport_SplitFormulaFixed(t *testing.T) {
-	in := &InputTransport{CarPurchases: []CarPurchase{
+	in := &InputTransport{CarPurchases: []ItemPurchase{
 		{Name: "внутри проекта", Month: 3, Count: 1, Price: 1_000_000},
 		{Name: "за пределами", Month: 7, Count: 1, Price: 5_000_000},
 		{Name: "месяц не заполнен", Month: 0, Count: 1, Price: 3_000_000},
@@ -184,7 +184,7 @@ func TestCalcTransport_RentalCountsLength(t *testing.T) {
 // ноль в месяце — допустимое значение, ничего не начисляется.
 func TestCalcTransport_Count(t *testing.T) {
 	transport, garage := calcTransport(&InputTransport{
-		CarPurchases: []CarPurchase{{Month: 1, Count: 3, Price: 100}},
+		CarPurchases: []ItemPurchase{{Month: 1, Count: 3, Price: 100}},
 		CarRentals: []RentedItem{
 			{Price: 10, Counts: []int{0, 4, 4}},
 			{Price: 10, Counts: []int{0, 0, 0}}, // не арендуем ни в одном месяце
@@ -230,21 +230,21 @@ func TestValidateTransport(t *testing.T) {
 	}{
 		{
 			name: "покупка без месяца — строка просто игнорируется",
-			in:   &InputTransport{CarPurchases: []CarPurchase{{Price: 100}}},
+			in:   &InputTransport{CarPurchases: []ItemPurchase{{Price: 100}}},
 		},
 		{
 			name: "покупка за пределами проекта",
-			in:   &InputTransport{CarPurchases: []CarPurchase{{Name: "Газель", Month: 7, Price: 100}}},
+			in:   &InputTransport{CarPurchases: []ItemPurchase{{Name: "Газель", Month: 7, Price: 100}}},
 			want: "месяц покупки 7 вне проекта",
 		},
 		{
 			name: "отрицательный месяц покупки",
-			in:   &InputTransport{CarPurchases: []CarPurchase{{Month: -1, Price: 100}}},
+			in:   &InputTransport{CarPurchases: []ItemPurchase{{Month: -1, Price: 100}}},
 			want: "вне проекта",
 		},
 		{
 			name: "отрицательная цена покупки",
-			in:   &InputTransport{CarPurchases: []CarPurchase{{Month: 1, Price: -5}}},
+			in:   &InputTransport{CarPurchases: []ItemPurchase{{Month: 1, Price: -5}}},
 			want: "цена не может быть отрицательной",
 		},
 		{
@@ -258,7 +258,7 @@ func TestValidateTransport(t *testing.T) {
 		},
 		{
 			name: "отрицательное количество в покупке",
-			in:   &InputTransport{CarPurchases: []CarPurchase{{Month: 1, Count: -2, Price: 100}}},
+			in:   &InputTransport{CarPurchases: []ItemPurchase{{Month: 1, Count: -2, Price: 100}}},
 			want: "количество не может быть отрицательным",
 		},
 		{

@@ -235,14 +235,17 @@ export interface InputRentApartments {
   cleaning_months: number[];
 }
 
-/** Одна покупка авто (таблица 4.3!A17:D27). Итог строки = цена × кол-во. */
-export interface CarPurchase {
+/**
+ * Одна разовая покупка: строка таблицы 4.3!A17:D27 (авто) или
+ * 4.4!A12:D22 (вагончики). Итог строки = цена × кол-во.
+ */
+export interface ItemPurchase {
   name: string;
   /** Месяц покупки, 1-based. 0 — строка не заполнена, в расчёт не идёт. */
   month: number;
-  /** Количество покупаемых авто (4.3!B17:B27). */
+  /** Количество (4.3!B17:B27, 4.4!B12:B22). */
   count: number;
-  /** Стоимость одного авто (4.3!C17:C27). */
+  /** Стоимость одной единицы (4.3!C17:C27, 4.4!C12:C22). */
   price: number;
 }
 
@@ -264,7 +267,7 @@ export interface RentedItem {
  * («Аренда транспорта»), гараж — отдельной.
  */
 export interface InputTransport {
-  car_purchases: CarPurchase[];
+  car_purchases: ItemPurchase[];
   car_rentals: RentedItem[];
   garage_rentals: RentedItem[];
 }
@@ -282,7 +285,7 @@ export interface MonthlyQty {
  */
 export interface InputWagonciks {
   rental: MonthlyQty;
-  purchase: MonthlyQty;
+  purchases: ItemPurchase[];
 }
 
 /**

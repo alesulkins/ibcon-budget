@@ -180,20 +180,23 @@ type InputRentApartments struct {
 	RealtorBase float64 `json:"realtor_base"`
 }
 
-// CarPurchase — одна покупка авто, строка таблицы 4.3!A17:D27.
+// ItemPurchase — одна разовая покупка: строка таблицы 4.3!A17:D27 (авто)
+// или 4.4!A12:D22 (вагончики). Структура таблиц в форме одинаковая, и
+// владелец потребовал одинакового ввода, поэтому тип общий.
 //
-// Итог строки, как и в форме: `количество × стоимость` (4.3!D17 =
-// IF(A17<=D8, C17*B17, 0)).
-type CarPurchase struct {
-	// Описание авто. В форме такого поля нет — добавлено, чтобы строку
+// Итог строки, как и в форме: `количество × стоимость`
+// (4.3!D17 и 4.4!D12 = IF(месяц<=D8, стоимость*количество, 0)).
+type ItemPurchase struct {
+	// Описание покупки. В форме такого поля нет — добавлено, чтобы строку
 	// таблицы можно было опознать.
 	Name string `json:"name"`
-	// Месяц покупки, 1-based (4.3!A17:A27). 0 — строка не заполнена и
-	// целиком игнорируется; месяц вне проекта отклоняет ValidateTransport.
+	// Месяц покупки, 1-based (4.3!A17:A27, 4.4!A12:A22). 0 — строка не
+	// заполнена и целиком игнорируется; недопустимый месяц отклоняет
+	// валидация листа.
 	Month int `json:"month"`
-	// Количество покупаемых авто (4.3!B17:B27)
+	// Количество (4.3!B17:B27, 4.4!B12:B22)
 	Count int `json:"count"`
-	// Стоимость одного авто (4.3!C17:C27)
+	// Стоимость одной единицы (4.3!C17:C27, 4.4!C12:C22)
 	Price float64 `json:"price"`
 }
 
@@ -221,7 +224,7 @@ type RentedItem struct {
 // (так устроена форма), аренда гаража — отдельной строкой 210.
 // Считает calcTransport.
 type InputTransport struct {
-	CarPurchases  []CarPurchase `json:"car_purchases"`
+	CarPurchases  []ItemPurchase `json:"car_purchases"`
 	CarRentals    []RentedItem  `json:"car_rentals"`
 	GarageRentals []RentedItem  `json:"garage_rentals"`
 }

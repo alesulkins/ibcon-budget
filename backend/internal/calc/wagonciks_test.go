@@ -16,8 +16,9 @@ import (
 //	покупка 4.4!A12:C12 = мес.1 × 2 шт × 55 500
 func referenceWagonciksInput() *InputWagonciks {
 	return &InputWagonciks{
-		Rental:   MonthlyQty{Price: 5_000, Counts: []int{0, 2, 1, 1, 0, 0}},
-		Purchase: MonthlyQty{Price: 55_500, Counts: []int{2, 0, 0, 0, 0, 0}},
+		Rental: MonthlyQty{Price: 5_000, Counts: []int{0, 2, 1, 1, 0, 0}},
+		// 4.4!A12:C12 — строка в строку с таблицей формы
+		Purchases: []ItemPurchase{{Name: "Вагончик 1", Month: 1, Count: 2, Price: 55_500}},
 	}
 }
 
@@ -58,20 +59,25 @@ func TestCalcWagonciks_Reference(t *testing.T) {
 //	                      мес.3: 4×10 000; мес.4: 5×30 000;
 //	                      мес.5: 6×40 000; мес.6: 7×50 000
 //
-// ОГОВОРКА про представление. Согласованная модель ввода держит ОДНУ цену
-// покупки на весь блок, а в форме у каждой из семи строк своя цена. Чтобы
-// сверить суммы, представляем месячные суммы покупок как 1 000 × количество:
-// 141 000 = 1 000×141 и так далее. Числа от этого не меняются, но сам факт,
-// что данные формы в модель не укладываются, вынесен владельцу отдельно.
+// Покупки месяцев 5 и 6 в итог не идут: это последние два месяца проекта.
+// В форме их отсекает граница расщепления формулы (SUMPRODUCT только в
+// C:F), в платформе — правило purchaseAllowedMonths. Результат совпадает.
 func TestCalcWagonciks_ReferenceAP(t *testing.T) {
 	got := calcWagonciks(&InputWagonciks{
-		Rental:   MonthlyQty{Price: 5_000, Counts: []int{0, 2, 1, 1, 2, 2}},
-		Purchase: MonthlyQty{Price: 1_000, Counts: []int{141, 60, 40, 150, 240, 350}},
+		Rental: MonthlyQty{Price: 5_000, Counts: []int{0, 2, 1, 1, 2, 2}},
+		// 4.4!A12:C18 — семь строк таблицы формы, у каждой своя цена
+		Purchases: []ItemPurchase{
+			{Name: "Вагончик 1", Month: 1, Count: 2, Price: 55_500},
+			{Name: "Вагончик 2", Month: 1, Count: 3, Price: 10_000},
+			{Name: "Вагончик 3", Month: 2, Count: 3, Price: 20_000},
+			{Name: "Вагончик 4", Month: 3, Count: 4, Price: 10_000},
+			{Name: "Вагончик 5", Month: 4, Count: 5, Price: 30_000},
+			{Name: "Вагончик 6", Month: 5, Count: 6, Price: 40_000},
+			{Name: "Вагончик 7", Month: 6, Count: 7, Price: 50_000},
+		},
 	}, 6)
 
-	// 4.4!C6:BJ6 = 2.Бюджет!H181:BO181.
-	// В месяцах 5-6 покупка обнулена: правилом «последние два месяца» у нас,
-	// вырожденной веткой IF(месяц=1) — в форме. Итог совпадает.
+	// 4.4!C6:BJ6 = 2.Бюджет!H181:BO181
 	want := []float64{141_000, 70_000, 45_000, 155_000, 10_000, 10_000}
 	for i := range want {
 		if math.Abs(got[i]-want[i]) > 0.01 {
@@ -112,7 +118,7 @@ func TestCalcWagonciks_SplitFormulaFixed(t *testing.T) {
 	// По форме этот месяц лежит в колонке F, то есть в рабочей ветке, но
 	// проверяем именно «не только первый месяц».
 	got := calcWagonciks(&InputWagonciks{
-		Purchase: MonthlyQty{Price: 100_000, Counts: []int{0, 0, 0, 3, 0, 0}},
+		Purchases: []ItemPurchase{{Month: 4, Count: 3, Price: 100_000}},
 	}, 6)
 
 	if got[3] != 300_000 {
@@ -125,7 +131,12 @@ func TestCalcWagonciks_SplitFormulaFixed(t *testing.T) {
 	// И покупка в разных месяцах сразу — форма считала бы только первую
 	// строку таблицы ($D$12), здесь считаются все месяцы.
 	got = calcWagonciks(&InputWagonciks{
-		Purchase: MonthlyQty{Price: 10, Counts: []int{1, 2, 3, 4, 0, 0}},
+		Purchases: []ItemPurchase{
+			{Month: 1, Count: 1, Price: 10},
+			{Month: 2, Count: 2, Price: 10},
+			{Month: 3, Count: 3, Price: 10},
+			{Month: 4, Count: 4, Price: 10},
+		},
 	}, 6)
 	for i, w := range []float64{10, 20, 30, 40, 0, 0} {
 		if got[i] != w {
@@ -156,8 +167,15 @@ func TestPurchaseAllowedMonths(t *testing.T) {
 // месяцах обнуляется, аренда в них считается как обычно.
 func TestCalcWagonciks_PurchaseBlockedTail(t *testing.T) {
 	got := calcWagonciks(&InputWagonciks{
-		Rental:   MonthlyQty{Price: 1_000, Counts: []int{1, 1, 1, 1, 1, 1}},
-		Purchase: MonthlyQty{Price: 100_000, Counts: []int{1, 1, 1, 1, 1, 1}},
+		Rental: MonthlyQty{Price: 1_000, Counts: []int{1, 1, 1, 1, 1, 1}},
+		Purchases: []ItemPurchase{
+			{Month: 1, Count: 1, Price: 100_000},
+			{Month: 2, Count: 1, Price: 100_000},
+			{Month: 3, Count: 1, Price: 100_000},
+			{Month: 4, Count: 1, Price: 100_000},
+			{Month: 5, Count: 1, Price: 100_000},
+			{Month: 6, Count: 1, Price: 100_000},
+		},
 	}, 6)
 
 	// месяцы 1-4 — аренда + покупка, месяцы 5-6 — только аренда
@@ -170,8 +188,8 @@ func TestCalcWagonciks_PurchaseBlockedTail(t *testing.T) {
 
 	// Проект в 1 месяц: покупка разрешена.
 	got = calcWagonciks(&InputWagonciks{
-		Rental:   MonthlyQty{Price: 1_000, Counts: []int{1}},
-		Purchase: MonthlyQty{Price: 100_000, Counts: []int{1}},
+		Rental:    MonthlyQty{Price: 1_000, Counts: []int{1}},
+		Purchases: []ItemPurchase{{Month: 1, Count: 1, Price: 100_000}},
 	}, 1)
 	if got[0] != 101_000 {
 		t.Errorf("проект в 1 месяц: want 101 000, got %.0f", got[0])
@@ -242,7 +260,7 @@ func TestCalcWagonciks_Empty(t *testing.T) {
 // TestValidateWagonciks — отрицательные цены и количества отклоняем,
 // количество покупки в закрытом месяце ошибкой не считаем.
 func TestValidateWagonciks(t *testing.T) {
-	if err := ValidateWagonciks(referenceWagonciksInput()); err != nil {
+	if err := ValidateWagonciks(referenceWagonciksInput(), 6); err != nil {
 		t.Errorf("эталонный ввод должен проходить валидацию: %v", err)
 	}
 
@@ -252,10 +270,20 @@ func TestValidateWagonciks(t *testing.T) {
 		want string
 	}{
 		{
-			name: "покупка в закрытом месяце — не ошибка, расчёт её обнулит",
-			in: &InputWagonciks{
-				Purchase: MonthlyQty{Price: 1, Counts: []int{0, 0, 0, 0, 5, 5}},
-			},
+			name: "покупка без месяца — строка просто игнорируется",
+			in:   &InputWagonciks{Purchases: []ItemPurchase{{Count: 1, Price: 100}}},
+		},
+		{
+			name: "покупка в последние два месяца проекта",
+			in: &InputWagonciks{Purchases: []ItemPurchase{
+				{Name: "Бытовка", Month: 5, Count: 1, Price: 100},
+			}},
+			want: "не покупают в последние два месяца проекта",
+		},
+		{
+			name: "покупка за пределами проекта",
+			in:   &InputWagonciks{Purchases: []ItemPurchase{{Month: 9, Count: 1, Price: 100}}},
+			want: "допустимо от 1 до 4",
 		},
 		{
 			name: "отрицательная цена аренды",
@@ -269,13 +297,13 @@ func TestValidateWagonciks(t *testing.T) {
 		},
 		{
 			name: "отрицательное количество покупки",
-			in:   &InputWagonciks{Purchase: MonthlyQty{Price: 1, Counts: []int{-1}}},
+			in:   &InputWagonciks{Purchases: []ItemPurchase{{Month: 1, Count: -1, Price: 1}}},
 			want: "покупка вагончиков",
 		},
 	}
 
 	for _, c := range cases {
-		err := ValidateWagonciks(c.in)
+		err := ValidateWagonciks(c.in, 6)
 		switch {
 		case c.want == "" && err != nil:
 			t.Errorf("%s: ожидалось без ошибки, получено %v", c.name, err)
@@ -289,7 +317,8 @@ func TestValidateWagonciks(t *testing.T) {
 
 // TestValidateInput_Wagonciks — тот же контроль через диспетчер сохранения.
 func TestValidateInput_Wagonciks(t *testing.T) {
-	ok := []byte(`{"rental":{"price":5000,"counts":[0,2,1]},"purchase":{"price":55500,"counts":[2,0,0]}}`)
+	ok := []byte(`{"rental":{"price":5000,"counts":[0,2,1]},` +
+		`"purchases":[{"name":"Бытовка","month":1,"count":2,"price":55500}]}`)
 	if err := ValidateInput(TypeWagonciks, ok, ExecutorAibicon, 6); err != nil {
 		t.Errorf("корректный ввод отклонён: %v", err)
 	}
@@ -297,6 +326,12 @@ func TestValidateInput_Wagonciks(t *testing.T) {
 	bad := []byte(`{"rental":{"price":-1,"counts":[]}}`)
 	if err := ValidateInput(TypeWagonciks, bad, ExecutorAibicon, 6); err == nil {
 		t.Error("отрицательная цена должна отклоняться")
+	}
+
+	// Месяц 5 при длительности 6 — последние два месяца, покупка закрыта.
+	tail := []byte(`{"purchases":[{"month":5,"count":1,"price":100}]}`)
+	if err := ValidateInput(TypeWagonciks, tail, ExecutorAibicon, 6); err == nil {
+		t.Error("покупка в предпоследнем месяце должна отклоняться")
 	}
 
 	if err := ValidateInput(TypeWagonciks, []byte(`{"rental":`), ExecutorAibicon, 6); err == nil {

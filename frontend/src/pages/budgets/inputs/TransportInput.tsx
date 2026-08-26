@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  Card, Input, InputNumber, Select, Button, Switch, Typography, Alert, Space,
+  Card, Input, InputNumber, Button, Switch, Typography, Alert, Space,
 } from 'antd';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { budgetsApi } from '../../../api';
-import type { InputTransport, CarPurchase, RentedItem } from '../../../types';
+import type { InputTransport, ItemPurchase, RentedItem } from '../../../types';
 import { monthLabel, thousandFormatter, thousandParser } from '../../../utils/fmt';
 import MonthGrid, { monthGridCell, monthGridHeadCell } from '../../../components/MonthGrid';
+import PurchaseTable from '../../../components/PurchaseTable';
 import { useAutosave } from '../../../hooks/useAutosave';
 
 const { Text } = Typography;
@@ -22,15 +23,8 @@ interface Props {
 /** Старый формат листа 4.3 — готовые суммы по месяцам. */
 interface LegacyCost { monthly_amounts?: number[] }
 
-const table: React.CSSProperties = {
-  width: '100%',
-  tableLayout: 'fixed',
-  borderCollapse: 'collapse',
-};
-
 const NAME_COL = 200;
 const TOTAL_COL = 110;
-const DEL_COL = 40;
 
 /**
  * Ячейка месяца в таблицах аренды. Левая колонка выше остальных — в ней
@@ -44,10 +38,6 @@ const monthCountCell: React.CSSProperties = {
   verticalAlign: 'top',
   padding: '4px',
 };
-
-function emptyPurchase(): CarPurchase {
-  return { name: '', month: 0, count: 1, price: 0 };
-}
 
 function emptyRental(duration: number): RentedItem {
   return { name: '', price: 0, counts: Array(duration).fill(0) };
@@ -70,7 +60,7 @@ function rentalTotal(r: RentedItem, duration: number): number {
 }
 
 export default function TransportInput({ versionId, duration, startDate, readonly }: Props) {
-  const [purchases, setPurchases] = useState<CarPurchase[]>([]);
+  const [purchases, setPurchases] = useState<ItemPurchase[]>([]);
   const [cars, setCars] = useState<RentedItem[]>([]);
   const [garages, setGarages] = useState<RentedItem[]>([]);
   const [hydrated, setHydrated] = useState(false);
@@ -132,7 +122,6 @@ export default function TransportInput({ versionId, duration, startDate, readonl
   useAutosave({ data: payload, ready: hydrated, save, enabled: !readonly });
 
   const months = Array.from({ length: duration }, (_, i) => monthLabel(startDate, i));
-  const monthOptions = months.map((label, i) => ({ value: i + 1, label }));
 
   function patchRental(
     set: React.Dispatch<React.SetStateAction<RentedItem[]>>,
@@ -337,144 +326,15 @@ export default function TransportInput({ versionId, duration, startDate, readonl
           обязателен: строка без месяца в расчёт не попадёт и не сохранится.
           Итог строки — цена × количество.
         </Text>
-        <table style={table}>
-          <colgroup>
-            <col />
-            <col style={{ width: 180 }} />
-            <col style={{ width: 160 }} />
-            <col style={{ width: 70 }} />
-            <col style={{ width: TOTAL_COL }} />
-            {!readonly && <col style={{ width: DEL_COL }} />}
-          </colgroup>
-          <thead>
-            <tr>
-              <th style={{ ...monthGridHeadCell, textAlign: 'left', color: '#333', fontWeight: 500 }}>
-                Описание авто
-              </th>
-              <th style={{ ...monthGridHeadCell, color: '#333', fontWeight: 500 }}>
-                Месяц покупки
-              </th>
-              <th style={{ ...monthGridHeadCell, color: '#333', fontWeight: 500 }}>
-                Цена за ед., ₽
-              </th>
-              <th style={{ ...monthGridHeadCell, color: '#333', fontWeight: 500 }}>
-                Кол-во
-              </th>
-              <th style={{ ...monthGridHeadCell, textAlign: 'right', color: '#333', fontWeight: 500 }}>
-                Итого
-              </th>
-              {!readonly && <th style={monthGridHeadCell} />}
-            </tr>
-          </thead>
-          <tbody>
-            {purchases.length === 0 && (
-              <tr>
-                <td
-                  colSpan={5 + (readonly ? 0 : 1)}
-                  style={{ ...monthGridCell, color: '#999', fontSize: 12, padding: '10px 4px' }}
-                >
-                  Покупок нет
-                </td>
-              </tr>
-            )}
-            {purchases.map((p, idx) => (
-              <tr key={idx} style={{ borderTop: '1px solid #f0f0f0' }}>
-                <td style={{ ...monthGridCell, textAlign: 'left' }}>
-                  {readonly ? (
-                    <Text style={{ fontSize: 12 }}>{p.name || '—'}</Text>
-                  ) : (
-                    <Input
-                      size="small"
-                      value={p.name}
-                      placeholder="например, Газель NEXT"
-                      onChange={e => setPurchases(prev => prev.map(
-                        (r, i) => (i === idx ? { ...r, name: e.target.value } : r),
-                      ))}
-                    />
-                  )}
-                </td>
-                <td style={monthGridCell}>
-                  {readonly ? (
-                    <Text style={{ fontSize: 12 }}>
-                      {p.month >= 1 ? monthLabel(startDate, p.month - 1) : '—'}
-                    </Text>
-                  ) : (
-                    <Select
-                      size="small"
-                      style={{ width: '100%' }}
-                      // Список ограничен месяцами проекта — выбрать месяц
-                      // за его пределами нельзя.
-                      options={monthOptions}
-                      value={p.month >= 1 && p.month <= duration ? p.month : undefined}
-                      placeholder="выберите месяц"
-                      status={p.month >= 1 ? undefined : 'error'}
-                      onChange={v => setPurchases(prev => prev.map(
-                        (r, i) => (i === idx ? { ...r, month: v ?? 0 } : r),
-                      ))}
-                    />
-                  )}
-                </td>
-                <td style={monthGridCell}>
-                  {readonly ? (
-                    <Text style={{ fontSize: 12 }}>{p.price.toLocaleString('ru-RU')}</Text>
-                  ) : (
-                    <InputNumber
-                      size="small"
-                      style={{ width: '100%' }}
-                      min={0}
-                      value={p.price || null}
-                      onChange={v => setPurchases(prev => prev.map(
-                        (r, i) => (i === idx ? { ...r, price: v ?? 0 } : r),
-                      ))}
-                      formatter={thousandFormatter}
-                      parser={thousandParser}
-                    />
-                  )}
-                </td>
-                <td style={monthGridCell}>
-                  {readonly ? (
-                    <Text style={{ fontSize: 12 }}>{p.count}</Text>
-                  ) : (
-                    <InputNumber
-                      size="small"
-                      style={{ width: '100%' }}
-                      min={0}
-                      value={p.count}
-                      onChange={v => setPurchases(prev => prev.map(
-                        (r, i) => (i === idx ? { ...r, count: v ?? 0 } : r),
-                      ))}
-                    />
-                  )}
-                </td>
-                <td style={{ ...monthGridCell, textAlign: 'right', fontWeight: 500, fontSize: 12 }}>
-                  {(p.price * p.count).toLocaleString('ru-RU')}
-                </td>
-                {!readonly && (
-                  <td style={monthGridCell}>
-                    <Button
-                      size="small"
-                      type="text"
-                      danger
-                      icon={<DeleteOutlined />}
-                      onClick={() => setPurchases(prev => prev.filter((_, i) => i !== idx))}
-                    />
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {!readonly && (
-          <Button
-            size="small"
-            type="dashed"
-            icon={<PlusOutlined />}
-            style={{ marginTop: 8 }}
-            onClick={() => setPurchases(prev => [...prev, emptyPurchase()])}
-          >
-            Добавить покупку
-          </Button>
-        )}
+        <PurchaseTable
+          items={purchases}
+          onChange={setPurchases}
+          months={months}
+          readonly={readonly}
+          namePlaceholder="например, Газель NEXT"
+          addLabel="Добавить покупку"
+          emptyLabel="Покупок нет"
+        />
       </Card>
 
       <Card
