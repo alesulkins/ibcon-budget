@@ -47,8 +47,8 @@ const WIZARD_STEPS = [
   { key: 'office',       title: 'Офис',                    desc: '4.5 – Аренда и уборка' },
   { key: 'control_equipment', title: 'СК оборудование',    desc: '4.7 – Приборы' },
   { key: 'software',     title: 'ПО',                      desc: '4.8 – Программное обеспечение' },
-  { key: 'subcontract_ext', title: 'Субподряд ГПХ внешний', desc: '4.9' },
-  { key: 'subcontract_emp', title: 'Субподряд ГПХ сотр.',  desc: '4.10' },
+  { key: 'subcontract_ext', title: 'ГПХ внешний', desc: '4.9' },
+  { key: 'subcontract_emp', title: 'ГПХ сотрудников',  desc: '4.10' },
   { key: 'subcontract_gen', title: 'Субподряд',            desc: '4.11' },
   { key: 'corporate_events', title: 'Корпоративы',         desc: '4.12 – Корпоративные мероприятия' },
   { key: 'overhead',     title: 'Прочие расходы',          desc: 'Строки 178-211 (накладные)' },
@@ -191,7 +191,7 @@ export default function BudgetVersionPage() {
           <SimpleCostInput
             versionId={versionId}
             type="control_equipment"
-            title="Приобретение приборов стройконтроля — лист 4.7"
+            title="Приобретение приборов стройконтроля"
             duration={duration}
             startDate={project!.start_date}
             readonly={isReadonly}
@@ -213,7 +213,7 @@ export default function BudgetVersionPage() {
           <SimpleCostInput
             versionId={versionId}
             type="subcontract_ext"
-            title="ГПХ внешний (контрагенты/услуги) — лист 4.9"
+            title="ГПХ внешний (контрагенты/услуги)"
             duration={duration}
             startDate={project!.start_date}
             readonly={isReadonly}
@@ -224,7 +224,7 @@ export default function BudgetVersionPage() {
           <SimpleCostInput
             versionId={versionId}
             type="subcontract_emp"
-            title="ГПХ сотрудников — лист 4.10"
+            title="ГПХ сотрудников"
             duration={duration}
             startDate={project!.start_date}
             readonly={isReadonly}
@@ -235,7 +235,7 @@ export default function BudgetVersionPage() {
           <SimpleCostInput
             versionId={versionId}
             type="subcontract_gen"
-            title="Субподрядные работы — лист 4.11"
+            title="Субподрядные работы"
             duration={duration}
             startDate={project!.start_date}
             readonly={isReadonly}
@@ -246,7 +246,7 @@ export default function BudgetVersionPage() {
           <SimpleCostInput
             versionId={versionId}
             type="corporate_events"
-            title="Корпоративные мероприятия — лист 4.12"
+            title="Корпоративные мероприятия"
             duration={duration}
             startDate={project!.start_date}
             readonly={isReadonly}

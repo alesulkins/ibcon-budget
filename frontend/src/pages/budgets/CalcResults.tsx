@@ -48,7 +48,7 @@ export default function CalcResults({ versionId, projectId, duration, startDate 
     { label: 'Итого стоимость работ (без НДС)', value: fmtMoney(r.total_revenue), highlight: true },
     { label: 'Выручка с НДС', value: fmtMoney(r.total_revenue_with_vat) },
     { label: 'Операционная прибыль', value: fmtMoney(r.operating_profit) },
-    { label: 'Налог', value: fmtMoney(r.tax) },
+    { label: 'Налог на прибыль', value: fmtMoney(r.tax) },
     { label: 'Чистая прибыль', value: fmtMoney(r.net_profit), highlight: true },
     { label: 'Рентабельность', value: fmtPct(r.profitability), highlight: true },
   ] : [];

@@ -188,13 +188,13 @@ export default function ProfilePage() {
           <Card
             size="small"
             title="Рабочие заметки и напоминания"
-            style={{ height: '100%' }}
+            style={{ height: '100%'}}
             extra={(
               <Button
                 type="primary"
                 size="small"
                 icon={<SaveOutlined />}
-                style={{ background: BRAND }}
+                style={{ background: BRAND, color: 'white' }}
                 disabled={!notesDirty}
                 loading={updateMutation.isPending}
                 onClick={() => updateMutation.mutate({ notes })}
