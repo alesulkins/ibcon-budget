@@ -23,7 +23,8 @@ import TransportInput from './inputs/TransportInput';
 import WagonciksInput from './inputs/WagonciksInput';
 import OfficeInput from './inputs/OfficeInput';
 import CostLinesInput from './inputs/CostLinesInput';
-import SimpleCostInput from './inputs/SimpleCostInput';
+import PurchasesInput from './inputs/PurchasesInput';
+import GphEmployeesInput from './inputs/GphEmployeesInput';
 import OverheadInput from './inputs/OverheadInput';
 import BudgetParamsInput from './inputs/BudgetParamsInput';
 import CalcResults from './CalcResults';
@@ -46,10 +47,10 @@ const WIZARD_STEPS = [
   { key: 'transport_garage', title: 'Транспорт',           desc: '4.3 – Аренда и гараж' },
   { key: 'site_setup',   title: 'Стройплощадка',           desc: '4.4 – Обустройство' },
   { key: 'office',       title: 'Офис',                    desc: '4.5 – Аренда и уборка' },
-  { key: 'control_equipment', title: 'СК оборудование',    desc: '4.7 – Приборы' },
-  { key: 'software',     title: 'ПО',                      desc: '4.8 – Программное обеспечение' },
-  { key: 'subcontract_ext', title: 'ГПХ внешний', desc: '4.9' },
-  { key: 'subcontract_emp', title: 'ГПХ сотрудников',  desc: '4.10' },
+  { key: 'control_equipment', title: 'СК оборудование',    desc: '4.7 – Приборы стройконтроля' },
+  { key: 'software',     title: 'ПО',                      desc: '4.8 – Приобретение ПО' },
+  { key: 'subcontract_ext', title: 'ГПХ внешний', desc: '4.9 – Субподряд (ГПХ внешний)' },
+  { key: 'subcontract_emp', title: 'ГПХ сотрудников',  desc: '4.10 – Субподряд (ГПХ сотрудников)' },
   { key: 'subcontract_gen', title: 'Субподряд',            desc: '4.11' },
   { key: 'corporate_events', title: 'Корпоративы',         desc: '4.12 – Корпоративные мероприятия' },
   { key: 'overhead',     title: 'Прочие расходы',          desc: 'Строки 178-211 (накладные)' },
@@ -189,13 +190,24 @@ export default function BudgetVersionPage() {
         );
       case 'control_equipment':
         return (
-          <SimpleCostInput
+          <PurchasesInput
             versionId={versionId}
-            type="control_equipment"
-            title="Приобретение приборов стройконтроля"
+            type="equipment_items"
+            title="Приборы строительного контроля"
             duration={duration}
             startDate={project!.start_date}
             readonly={isReadonly}
+            nameLabel="Название прибора"
+            namePlaceholder="например, Нивелир оптический"
+            monthColLabel="Месяц покупки"
+            priceLabel="Цена за ед., ₽"
+            countLabel="Кол-во"
+            addLabel="Добавить прибор"
+            emptyLabel="Приборов нет"
+            hint={'Одна строка — один прибор. Покупка учитывается целиком в '
+              + 'месяц приобретения; доступны все месяцы проекта, включая '
+              + 'последние два. Сумма уходит одной строкой бюджета «Приборы '
+              + 'строительного контроля».'}
           />
         );
       case 'software':
@@ -238,10 +250,8 @@ export default function BudgetVersionPage() {
         );
       case 'subcontract_emp':
         return (
-          <SimpleCostInput
+          <GphEmployeesInput
             versionId={versionId}
-            type="subcontract_emp"
-            title="ГПХ сотрудников"
             duration={duration}
             startDate={project!.start_date}
             readonly={isReadonly}
@@ -268,13 +278,23 @@ export default function BudgetVersionPage() {
         );
       case 'corporate_events':
         return (
-          <SimpleCostInput
+          <PurchasesInput
             versionId={versionId}
-            type="corporate_events"
+            type="corporate_events_items"
             title="Корпоративные мероприятия"
             duration={duration}
             startDate={project!.start_date}
             readonly={isReadonly}
+            nameLabel={null}
+            monthColLabel="Месяц проведения"
+            priceLabel="Стоимость за чел., ₽"
+            countLabel="Кол-во участников"
+            addLabel="Добавить корпоратив"
+            emptyLabel="Корпоративов нет"
+            hint={'Одна строка — один корпоратив. Итог строки — количество '
+              + 'участников × стоимость за человека, начисляется в месяц '
+              + 'проведения. Корпоративов может не быть совсем: пустая '
+              + 'таблица даёт нулевой расход.'}
           />
         );
       case 'overhead':

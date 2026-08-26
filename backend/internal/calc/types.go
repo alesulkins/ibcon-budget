@@ -4,13 +4,13 @@ import "time"
 
 // Коды графиков работы (из справочника 4.6)
 const (
-	ScheduleMV         = "МВ"          // межвахтовый перерыв
-	ScheduleK          = "К"           // командировка
-	Schedule42         = "4/2"         // вахта 4/2
-	ScheduleOF         = "ОФ"          // офис
-	Schedule44         = "4/4"         // вахта 4/4
-	ScheduleOTP        = "ОТП"         // отпуск
-	ScheduleNotHired   = "не принят"
+	ScheduleMV       = "МВ"  // межвахтовый перерыв
+	ScheduleK        = "К"   // командировка
+	Schedule42       = "4/2" // вахта 4/2
+	ScheduleOF       = "ОФ"  // офис
+	Schedule44       = "4/4" // вахта 4/4
+	ScheduleOTP      = "ОТП" // отпуск
+	ScheduleNotHired = "не принят"
 )
 
 // Исполнители (из справочника executors)
@@ -41,8 +41,8 @@ const (
 
 // Режимы ставки банковской гарантии
 const (
-	BGRatePerYear  = "%/год"
-	BGRateTotal    = "%/весь срок"
+	BGRatePerYear = "%/год"
+	BGRateTotal   = "%/весь срок"
 )
 
 // npflGrossUpDivisor — gross-up на НДФЛ 13% при выплате физическому лицу:
@@ -61,7 +61,7 @@ const npflGrossUpDivisor = 0.87
 // Employee — один сотрудник (лист 4.6)
 type Employee struct {
 	// Информация о сотруднике
-	Position     string  `json:"position"`      // должность (Специалист/Инженер ПТО и т.п.)
+	Position     string  `json:"position"` // должность (Специалист/Инженер ПТО и т.п.)
 	FullName     string  `json:"full_name"`
 	Country      string  `json:"country"`       // "россия" / "киргизия"
 	BaseSchedule string  `json:"base_schedule"` // условия работы (вахта/офис и т.п.)
@@ -79,12 +79,12 @@ type Employee struct {
 // InputEmployees — данные листа 4.6 (сотрудники и билеты)
 // Билеты рассчитываются автоматически из MonthlySchedule: 4/2→2, К→2(командировка), смена→1
 type InputEmployees struct {
-	TicketPrice  float64    `json:"ticket_price"`   // стоимость одного билета (C5, default 40000)
+	TicketPrice float64 `json:"ticket_price"` // стоимость одного билета (C5, default 40000)
 	// PerDiemRF — суточные по РФ. В РАСЧЁТЕ НЕ УЧАСТВУЕТ: 4.6!D9 это
 	// формула `=700+300/0.87*1.3`, а не поле ввода, поэтому применяется
 	// константа perDiemRFRate. Поле оставлено, чтобы старые сохранённые
 	// данные не ломали разбор JSON.
-	PerDiemRF float64 `json:"per_diem_rf"`
+	PerDiemRF    float64    `json:"per_diem_rf"`
 	PerDiemOther float64    `json:"per_diem_other"` // суточные за рубежом (D10)
 	Employees    []Employee `json:"employees"`
 }
@@ -225,16 +225,16 @@ type RentedItem struct {
 // Считает calcTransport.
 type InputTransport struct {
 	CarPurchases  []ItemPurchase `json:"car_purchases"`
-	CarRentals    []RentedItem  `json:"car_rentals"`
-	GarageRentals []RentedItem  `json:"garage_rentals"`
+	CarRentals    []RentedItem   `json:"car_rentals"`
+	GarageRentals []RentedItem   `json:"garage_rentals"`
 }
 
 // BankGuarantee — параметры одной банковской гарантии
 type BankGuarantee struct {
-	Pct          float64 `json:"pct"`           // % от стоимости договора (F220/F224/F228)
-	RatePct      float64 `json:"rate_pct"`      // % ставка (F221/F225/F229)
-	RateType     string  `json:"rate_type"`     // "%/год" или "%/весь срок"
-	DurationMos  float64 `json:"duration_mos"`  // срок в месяцах (F222/F226/F230)
+	Pct         float64 `json:"pct"`          // % от стоимости договора (F220/F224/F228)
+	RatePct     float64 `json:"rate_pct"`     // % ставка (F221/F225/F229)
+	RateType    string  `json:"rate_type"`    // "%/год" или "%/весь срок"
+	DurationMos float64 `json:"duration_mos"` // срок в месяцах (F222/F226/F230)
 }
 
 // InputBudgetParams — параметры бюджета (шаги 3 и 22 визарда)
@@ -287,10 +287,10 @@ type BudgetInputs struct {
 	DurationMonths   int       `json:"-"` // из projects.duration_months
 	ExecutorName     string    `json:"-"` // из projects.executor
 
-	Employees       *InputEmployees   // 4.6
-	Bonuses         *InputBonuses     // 4.1 (премии)
-	OvertimeRF      []float64         // строка 170: переработки сотрудников РФ
-	OvertimeKG      []float64         // строка 171: переработки сотрудников Киргизии
+	Employees  *InputEmployees // 4.6
+	Bonuses    *InputBonuses   // 4.1 (премии)
+	OvertimeRF []float64       // строка 170: переработки сотрудников РФ
+	OvertimeKG []float64       // строка 171: переработки сотрудников Киргизии
 
 	// Лист 4.2 — считается по формуле, а не приходит готовой суммой.
 	// Даёт строки 178 (аренда, вкл. уборку) и 179 (риелтор).
@@ -311,8 +311,17 @@ type BudgetInputs struct {
 	// Листы-списки: позиции с наименованием и стоимостью по месяцам,
 	// расчёт у всех трёх общий — calcCostLines.
 	SoftwareLines       *InputCostLines // 4.8  → строка 193 приобретение ПО
-	SubcontractExtLines *InputCostLines // 4.9  → строка 200 ГПХ внешний
-	SubcontractGenLines *InputCostLines // 4.11 → строка 202 субподряд
+	SubcontractExtLines *InputCostLines // 4.9  → строка 200 субподряд (ГПХ внешний)
+	SubcontractGenLines *InputCostLines // 4.11 → строка 202 субподрядные работы
+
+	// Листы-покупки: строки «месяц / количество / цена», расчёт общий —
+	// calcPurchases.
+	EquipmentItems      *InputPurchases // 4.7  → строка 189 приборы стройконтроля
+	CorporateEventItems *InputPurchases // 4.12 → строка 205 корпоративные мероприятия
+
+	// Лист 4.10 — два числа на весь проект, расход месяцев одинаков.
+	// Даёт строку 201 (субподряд, ГПХ сотрудников).
+	GphEmployees *InputGphEmployees
 
 	// Накладные расходы (строки 178-211) — двумерный массив по статьям
 	//
@@ -321,16 +330,16 @@ type BudgetInputs struct {
 	// сохранённых до перехода на расчёт по формуле: если у версии есть
 	// Transport, эти поля игнорируются. Удалить, когда старых версий не
 	// останется.
-	TransportRental   []float64 // 180 Аренда транспорта (4.3), устаревший ввод
-	SiteSetup         []float64 // 181 Обустройство стройплощадки (4.4), устаревший ввод
-	OfficeRent        []float64 // 182 Аренда офиса (4.5), устаревший ввод
-	OfficeCleaning    []float64 // 183 Уборка офиса (4.5), устаревший ввод
+	TransportRental []float64 // 180 Аренда транспорта (4.3), устаревший ввод
+	SiteSetup       []float64 // 181 Обустройство стройплощадки (4.4), устаревший ввод
+	OfficeRent      []float64 // 182 Аренда офиса (4.5), устаревший ввод
+	OfficeCleaning  []float64 // 183 Уборка офиса (4.5), устаревший ввод
 	// 184 Билеты — рассчитывается из Employee.MonthlySchedule
 	// 185 Командировочные — рассчитывается из Employee.TripDays
 	Internet          []float64 // 186
 	Mobile            []float64 // 187
 	LabResearch       []float64 // 188
-	ControlEquipment  []float64 // 189 (4.7)
+	ControlEquipment  []float64 // 189 (4.7), устаревший ввод — см. выше
 	Training          []float64 // 190
 	Medical           []float64 // 191
 	Uniform           []float64 // 192
@@ -342,11 +351,11 @@ type BudgetInputs struct {
 	Fuel              []float64 // 198 ГСМ
 	TransportServices []float64 // 199
 	SubcontractExt    []float64 // 200 (4.9), устаревший ввод — см. выше
-	SubcontractEmp    []float64 // 201 (4.10)
+	SubcontractEmp    []float64 // 201 (4.10), устаревший ввод — см. выше
 	SubcontractGen    []float64 // 202 (4.11), устаревший ввод — см. выше
 	SubcontractOrg    []float64 // 203
 	Representative    []float64 // 204
-	CorporateEvents   []float64 // 205 (4.12)
+	CorporateEvents   []float64 // 205 (4.12), устаревший ввод — см. выше
 	BankServices      []float64 // 206
 	InsuranceLiab     []float64 // 207
 	Utilities         []float64 // 208
@@ -367,14 +376,14 @@ type MonthlyResult struct {
 	Month int `json:"month"` // 1-indexed
 
 	// ФОТ и налоги (строки 168-176)
-	FOT            float64 `json:"fot"`              // 168
-	Bonuses        float64 `json:"bonuses"`           // 169
-	OvertimeRF     float64 `json:"overtime_rf"`       // 170
-	OvertimeKG     float64 `json:"overtime_kg"`       // 171
-	NDFL           float64 `json:"ndfl"`              // 172
-	InsuranceRF    float64 `json:"insurance_rf"`      // 173
-	InsuranceKG    float64 `json:"insurance_kg"`      // 174
-	TotalFOT       float64 `json:"total_fot"`         // 176 = SUM(168-174)
+	FOT         float64 `json:"fot"`          // 168
+	Bonuses     float64 `json:"bonuses"`      // 169
+	OvertimeRF  float64 `json:"overtime_rf"`  // 170
+	OvertimeKG  float64 `json:"overtime_kg"`  // 171
+	NDFL        float64 `json:"ndfl"`         // 172
+	InsuranceRF float64 `json:"insurance_rf"` // 173
+	InsuranceKG float64 `json:"insurance_kg"` // 174
+	TotalFOT    float64 `json:"total_fot"`    // 176 = SUM(168-174)
 
 	// Накладные (178-211)
 	Overhead [34]float64 `json:"overhead"` // [0]=178, [1]=179, ..., [33]=211
@@ -383,18 +392,18 @@ type MonthlyResult struct {
 
 	// Итоги
 	ProjectCostsExFOT float64 `json:"project_costs_ex_fot"` // 212 = SUM(178-211)
-	Unpredictables    float64 `json:"unpredictables"`        // 214
-	AUP               float64 `json:"aup"`                   // 215
-	TotalCostsGross   float64 `json:"total_costs_gross"`     // 216 = 215+214+212+176
-	OtherExpenses     float64 `json:"other_expenses"`        // 218
-	BGExecution       float64 `json:"bg_execution"`          // 222
-	BGWarranty        float64 `json:"bg_warranty"`           // 226
-	BGAdvance         float64 `json:"bg_advance"`            // 230
-	TotalCosts        float64 `json:"total_costs"`           // 232 = 230+226+218+216+222
-	MarginAmount      float64 `json:"margin_amount"`         // 234
-	Revenue           float64 `json:"revenue"`               // 236 (без НДС)
-	OperatingProfit   float64 `json:"operating_profit"`      // 238
-	RevenueWithVAT    float64 `json:"revenue_with_vat"`      // 247
+	Unpredictables    float64 `json:"unpredictables"`       // 214
+	AUP               float64 `json:"aup"`                  // 215
+	TotalCostsGross   float64 `json:"total_costs_gross"`    // 216 = 215+214+212+176
+	OtherExpenses     float64 `json:"other_expenses"`       // 218
+	BGExecution       float64 `json:"bg_execution"`         // 222
+	BGWarranty        float64 `json:"bg_warranty"`          // 226
+	BGAdvance         float64 `json:"bg_advance"`           // 230
+	TotalCosts        float64 `json:"total_costs"`          // 232 = 230+226+218+216+222
+	MarginAmount      float64 `json:"margin_amount"`        // 234
+	Revenue           float64 `json:"revenue"`              // 236 (без НДС)
+	OperatingProfit   float64 `json:"operating_profit"`     // 238
+	RevenueWithVAT    float64 `json:"revenue_with_vat"`     // 247
 }
 
 // CalcResult — полные результаты расчёта бюджета
@@ -403,12 +412,12 @@ type CalcResult struct {
 	Monthly        []MonthlyResult `json:"monthly"`
 
 	// Итого по проекту (строки G)
-	TotalFOT           float64 `json:"total_fot"`
-	TotalCosts         float64 `json:"total_costs"`
-	TotalRevenue       float64 `json:"total_revenue"` // G236
-	OperatingProfit    float64 `json:"operating_profit"`
-	Tax                float64 `json:"tax"`
-	NetProfit          float64 `json:"net_profit"`
-	Profitability      float64 `json:"profitability"` // % G244
+	TotalFOT            float64 `json:"total_fot"`
+	TotalCosts          float64 `json:"total_costs"`
+	TotalRevenue        float64 `json:"total_revenue"` // G236
+	OperatingProfit     float64 `json:"operating_profit"`
+	Tax                 float64 `json:"tax"`
+	NetProfit           float64 `json:"net_profit"`
+	Profitability       float64 `json:"profitability"`          // % G244
 	TotalRevenueWithVAT float64 `json:"total_revenue_with_vat"` // G247
 }

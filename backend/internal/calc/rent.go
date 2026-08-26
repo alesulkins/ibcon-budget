@@ -312,6 +312,21 @@ func ValidateInput(inputType string, raw []byte, executor string, duration int) 
 			return fmt.Errorf("%s: некорректный формат данных: %w", title, err)
 		}
 		return ValidateCostLines(title, &v)
+
+	case TypeEquipmentItems, TypeCorporateEventsItems:
+		title := purchasesTitle(inputType)
+		var v InputPurchases
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return fmt.Errorf("%s: некорректный формат данных: %w", title, err)
+		}
+		return ValidatePurchases(title, &v, duration)
+
+	case TypeGphEmployees:
+		var v InputGphEmployees
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return fmt.Errorf("ГПХ сотрудников: некорректный формат данных: %w", err)
+		}
+		return ValidateGphEmployees(&v)
 	}
 	return nil
 }

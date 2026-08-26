@@ -89,6 +89,28 @@ func Run(inp *BudgetInputs) *CalcResult {
 		subGenArr = inp.SubcontractGen
 	}
 
+	// ── 1е. Листы-покупки 4.7 и 4.12 ─────────────────────────────────────────
+	// Расход месяца = Σ цена × количество по строкам этого месяца.
+	//   4.7  → строка 189 приборы стройконтроля
+	//   4.12 → строка 205 корпоративные мероприятия
+	// Ограничения на последние месяцы проекта, как у вагончиков, здесь нет.
+	equipmentArr := calcPurchases(inp.EquipmentItems, n)
+	if inp.EquipmentItems == nil {
+		equipmentArr = inp.ControlEquipment // версия до перехода на таблицу
+	}
+	corporateArr := calcPurchases(inp.CorporateEventItems, n)
+	if inp.CorporateEventItems == nil {
+		corporateArr = inp.CorporateEvents
+	}
+
+	// ── 1ж. Лист 4.10: ГПХ сотрудников ───────────────────────────────────────
+	// Строка 201 = среднее количество × средняя стоимость, одинаково во всех
+	// месяцах проекта.
+	gphArr := calcGphEmployees(inp.GphEmployees, n)
+	if inp.GphEmployees == nil {
+		gphArr = inp.SubcontractEmp // версия до перехода на два поля
+	}
+
 	// ── 2. Премии и компенсации (4.1) суммарно → 2.Бюджет строка 169 ────────
 	bonusArr := bonusRes.Total
 
@@ -152,7 +174,7 @@ func Run(inp *BudgetInputs) *CalcResult {
 		inp.Internet,          // 8 → 186
 		inp.Mobile,            // 9 → 187
 		inp.LabResearch,       // 10 → 188
-		inp.ControlEquipment,  // 11 → 189
+		equipmentArr,          // 11 → 189 Приборы стройконтроля (4.7, таблица покупок)
 		inp.Training,          // 12 → 190
 		inp.Medical,           // 13 → 191
 		inp.Uniform,           // 14 → 192
@@ -164,11 +186,11 @@ func Run(inp *BudgetInputs) *CalcResult {
 		inp.Fuel,              // 20 → 198
 		inp.TransportServices, // 21 → 199
 		subExtArr,             // 22 → 200 ГПХ внешний (4.9, список позиций)
-		inp.SubcontractEmp,    // 23 → 201
+		gphArr,                // 23 → 201 ГПХ сотрудников (4.10, два поля)
 		subGenArr,             // 24 → 202 Субподряд (4.11, список позиций)
 		inp.SubcontractOrg,    // 25 → 203
 		inp.Representative,    // 26 → 204
-		inp.CorporateEvents,   // 27 → 205
+		corporateArr,          // 27 → 205 Корпоративы (4.12, таблица покупок)
 		inp.BankServices,      // 28 → 206
 		inp.InsuranceLiab,     // 29 → 207
 		inp.Utilities,         // 30 → 208

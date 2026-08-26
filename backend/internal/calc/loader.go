@@ -8,10 +8,10 @@ import (
 
 // inputTypes — список всех типов входных данных (ключи в budget_inputs)
 const (
-	TypeEmployees        = "employees"
-	TypeBonuses          = "bonuses"
-	TypeOvertimeRF       = "overtime_rf"
-	TypeOvertimeKG       = "overtime_kg"
+	TypeEmployees  = "employees"
+	TypeBonuses    = "bonuses"
+	TypeOvertimeRF = "overtime_rf"
+	TypeOvertimeKG = "overtime_kg"
 	// TypeRentApartments — лист 4.2. Структура НЕ {monthly_amounts},
 	// а количество квартир по типам + цены (см. InputRentApartments).
 	// Строка «Риелтор» (179) считается отсюда же, отдельного типа ввода нет.
@@ -51,7 +51,17 @@ const (
 	TypeSoftwareItems       = "software_items"
 	TypeSubcontractExtItems = "subcontract_ext_items"
 	TypeSubcontractGenItems = "subcontract_gen_items"
-	TypeInternet            = "internet"
+	// Листы-покупки 4.7 и 4.12: строки «месяц / количество / цена»
+	// (см. InputPurchases). Дают строки 189 и 205. Ключи без суффикса —
+	// TypeControlEquipment и TypeCorporateEvents — это те же листы старым
+	// вводом готовыми суммами по месяцам.
+	TypeEquipmentItems       = "equipment_items"
+	TypeCorporateEventsItems = "corporate_events_items"
+	// TypeGphEmployees — лист 4.10: среднее количество и средняя стоимость
+	// на весь проект (см. InputGphEmployees). Даёт строку 201.
+	// TypeSubcontractEmp — тот же лист старым вводом.
+	TypeGphEmployees     = "gph_employees"
+	TypeInternet         = "internet"
 	TypeMobile           = "mobile"
 	TypeLabResearch      = "lab_research"
 	TypeControlEquipment = "control_equipment"
@@ -196,6 +206,24 @@ func LoadInputs(
 			case TypeSubcontractGenItems:
 				inp.SubcontractGenLines = &v
 			}
+
+		case TypeEquipmentItems, TypeCorporateEventsItems:
+			var v InputPurchases
+			if err := json.Unmarshal(raw, &v); err != nil {
+				return nil, fmt.Errorf("parse %s: %w", typ, err)
+			}
+			if typ == TypeEquipmentItems {
+				inp.EquipmentItems = &v
+			} else {
+				inp.CorporateEventItems = &v
+			}
+
+		case TypeGphEmployees:
+			var v InputGphEmployees
+			if err := json.Unmarshal(raw, &v); err != nil {
+				return nil, fmt.Errorf("parse %s: %w", typ, err)
+			}
+			inp.GphEmployees = &v
 
 		case TypeBudgetParams:
 			var v InputBudgetParams

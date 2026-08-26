@@ -27,9 +27,18 @@ interface Props {
    */
   allowedMonths?: number;
   readonly?: boolean;
-  namePlaceholder: string;
+  namePlaceholder?: string;
   addLabel: string;
   emptyLabel: string;
+  /**
+   * Заголовок колонки описания. `null` — колонки нет: у корпоратива (4.12)
+   * в форме только месяц, количество участников и цена.
+   */
+  nameLabel?: string | null;
+  /** Заголовки остальных колонок; по умолчанию — как у покупки. */
+  monthColLabel?: string;
+  priceLabel?: string;
+  countLabel?: string;
 }
 
 export function emptyPurchase(): ItemPurchase {
@@ -47,10 +56,17 @@ export function emptyPurchase(): ItemPurchase {
 export default function PurchaseTable({
   items, onChange, months, allowedMonths, readonly,
   namePlaceholder, addLabel, emptyLabel,
+  nameLabel = 'Описание',
+  monthColLabel = 'Месяц покупки',
+  priceLabel = 'Цена за ед., ₽',
+  countLabel = 'Кол-во',
 }: Props) {
   const allowed = allowedMonths ?? months.length;
   // Месяц выбирается только из доступных — вне диапазона не выбрать в принципе.
   const monthOptions = months.slice(0, allowed).map((label, i) => ({ value: i + 1, label }));
+  const withName = nameLabel !== null;
+  // Колонок в строке: (описание) + месяц + цена + количество + итого.
+  const colCount = (withName ? 5 : 4) + (readonly ? 0 : 1);
 
   function patch(idx: number, p: Partial<ItemPurchase>) {
     onChange(items.map((r, i) => (i === idx ? { ...r, ...p } : r)));
@@ -60,8 +76,10 @@ export default function PurchaseTable({
     <div>
       <table style={table}>
         <colgroup>
-          <col />
-          <col style={{ width: 180 }} />
+          {withName && <col />}
+          {/* Без колонки описания тянется колонка месяца, иначе таблица
+              схлопывается по содержимому и не занимает белую область. */}
+          <col style={withName ? { width: 180 } : undefined} />
           <col style={{ width: 160 }} />
           <col style={{ width: COUNT_COL }} />
           <col style={{ width: TOTAL_COL }} />
@@ -69,17 +87,19 @@ export default function PurchaseTable({
         </colgroup>
         <thead>
           <tr>
-            <th style={{ ...monthGridHeadCell, textAlign: 'left', color: '#333', fontWeight: 500 }}>
-              Описание
+            {withName && (
+              <th style={{ ...monthGridHeadCell, textAlign: 'left', color: '#333', fontWeight: 500 }}>
+                {nameLabel}
+              </th>
+            )}
+            <th style={{ ...monthGridHeadCell, color: '#333', fontWeight: 500 }}>
+              {monthColLabel}
             </th>
             <th style={{ ...monthGridHeadCell, color: '#333', fontWeight: 500 }}>
-              Месяц покупки
+              {priceLabel}
             </th>
             <th style={{ ...monthGridHeadCell, color: '#333', fontWeight: 500 }}>
-              Цена за ед., ₽
-            </th>
-            <th style={{ ...monthGridHeadCell, color: '#333', fontWeight: 500 }}>
-              Кол-во
+              {countLabel}
             </th>
             <th style={{ ...monthGridHeadCell, textAlign: 'right', color: '#333', fontWeight: 500 }}>
               Итого
@@ -91,7 +111,7 @@ export default function PurchaseTable({
           {items.length === 0 && (
             <tr>
               <td
-                colSpan={5 + (readonly ? 0 : 1)}
+                colSpan={colCount}
                 style={{ ...monthGridCell, color: '#999', fontSize: 12, padding: '10px 4px' }}
               >
                 {emptyLabel}
@@ -100,18 +120,20 @@ export default function PurchaseTable({
           )}
           {items.map((p, idx) => (
             <tr key={idx} style={{ borderTop: '1px solid #f0f0f0' }}>
-              <td style={{ ...monthGridCell, textAlign: 'left' }}>
-                {readonly ? (
-                  <Text style={{ fontSize: 12 }}>{p.name || '—'}</Text>
-                ) : (
-                  <Input
-                    size="small"
-                    value={p.name}
-                    placeholder={namePlaceholder}
-                    onChange={e => patch(idx, { name: e.target.value })}
-                  />
-                )}
-              </td>
+              {withName && (
+                <td style={{ ...monthGridCell, textAlign: 'left' }}>
+                  {readonly ? (
+                    <Text style={{ fontSize: 12 }}>{p.name || '—'}</Text>
+                  ) : (
+                    <Input
+                      size="small"
+                      value={p.name}
+                      placeholder={namePlaceholder}
+                      onChange={e => patch(idx, { name: e.target.value })}
+                    />
+                  )}
+                </td>
+              )}
               <td style={monthGridCell}>
                 {readonly ? (
                   <Text style={{ fontSize: 12 }}>

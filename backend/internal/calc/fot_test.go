@@ -17,8 +17,8 @@ func TestScheduleMultiplier(t *testing.T) {
 		salary float64
 		want   float64
 	}{
-		{ScheduleMV, 100_000, 0.3},  // 30000/100000
-		{ScheduleMV, 60_000, 0.5},   // 30000/60000
+		{ScheduleMV, 100_000, 0.3}, // 30000/100000
+		{ScheduleMV, 60_000, 0.5},  // 30000/60000
 		{ScheduleNotHired, 100_000, 0},
 		{Schedule42, 100_000, 1},
 		{ScheduleOF, 100_000, 1},

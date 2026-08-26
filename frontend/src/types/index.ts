@@ -331,6 +331,29 @@ export interface InputCostLines {
   lines: CostLine[];
 }
 
+/**
+ * Ввод листа-покупок (4.7 приборы, 4.12 корпоративы). Расход месяца —
+ * сумма «цена × количество» по строкам этого месяца. В отличие от
+ * вагончиков (4.4), последние два месяца проекта разрешены.
+ *
+ * У корпоратива поле name не используется: в форме только месяц,
+ * количество участников и цена за человека.
+ */
+export interface InputPurchases {
+  items: ItemPurchase[];
+}
+
+/**
+ * ГПХ сотрудников (лист 4.10). Два числа на весь проект; расход всех
+ * месяцев одинаков и равен avg_count × avg_cost. Считает calcGphEmployees.
+ */
+export interface InputGphEmployees {
+  /** Среднее количество исполнителей в месяц; допускается дробное. */
+  avg_count: number;
+  /** Средняя стоимость одного исполнителя за месяц. */
+  avg_cost: number;
+}
+
 export interface InputEmployees {
   ticket_price: number;
   per_diem_rf: number;
