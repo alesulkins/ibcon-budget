@@ -269,6 +269,34 @@ export interface InputTransport {
   garage_rentals: RentedItem[];
 }
 
+/** Цена за единицу плюс количество в каждом месяце (лист 4.4). */
+export interface MonthlyQty {
+  price: number;
+  /** Количество по месяцам, индекс 0 = первый месяц проекта. */
+  counts: number[];
+}
+
+/**
+ * Вагончики (лист 4.4). Аренда и покупка складываются в одну строку
+ * бюджета «Обустройство строительной площадки»; считает calcWagonciks.
+ */
+export interface InputWagonciks {
+  rental: MonthlyQty;
+  purchase: MonthlyQty;
+}
+
+/**
+ * Сколько первых месяцев проекта открыты для покупки вагончиков.
+ * Покупка невозможна в последние два месяца; проект в 1 месяц —
+ * оговорённое исключение, там покупка разрешена.
+ * Дублирует purchaseAllowedMonths из internal/calc/wagonciks.go.
+ */
+export function purchaseAllowedMonths(duration: number): number {
+  if (duration === 1) return 1;
+  if (duration < 2) return 0;
+  return duration - 2;
+}
+
 export interface InputEmployees {
   ticket_price: number;
   per_diem_rf: number;

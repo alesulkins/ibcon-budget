@@ -49,6 +49,15 @@ func Run(inp *BudgetInputs) *CalcResult {
 		transportArr, garageArr = inp.TransportRental, inp.GarageRent
 	}
 
+	// ── 1в. Лист 4.4: вагончики ───────────────────────────────────────────────
+	// Строка 181 = аренда вагончиков + покупка вагончиков одной суммой.
+	wagonciksArr := calcWagonciks(inp.Wagonciks, n)
+	if inp.Wagonciks == nil {
+		// Версия сохранена до перехода 4.4 на расчёт по формуле.
+		// Удалить вместе с TypeSiteSetup.
+		wagonciksArr = inp.SiteSetup
+	}
+
 	// ── 2. Премии и компенсации (4.1) суммарно → 2.Бюджет строка 169 ────────
 	bonusArr := bonusRes.Total
 
@@ -104,7 +113,7 @@ func Run(inp *BudgetInputs) *CalcResult {
 		rentAptsArr,           // 0 → 178 Аренда квартир, вкл. уборку (4.2, авторасчёт)
 		realtorArr,            // 1 → 179 Риелтор (4.2, авторасчёт)
 		transportArr,          // 2 → 180 Аренда транспорта + покупка авто (4.3, авторасчёт)
-		inp.SiteSetup,         // 3 → 181
+		wagonciksArr,          // 3 → 181 Вагончики: аренда + покупка (4.4, авторасчёт)
 		inp.OfficeRent,        // 4 → 182
 		inp.OfficeCleaning,    // 5 → 183
 		ticketsArr,            // 6 → 184 Билеты (авторасчёт)

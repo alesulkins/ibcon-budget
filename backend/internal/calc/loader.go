@@ -23,7 +23,14 @@ const (
 	// TypeTransportRental / TypeGarageRent — СТАРЫЙ ввод листа 4.3 готовыми
 	// суммами по месяцам. Читаются только ради версий, сохранённых до
 	// перехода на расчёт по формуле; новые данные пишутся в TypeTransport.
-	TypeTransportRental  = "transport_rental"
+	TypeTransportRental = "transport_rental"
+	// TypeWagonciks — лист 4.4. Аренда и покупка вагончиков, у каждой цена
+	// за единицу и количество по месяцам (см. InputWagonciks).
+	// Даёт строку 181.
+	TypeWagonciks = "wagonciks"
+	// TypeSiteSetup — СТАРЫЙ ввод листа 4.4 готовыми суммами по месяцам.
+	// Читается только ради версий, сохранённых до перехода на расчёт по
+	// формуле; новые данные пишутся в TypeWagonciks.
 	TypeSiteSetup        = "site_setup"
 	TypeOfficeRent       = "office_rent"
 	TypeOfficeCleaning   = "office_cleaning"
@@ -144,6 +151,13 @@ func LoadInputs(
 				return nil, fmt.Errorf("parse %s: %w", typ, err)
 			}
 			inp.Transport = &v
+
+		case TypeWagonciks:
+			var v InputWagonciks
+			if err := json.Unmarshal(raw, &v); err != nil {
+				return nil, fmt.Errorf("parse %s: %w", typ, err)
+			}
+			inp.Wagonciks = &v
 
 		case TypeBudgetParams:
 			var v InputBudgetParams

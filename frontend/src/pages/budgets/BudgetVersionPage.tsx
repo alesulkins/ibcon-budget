@@ -20,6 +20,7 @@ import EmployeesInput from './inputs/EmployeesInput';
 import BonusesInput from './inputs/BonusesInput';
 import RentApartmentsInput from './inputs/RentApartmentsInput';
 import TransportInput from './inputs/TransportInput';
+import WagonciksInput from './inputs/WagonciksInput';
 import SimpleCostInput from './inputs/SimpleCostInput';
 import OverheadInput from './inputs/OverheadInput';
 import BudgetParamsInput from './inputs/BudgetParamsInput';
@@ -162,23 +163,15 @@ export default function BudgetVersionPage() {
           />
         );
       case 'site_setup':
+        // Аренда и покупка вагончиков; сумму считает бэкенд
+        // (calcWagonciks, лист 4.4).
         return (
-          <div>
-            <Alert
-              type="info"
-              showIcon
-              style={{ marginBottom: 12 }}
-              message='Строка "Обустройство стройплощадки" в бюджете включает аренду и покупку вагончиков. Если в каком-то месяце планируется покупка — добавьте её стоимость к сумме за этот месяц.'
-            />
-            <SimpleCostInput
-              versionId={versionId}
-              type="trailer_rent"
-              title="Аренда/обустройство вагончиков (включая покупку) — лист 4.4"
-              duration={duration}
-              startDate={project!.start_date}
-              readonly={isReadonly}
-            />
-          </div>
+          <WagonciksInput
+            versionId={versionId}
+            duration={duration}
+            startDate={project!.start_date}
+            readonly={isReadonly}
+          />
         );
       case 'office':
         return (

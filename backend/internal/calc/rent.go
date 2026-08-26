@@ -290,6 +290,13 @@ func ValidateInput(inputType string, raw []byte, executor string, duration int) 
 			return fmt.Errorf("транспорт: некорректный формат данных: %w", err)
 		}
 		return ValidateTransport(&v, duration)
+
+	case TypeWagonciks:
+		var v InputWagonciks
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return fmt.Errorf("вагончики: некорректный формат данных: %w", err)
+		}
+		return ValidateWagonciks(&v)
 	}
 	return nil
 }
