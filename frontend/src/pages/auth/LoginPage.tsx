@@ -4,10 +4,9 @@ import { LockOutlined, MailOutlined } from '@ant-design/icons';
 import { authApi } from '../../api';
 import { setAuth, savedEmail } from '../../store/auth';
 import { extractError } from '../../api/client';
+import { BRAND } from '../../theme';
 
 const { Title, Text } = Typography;
-
-const BRAND = '#1a3a6b';
 
 interface LoginFormValues {
   email: string;

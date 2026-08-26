@@ -28,6 +28,7 @@ import GphEmployeesInput from './inputs/GphEmployeesInput';
 import OverheadInput from './inputs/OverheadInput';
 import BudgetParamsInput from './inputs/BudgetParamsInput';
 import CalcResults from './CalcResults';
+import { BRAND } from '../../theme';
 
 const { Title, Text } = Typography;
 
@@ -428,7 +429,7 @@ export default function BudgetVersionPage() {
             type="primary"
             disabled={step === WIZARD_STEPS.length - 1 || isAP}
             onClick={() => setStep(s => s + 1)}
-            style={{ background: '#1a3a6b' }}
+            style={{ background: BRAND }}
           >
             Далее →
           </Button>

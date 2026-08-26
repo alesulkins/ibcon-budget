@@ -7,6 +7,7 @@ import ruRU from 'antd/locale/ru_RU';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ru';
 import App from './App';
+import { BRAND, BRAND_WHITE, PAGE_BG } from './theme';
 import './index.css';
 
 dayjs.locale('ru');
@@ -33,10 +34,13 @@ createRoot(document.getElementById('root')!).render(
           cssVar: { key: 'ibcon' },
           hashed: false,
           token: {
-            colorPrimary: '#1a3a6b',
+            colorPrimary: BRAND,
+            // Карточки, таблицы, модалы и поля — фирменный белый.
+            colorBgContainer: BRAND_WHITE,
+            colorBgElevated: BRAND_WHITE,
             // Совпадает с --ibcon-bg в index.css: иначе на краях страницы
-            // виден стык двух почти одинаковых серых.
-            colorBgLayout: '#f2f4f7',
+            // виден стык двух почти одинаковых фонов.
+            colorBgLayout: PAGE_BG,
             borderRadius: 8,
             fontSize: 14,
           },

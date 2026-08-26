@@ -12,6 +12,7 @@ import { usersApi, projectsApi } from '../../api';
 import type { User } from '../../types';
 import { ROLES, ROLE_LABELS } from '../../types';
 import { extractError } from '../../api/client';
+import { BRAND } from '../../theme';
 
 
 export default function UsersPage() {
@@ -150,7 +151,7 @@ export default function UsersPage() {
     <div>
       {/* Название раздела живёт в шапке (AppLayout). */}
       <Button
-        type="primary" icon={<PlusOutlined />} style={{ marginBottom: 12, background: '#1a3a6b' }}
+        type="primary" icon={<PlusOutlined />} style={{ marginBottom: 12, background: BRAND }}
         onClick={() => { setShowCreate(true); createForm.resetFields(); }}
       >
         Создать пользователя

@@ -12,6 +12,7 @@ import { fmtMoney, monthLabel, fmtNum } from '../../utils/fmt';
 import { profitabilityGrade } from '../../utils/profitability';
 import Profitability from '../../components/Profitability';
 import { extractError } from '../../api/client';
+import { BRAND } from '../../theme';
 
 const { Title, Text } = Typography;
 
@@ -84,7 +85,7 @@ export default function CalcResults({ versionId, projectId, duration, startDate 
           icon={<CalculatorOutlined />}
           loading={calcMutation.isPending}
           onClick={() => calcMutation.mutate()}
-          style={{ background: '#1a3a6b' }}
+          style={{ background: BRAND }}
           size="large"
         >
           Рассчитать бюджет
@@ -115,7 +116,7 @@ export default function CalcResults({ versionId, projectId, duration, startDate 
                   title="Стоимость работ без НДС (G236)"
                   value={r.total_revenue}
                   formatter={(v) => `${fmtNum(Number(v))} ₽`}
-                  valueStyle={{ color: '#1a3a6b', fontWeight: 700 }}
+                  valueStyle={{ color: BRAND, fontWeight: 700 }}
                 />
               </Card>
             </Col>

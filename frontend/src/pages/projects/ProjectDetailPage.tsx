@@ -21,6 +21,7 @@ import Profitability from '../../components/Profitability';
 import { hasRole } from '../../store/auth';
 import { shortName } from '../../utils/names';
 import { extractError } from '../../api/client';
+import { BRAND } from '../../theme';
 
 const { Title, Text } = Typography;
 
@@ -340,7 +341,7 @@ export default function ProjectDetailPage() {
             <Button
               type="primary"
               icon={<PlusOutlined />}
-              style={{ background: '#1a3a6b' }}
+              style={{ background: BRAND }}
               onClick={() => setShowCreateBudget(true)}
             >
               {(versions ?? []).length > 0 ? 'Новая версия' : 'Создать бюджет'}

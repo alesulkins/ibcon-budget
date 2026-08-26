@@ -13,11 +13,12 @@ import { shortName, initials } from '../utils/names';
 import { useNavigate, useLocation, useMatch, Outlet } from 'react-router-dom';
 import { clearAuth, currentUser, hasRole } from '../store/auth';
 import { useScrollRestore } from '../hooks/useScrollRestore';
+import { BRAND, BRAND_LIGHT, BRAND_DARK } from '../theme';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
 
-const IBCON_COLOR = '#1a3a6b';
+const IBCON_COLOR = BRAND;
 
 /** Заголовок раздела в шапке — для экранов без своей цепочки крошек. */
 const SECTION_TITLES: Record<string, string> = {
@@ -250,7 +251,7 @@ export default function AppLayout() {
         // к тёмному низу, тонкая светлая грань справа и мягкая тень на
         // контент. Панель перестаёт выглядеть наклейкой и получает объём.
         style={{
-          background: `linear-gradient(170deg, #24487f 0%, ${IBCON_COLOR} 42%, #14294c 100%)`,
+          background: `linear-gradient(170deg, ${BRAND_LIGHT} 0%, ${IBCON_COLOR} 42%, ${BRAND_DARK} 100%)`,
           position: 'sticky',
           top: 0,
           height: '100vh',
@@ -260,22 +261,32 @@ export default function AppLayout() {
         }}
         trigger={null}
       >
+        {/* Логотип: развёрнутый знак, в свёрнутом виде — последняя буква.
+            Оба файла залиты фирменным белым, поэтому читаются на панели
+            без дополнительной обработки. */}
         <div style={{
           height: 64,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: 'white',
-          fontWeight: 700,
-          fontSize: collapsed ? 14 : 16,
-          letterSpacing: 1,
-          padding: '0 16px',
+          padding: collapsed ? '0 12px' : '0 20px',
           // Разделитель в две грани: тёмная линия и светлый блик под ней —
           // так край читается как рельеф, а не как нарисованная черта.
           borderBottom: '1px solid rgba(0,0,0,0.18)',
           boxShadow: '0 1px 0 rgba(255,255,255,0.06)',
         }}>
-          {collapsed ? 'IB' : 'IBCON Бюджет'}
+          <img
+            src={collapsed ? '/logo-last-letter.svg' : '/logo.svg'}
+            alt="IBCON"
+            // Высота фиксирована, ширина считается по пропорции: знак
+            // широкий (270×60), обрезанная буква почти квадратная.
+            style={{
+              height: collapsed ? 28 : 26,
+              width: 'auto',
+              maxWidth: '100%',
+              display: 'block',
+            }}
+          />
         </div>
         <Menu
           theme="dark"

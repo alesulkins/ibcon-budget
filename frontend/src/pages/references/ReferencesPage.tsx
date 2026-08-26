@@ -10,6 +10,7 @@ import { refsApi } from '../../api';
 import type { Executor, Position, WorkMode } from '../../types';
 import { hasRole } from '../../store/auth';
 import { extractError } from '../../api/client';
+import { BRAND } from '../../theme';
 
 const canEdit = () => hasRole('GE');
 
@@ -287,7 +288,7 @@ export default function ReferencesPage() {
           <Button
             type="primary"
             icon={<PlusOutlined />}
-            style={{ background: '#1a3a6b' }}
+            style={{ background: BRAND }}
             onClick={() => setAddSignal(s => s + 1)}
           >
             {ADD_LABELS[tab]}

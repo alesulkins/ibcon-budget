@@ -13,11 +13,11 @@ import { ROLE_LABELS } from '../../types';
 import type { Profile } from '../../types';
 import { initials } from '../../utils/names';
 import { extractError } from '../../api/client';
+import { BRAND } from '../../theme';
 
 const { Text, Paragraph } = Typography;
 const { TextArea } = Input;
 
-const BRAND = '#1a3a6b';
 
 /** Набор аватаров-стикеров: выбор не требует загрузки файла. */
 const STICKERS = [

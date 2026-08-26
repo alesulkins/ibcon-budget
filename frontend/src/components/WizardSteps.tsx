@@ -1,5 +1,6 @@
 import { useRef, useEffect } from 'react';
 import { Tooltip } from 'antd';
+import { BRAND } from '../theme';
 
 export interface WizardStepItem {
   key: string;
@@ -13,7 +14,6 @@ interface Props {
   onChange?: (idx: number) => void;
 }
 
-const BRAND = '#1a3a6b';
 const CIRCLE = 48; // вдвое больше стандартного кружка antd Steps
 
 /**

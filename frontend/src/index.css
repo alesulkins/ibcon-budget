@@ -2,11 +2,14 @@
  * Глобальные правила, которые нельзя выразить инлайновым стилем.
  */
 
+/* Фирменные цвета. Дубль значений из src/theme.ts — для правил, которые
+   нельзя задать инлайновым стилем. Менять только вместе с theme.ts. */
 :root {
-  /* Фон рабочей области. Должен совпадать с фоном antd Layout, иначе
-     на краях видны стыки. */
-  --ibcon-bg: #f2f4f7;
-  --ibcon-navy: #1a3a6b;
+  --ibcon-brand: #183e4d;
+  --ibcon-white: #fdf9f8;
+  /* Фон рабочей области: должен совпадать с colorBgLayout у antd, иначе
+     на краях страницы виден стык двух почти одинаковых тонов. */
+  --ibcon-bg: #f2edeb;
 }
 
 /**
@@ -78,5 +81,5 @@ html body {
 .ant-table-content,
 .ibcon-scroll {
   scrollbar-width: thin;
-  scrollbar-color: rgba(26, 58, 107, 0.25) transparent;
+  scrollbar-color: rgba(24, 62, 77, 0.28) transparent;
 }

@@ -21,6 +21,7 @@ import { extractError } from '../../api/client';
 import { useStickyState } from '../../hooks/useStickyState';
 import { currentUser } from '../../store/auth';
 import Fireworks, { shouldShowFireworks, markFireworksShown } from '../../components/Fireworks';
+import { BRAND } from '../../theme';
 
 
 export default function ProjectsPage() {
@@ -268,7 +269,7 @@ export default function ProjectsPage() {
             onClick={() => setShowCreate(true)}
             // marginLeft: auto — кнопка уходит вправо, а фильтры остаются
             // слева; при переносе строки она встаёт в конец последней.
-            style={{ background: '#1a3a6b', marginLeft: 'auto' }}
+            style={{ background: BRAND, marginLeft: 'auto' }}
           >
             Создать проект
           </Button>
