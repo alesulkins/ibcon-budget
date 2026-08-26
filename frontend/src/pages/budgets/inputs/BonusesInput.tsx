@@ -1,17 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Card, Table, Button, Modal, Form, Input, InputNumber,
-  Select, message, Space, Typography, Alert,
+  Select, Space, Typography, Tooltip,
 } from 'antd';
-import { PlusOutlined, DeleteOutlined, SaveOutlined } from '@ant-design/icons';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { PlusOutlined, DeleteOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { useQuery } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
 import { budgetsApi } from '../../../api';
 import {
   BONUS_KIND_BUILDER_DAY, BONUS_KIND_NEW_YEAR, BONUS_KIND_OTHER,
 } from '../../../types';
 import type { BonusType, InputBonuses } from '../../../types';
-import { extractError } from '../../../api/client';
+import { useAutosave } from '../../../hooks/useAutosave';
 
 const { Text } = Typography;
 
@@ -49,27 +49,30 @@ export default function BonusesInput({ versionId, readonly }: Props) {
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [form] = Form.useForm<BonusFormValues>();
 
-  const { data: savedBonuses } = useQuery({
+  const { data: savedBonuses, isSuccess } = useQuery({
     queryKey: ['budget-input', versionId, 'bonuses'],
     queryFn: () => budgetsApi.getInput<InputBonuses>(versionId, 'bonuses'),
   });
 
+  const [hydrated, setHydrated] = useState(false);
+
   useEffect(() => {
+    if (!isSuccess) return;
     if (savedBonuses?.bonus_types) {
       setBonusTypes(savedBonuses.bonus_types);
     }
-  }, [savedBonuses]);
+    setHydrated(true);
+  }, [savedBonuses, isSuccess]);
 
-  const saveMutation = useMutation({
-    mutationFn: () => {
-      // Передаём только виды премий. Суммы по сотрудникам считает бэкенд
-      // (calcBonuses): процент от проиндексированного оклада в нужный месяц.
-      const payload: InputBonuses = { bonus_types: bonusTypes };
-      return budgetsApi.saveInput(versionId, 'bonuses', payload);
-    },
-    onSuccess: () => message.success('Данные по премиям сохранены'),
-    onError: (e) => message.error(extractError(e)),
-  });
+  // Передаём только виды премий. Суммы по сотрудникам считает бэкенд
+  // (calcBonuses): процент от проиндексированного оклада в нужный месяц.
+  const save = useCallback(
+    (types: BonusType[]) =>
+      budgetsApi.saveInput(versionId, 'bonuses', { bonus_types: types } as InputBonuses),
+    [versionId],
+  );
+
+  useAutosave({ data: bonusTypes, ready: hydrated, save, enabled: !readonly });
 
   function addOrEditBonus(vals: BonusFormValues) {
     const bt: BonusType = {
@@ -147,45 +150,36 @@ export default function BonusesInput({ versionId, readonly }: Props) {
   return (
     <div>
       <Card
-        title="Виды премий — лист 4.1"
+        title={
+          <Space size={6}>
+            <span>Виды премий</span>
+            <Tooltip
+              title={
+                'Премии и компенсации при увольнении рассчитываются автоматически. '
+                + 'Премия начисляется каждому сотруднику, который в этот месяц '
+                + 'является сотрудником. Дополнительно начисляется компенсация '
+                + 'при увольнении.'
+              }
+            >
+              <InfoCircleOutlined style={{ color: '#8c8c8c', fontSize: 14 }} />
+            </Tooltip>
+          </Space>
+        }
         size="small"
         style={{ marginBottom: 16 }}
         extra={
           !readonly && (
-            <Space>
-              <Button
-                size="small"
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() => { form.resetFields(); setEditingIdx(null); setShowAdd(true); }}
-              >
-                Добавить вид премии
-              </Button>
-              <Button
-                size="small"
-                icon={<SaveOutlined />}
-                onClick={() => saveMutation.mutate()}
-                loading={saveMutation.isPending}
-              >
-                Сохранить
-              </Button>
-            </Space>
+            <Button
+              size="small"
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => { form.resetFields(); setEditingIdx(null); setShowAdd(true); }}
+            >
+              Добавить вид премии
+            </Button>
           )
         }
       >
-        <Alert
-          type="info"
-          showIcon
-          style={{ marginBottom: 12 }}
-          message="Суммы премий рассчитываются автоматически"
-          description={
-            'Премия начисляется каждому сотруднику, который в этот месяц не имеет ' +
-            'статуса «не принят»: процент от планового ФОТ на руки с учётом ' +
-            'индексации. В проекте длиннее года премия начисляется каждый год. ' +
-            'В последний месяц проекта дополнительно начисляется компенсация ' +
-            'при увольнении.'
-          }
-        />
         <Table
           rowKey={(_, i) => i!}
           columns={columns}

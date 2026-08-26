@@ -105,28 +105,70 @@ func TestRun_SimpleOneMonth(t *testing.T) {
 	}
 }
 
-func TestRun_ManualRevenue(t *testing.T) {
-	// Ручная выручка 1 000 000 руб, 2 месяца — равномерно 500 000/мес
-	inp := &BudgetInputs{
-		ProjectStartDate: time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC),
-		DurationMonths:   2,
-		ExecutorName:     ExecutorAibicon,
-		Employees:        nil,
-		Params: &InputBudgetParams{
-			UnpredictablesPct: 0,
-			AUPPct:            0,
-			ManualRevenue:     1_000_000,
-		},
+// TestRun_RevenueFromTKP — стоимость работ (2.Бюджет!F236) выводится из ТКП,
+// а не вводится отдельно: F236 = G252 = IF(КГ, G251, IF(АП, G251, G251/1.22)).
+// У «Айбикон» ТКП задаётся С НДС, поэтому делится на 1.22.
+func TestRun_RevenueFromTKP(t *testing.T) {
+	tests := []struct {
+		executor    string
+		tkp         float64
+		wantRevenue float64
+	}{
+		// Айбикон: ТКП с НДС → выручка без НДС = 1 220 000 / 1.22
+		{ExecutorAibicon, 1_220_000, 1_000_000},
+		// Айбикон-Проект и Киргизия: ТКП уже без НДС, деления нет
+		{ExecutorAibiconProject, 1_000_000, 1_000_000},
+		{ExecutorAibiconKG, 1_000_000, 1_000_000},
 	}
 
-	res := Run(inp)
-	for i, mr := range res.Monthly {
-		if math.Abs(mr.Revenue-500_000) > 0.01 {
-			t.Errorf("month %d Revenue: want 500000, got %.2f", i+1, mr.Revenue)
+	for _, tt := range tests {
+		inp := &BudgetInputs{
+			ProjectStartDate: time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC),
+			DurationMonths:   2,
+			ExecutorName:     tt.executor,
+			Params: &InputBudgetParams{
+				UnpredictablesPct: 0,
+				AUPPct:            0,
+				ContractValue:     tt.tkp,
+			},
+		}
+		res := Run(inp)
+
+		// Выручка распределяется равномерно по месяцам (H236 = F236/D8)
+		perMonth := tt.wantRevenue / 2
+		for i, mr := range res.Monthly {
+			if math.Abs(mr.Revenue-perMonth) > 0.01 {
+				t.Errorf("%s, месяц %d: выручка want %.2f, got %.2f",
+					tt.executor, i+1, perMonth, mr.Revenue)
+			}
+		}
+		if math.Abs(res.TotalRevenue-tt.wantRevenue) > 0.01 {
+			t.Errorf("%s: итого выручка want %.2f, got %.2f",
+				tt.executor, tt.wantRevenue, res.TotalRevenue)
 		}
 	}
-	if math.Abs(res.TotalRevenue-1_000_000) > 0.01 {
-		t.Errorf("TotalRevenue: want 1000000, got %.2f", res.TotalRevenue)
+}
+
+// TestRun_NoTKPNoManualRevenue — без ТКП режим ручной выручки не включается,
+// работает наценка. Проверяем, что выручка НЕ нулевая и не равна ТКП.
+func TestRun_NoTKPNoManualRevenue(t *testing.T) {
+	inp := &BudgetInputs{
+		ProjectStartDate: mustDate(2026, 12, 1),
+		DurationMonths:   2,
+		ExecutorName:     ExecutorAibicon,
+		Internet:         []float64{1_000_000, 1_000_000},
+		Params: &InputBudgetParams{
+			TargetRentPct: 29,
+			// ContractValue не задан → режим наценки
+		},
+	}
+	res := Run(inp)
+	if res.TotalRevenue <= 2_000_000 {
+		t.Errorf("в режиме наценки выручка должна превышать расходы 2 млн, got %.2f",
+			res.TotalRevenue)
+	}
+	if math.Abs(res.Profitability-29) > 0.01 {
+		t.Errorf("рентабельность должна выйти целевой 29%%, got %.4f", res.Profitability)
 	}
 }
 
@@ -231,11 +273,17 @@ func TestRun_VATByExecutor(t *testing.T) {
 		{ExecutorAibiconKG, 1.0},
 	}
 	for _, tt := range tests {
+		// ТКП подбираем так, чтобы выручка без НДС вышла 1 000 000
+		// у всех трёх исполнителей (у «Айбикон» ТКП задаётся с НДС).
+		tkp := 1_000_000.0
+		if tt.executor == ExecutorAibicon {
+			tkp = 1_220_000
+		}
 		inp := &BudgetInputs{
 			ProjectStartDate: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 			DurationMonths:   1,
 			ExecutorName:     tt.executor,
-			Params:           &InputBudgetParams{ManualRevenue: 1_000_000},
+			Params:           &InputBudgetParams{ContractValue: tkp},
 		}
 		res := Run(inp)
 		wantVAT := 1_000_000 * tt.wantMult
@@ -259,9 +307,9 @@ func TestRun_OperatingProfitWithManualRevenue(t *testing.T) {
 		ExecutorName:     ExecutorAibicon,
 		Internet:         []float64{1_000_000, 1_000_000}, // расходы 1 млн/мес
 		Params: &InputBudgetParams{
-			ManualRevenue: 10_000_000,
-			ContractValue: 10_000_000,
-			TargetRentPct: 25, // задана, но при ручной выручке не применяется
+			// ТКП с НДС 12.2 млн → выручка без НДС ровно 10 млн
+			ContractValue: 12_200_000,
+			TargetRentPct: 25, // задана, но при заданном ТКП не применяется
 		},
 	}
 	res := Run(inp)
@@ -297,15 +345,15 @@ func TestRun_TaxByExecutor(t *testing.T) {
 			ExecutorName:     executor,
 			Internet:         []float64{1_000_000, 1_000_000, 1_000_000, 1_000_000, 1_000_000, 1_000_000},
 			Params: &InputBudgetParams{
-				ManualRevenue: 200_000_000,
 				ContractValue: 200_000_000,
 			},
 		}
 	}
 
-	// Айбикон: налог = операционная прибыль × 25%
+	// Айбикон: налог = операционная прибыль × 25%.
+	// Выручка = ТКП без НДС = 200 млн / 1.22, расходы 6 млн.
 	res := Run(mk(ExecutorAibicon))
-	wantProfit := 200_000_000.0 - 6_000_000.0
+	wantProfit := 200_000_000.0/vatMultiplier - 6_000_000.0
 	if math.Abs(res.OperatingProfit-wantProfit) > 0.01 {
 		t.Fatalf("Айбикон: опер.прибыль want %.2f, got %.2f", wantProfit, res.OperatingProfit)
 	}
@@ -481,8 +529,7 @@ func TestRun_KirgiziaAlwaysManualRevenue(t *testing.T) {
 		Internet:         []float64{1_000_000, 1_000_000, 1_000_000},
 		Params: &InputBudgetParams{
 			TargetRentPct: 27,          // задана, но не должна применяться
-			ManualRevenue: 100_000_000, // ТКП задан
-			ContractValue: 100_000_000,
+			ContractValue: 100_000_000, // ТКП задан
 		},
 	}
 	res := Run(inp)
@@ -538,10 +585,10 @@ func TestValidateBudgetParams_TargetRent(t *testing.T) {
 
 	// Через диспетчер ValidateInput
 	bad := []byte(`{"target_rent_pct":80}`)
-	if err := ValidateInput(TypeBudgetParams, bad, ExecutorAibicon); err == nil {
+	if err := ValidateInput(TypeBudgetParams, bad, ExecutorAibicon, 6); err == nil {
 		t.Error("ValidateInput: ожидалась ошибка для 80% при налоге 25%")
 	}
-	if err := ValidateInput(TypeBudgetParams, bad, ExecutorAibiconProject); err != nil {
+	if err := ValidateInput(TypeBudgetParams, bad, ExecutorAibiconProject, 6); err != nil {
 		t.Errorf("ValidateInput: 80%% при налоге 0 должно проходить, got %v", err)
 	}
 }
@@ -580,7 +627,6 @@ func TestRun_BankGuaranteesNeedContractValue(t *testing.T) {
 
 	// Режим ручной выручки: ТКП задан → БГ считаются как раньше
 	pTKP := bg()
-	pTKP.ManualRevenue = 200_000_000
 	pTKP.ContractValue = 200_000_000
 	res = Run(&BudgetInputs{
 		ProjectStartDate: mustDate(2026, 12, 1),
@@ -664,7 +710,6 @@ func TestRun_KirgiziaTaxNeedsContractValue(t *testing.T) {
 
 	// ТКП задан — налог считается: 200 млн × 7% / 6 мес
 	res := Run(base(&InputBudgetParams{
-		ManualRevenue: 200_000_000,
 		ContractValue: 200_000_000,
 	}))
 	if want := 2_333_333.3333333335; math.Abs(res.Tax-want) > 0.01 {
@@ -679,5 +724,182 @@ func TestRun_KirgiziaTaxNeedsContractValue(t *testing.T) {
 	// выручка при этом посчитана (режим наценки работает)
 	if res.TotalRevenue == 0 {
 		t.Error("без ТКП выручка всё равно должна считаться по наценке")
+	}
+}
+
+// TestRun_AUPPlusTwoMonths — АУП (строка 215) начисляется, пока номер
+// месяца <= длительность + 2: H215 = IF(H11<=$D$8+2, (H212+H214+H176)*F215, 0).
+//
+// Проверено на calc_sheets_ibcon-russia.xlsm (D8=6): в колонках месяцев 7 и 8
+// база (212, 214, 176) равна нулю, поэтому АУП там тоже ноль, а G215
+// совпадает с суммой первых шести месяцев. То есть «+2» ничего не
+// добавляет: строки расходов сами закрыты проверкой «месяц <= D8».
+//
+// Отсюда требование к платформе: массивы длиной ровно duration дают тот же
+// итог, что и форма, и никакого «хвоста» дописывать не нужно.
+func TestRun_AUPPlusTwoMonths(t *testing.T) {
+	const n = 6
+	inp := &BudgetInputs{
+		ProjectStartDate: mustDate(2027, 6, 1),
+		DurationMonths:   n,
+		ExecutorName:     ExecutorAibicon,
+		Internet:         []float64{100_000, 100_000, 100_000, 100_000, 100_000, 100_000},
+		Params: &InputBudgetParams{
+			UnpredictablesPct: 7,
+			AUPPct:            15,
+		},
+	}
+	res := Run(inp)
+
+	// Условие «месяц <= duration+2» выполняется для месяцев 1..8, поэтому
+	// внутри проекта АУП начисляется в каждом месяце без исключений.
+	for m := 0; m < n; m++ {
+		if res.Monthly[m].AUP <= 0 {
+			t.Errorf("месяц %d: АУП должен начисляться, got %.2f",
+				m+1, res.Monthly[m].AUP)
+		}
+	}
+
+	// Месяцы 7 и 8 существуют только в форме и имеют нулевую базу,
+	// поэтому итог АУП равен сумме по месяцам проекта.
+	var totalAUP float64
+	for m := 0; m < n; m++ {
+		totalAUP += res.Monthly[m].AUP
+	}
+	// Проверяем через формулу: АУП = (расходы + непредвиденные + ФОТ) × 15%
+	var want float64
+	for m := 0; m < n; m++ {
+		mr := res.Monthly[m]
+		want += (mr.ProjectCostsExFOT + mr.Unpredictables + mr.TotalFOT) * 0.15
+	}
+	if math.Abs(totalAUP-want) > 0.01 {
+		t.Errorf("итого АУП: want %.2f, got %.2f", want, totalAUP)
+	}
+
+	// Массив результатов не должен вырастать до duration+2
+	if len(res.Monthly) != n {
+		t.Errorf("месяцев в результате должно быть %d, got %d", n, len(res.Monthly))
+	}
+}
+
+// TestPerDiemRFIsFormulaNotInput — суточные по РФ берутся из формулы
+// 4.6!D9 = 700+300/0.87*1.3 ≈ 1148.28, а НЕ из пользовательского ввода.
+func TestPerDiemRFIsFormulaNotInput(t *testing.T) {
+	const want = 700 + 300/0.87*1.3
+	if math.Abs(perDiemRFRate-want) > 1e-9 {
+		t.Fatalf("perDiemRFRate: want %.10f, got %.10f", want, perDiemRFRate)
+	}
+	if math.Abs(perDiemRFRate-1148.2758620689656) > 1e-9 {
+		t.Errorf("perDiemRFRate должен совпадать с эталоном 4.6!D9 = 1148.2758620689656, got %.10f",
+			perDiemRFRate)
+	}
+
+	// Сотрудник с 10 днями командировки по РФ; в ввод кладём заведомо
+	// «чужое» значение суточных — оно должно быть проигнорировано.
+	mk := func(inputRF float64) *CalcResult {
+		return Run(&BudgetInputs{
+			ProjectStartDate: mustDate(2027, 6, 1),
+			DurationMonths:   2,
+			ExecutorName:     ExecutorAibicon,
+			Employees: &InputEmployees{
+				PerDiemRF:    inputRF,
+				PerDiemOther: 2_500,
+				Employees: []Employee{{
+					Position:        "Инженер",
+					Country:         CountryRF,
+					BaseSchedule:    "вахта",
+					SalaryNet:       100_000,
+					MonthlySchedule: []string{"К", "ОФ"},
+					TripDaysRF:      []int{10, 0},
+					TripDaysOther:   []int{0, 0},
+				}},
+			},
+			Params: &InputBudgetParams{},
+		})
+	}
+
+	wantPerDiem := 10 * perDiemRFRate
+	for _, inputRF := range []float64{0, 1, 5_000, 1_148} {
+		got := mk(inputRF).Monthly[0].PerDiem
+		if math.Abs(got-wantPerDiem) > 0.01 {
+			t.Errorf("ввод суточных РФ = %.0f: командировочные want %.2f (10 × %.4f), got %.2f",
+				inputRF, wantPerDiem, perDiemRFRate, got)
+		}
+	}
+
+	// Суточные по другим странам, наоборот, задаёт пользователь (4.6!D10)
+	res := Run(&BudgetInputs{
+		ProjectStartDate: mustDate(2027, 6, 1),
+		DurationMonths:   1,
+		ExecutorName:     ExecutorAibicon,
+		Employees: &InputEmployees{
+			PerDiemOther: 3_000,
+			Employees: []Employee{{
+				Position:        "Инженер",
+				Country:         CountryRF,
+				BaseSchedule:    "вахта",
+				SalaryNet:       100_000,
+				MonthlySchedule: []string{"К"},
+				TripDaysRF:      []int{0},
+				TripDaysOther:   []int{4},
+			}},
+		},
+		Params: &InputBudgetParams{},
+	})
+	if got := res.Monthly[0].PerDiem; math.Abs(got-4*3_000) > 0.01 {
+		t.Errorf("суточные за рубеж должны браться из ввода: want 12000.00, got %.2f", got)
+	}
+}
+
+// TestValidateEmployees_CountryByExecutor — «Киргизия» допустима только
+// у исполнителя «Айбикон Киргизия».
+func TestValidateEmployees_CountryByExecutor(t *testing.T) {
+	mk := func(country string) *InputEmployees {
+		return &InputEmployees{Employees: []Employee{{
+			Position: "Инженер", FullName: "Асанов А.А.",
+			Country: country, BaseSchedule: "вахта", SalaryNet: 100_000,
+		}}}
+	}
+
+	// Киргизский сотрудник у киргизского исполнителя — можно
+	if err := ValidateEmployees(mk(CountryKG), ExecutorAibiconKG); err != nil {
+		t.Errorf("Киргизия при исполнителе «Айбикон Киргизия» должна проходить: %v", err)
+	}
+	// Регистр не должен ломать правило
+	if err := ValidateEmployees(mk("Киргизия"), "айбикон киргизия"); err != nil {
+		t.Errorf("сравнение должно быть регистронезависимым: %v", err)
+	}
+
+	// У остальных исполнителей — нельзя
+	for _, ex := range []string{ExecutorAibicon, ExecutorAibiconProject} {
+		if err := ValidateEmployees(mk(CountryKG), ex); err == nil {
+			t.Errorf("исполнитель %q: Киргизия должна отклоняться, got nil", ex)
+		}
+	}
+
+	// Россия и самозанятый допустимы у любого исполнителя
+	for _, ex := range []string{ExecutorAibicon, ExecutorAibiconProject, ExecutorAibiconKG} {
+		for _, c := range []string{CountryRF, CountrySelfEmployed} {
+			if err := ValidateEmployees(mk(c), ex); err != nil {
+				t.Errorf("исполнитель %q, страна %q: должно проходить, got %v", ex, c, err)
+			}
+		}
+	}
+
+	// Пустая и неизвестная страна отклоняются
+	if err := ValidateEmployees(mk(""), ExecutorAibicon); err == nil {
+		t.Error("пустая страна должна отклоняться")
+	}
+	if err := ValidateEmployees(mk("Казахстан"), ExecutorAibicon); err == nil {
+		t.Error("неизвестная страна должна отклоняться")
+	}
+
+	// Через диспетчер ValidateInput — тот же результат
+	raw := []byte(`{"employees":[{"position":"Инженер","country":"киргизия","salary_net":100000}]}`)
+	if err := ValidateInput(TypeEmployees, raw, ExecutorAibicon, 6); err == nil {
+		t.Error("ValidateInput: Киргизия при «Айбикон» должна отклоняться")
+	}
+	if err := ValidateInput(TypeEmployees, raw, ExecutorAibiconKG, 6); err != nil {
+		t.Errorf("ValidateInput: Киргизия при «Айбикон Киргизия» должна проходить: %v", err)
 	}
 }

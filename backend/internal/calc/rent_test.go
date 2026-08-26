@@ -16,16 +16,21 @@ import (
 //	кол-во    4.2!C19:BJ19, C20:BJ20, C21:BJ21  (месяц 6 = колонка BJ)
 //	уборка    4.2!B9
 //	риелтор   4.2!B13
+//
+// CleaningMonths перечисляет все 6 месяцев: в Excel уборка начисляется
+// безусловно каждый месяц, а выбор месяцев — расширение платформы, поэтому
+// для совпадения с эталоном надо выбрать все.
 func referenceRentInput() *InputRentApartments {
 	return &InputRentApartments{
-		Price1Room:   200_000,
-		Price2Room:   250_000,
-		Price3Room:   300_000,
-		Count1Room:   []int{1, 2, 1, 1, 1, 1},
-		Count2Room:   []int{2, 5, 6, 2, 2, 5},
-		Count3Room:   []int{4, 3, 4, 1, 2, 1},
-		CleaningBase: 40_000,
-		RealtorBase:  40_000,
+		Price1Room:     200_000,
+		Price2Room:     250_000,
+		Price3Room:     300_000,
+		Count1Room:     []int{1, 2, 1, 1, 1, 1},
+		Count2Room:     []int{2, 5, 6, 2, 2, 5},
+		Count3Room:     []int{4, 3, 4, 1, 2, 1},
+		CleaningBase:   40_000,
+		RealtorBase:    40_000,
+		CleaningMonths: []int{1, 2, 3, 4, 5, 6},
 	}
 }
 
@@ -157,6 +162,50 @@ func TestCalcRentApartments_RealtorRules(t *testing.T) {
 	}
 }
 
+// TestCalcRentApartments_CleaningMonths — уборка начисляется только в
+// выбранных месяцах. Расширение сверх формы (в Excel уборка безусловна),
+// затребовано владельцем 2026-08-23.
+func TestCalcRentApartments_CleaningMonths(t *testing.T) {
+	in := referenceRentInput()
+
+	// Месяц 1: 7 квартир (1+2+4) × 40 000 уборки = 280 000.
+	// База аренды месяца 1 = 1×200000 + 2×250000 + 4×300000 = 1 900 000.
+	const baseM1 = 1_900_000.0
+	const cleanM1 = 280_000.0
+
+	// Уборка только в месяце 1
+	in.CleaningMonths = []int{1}
+	rent, _ := calcRentApartments(in, ExecutorAibiconKG, 6)
+	if got := rent[0]; math.Abs(got-(baseM1+cleanM1)) > 0.01 {
+		t.Errorf("месяц 1 с уборкой: want %.2f, got %.2f", baseM1+cleanM1, got)
+	}
+	// Месяц 2 без уборки: только база 2×200000+5×250000+3×300000 = 2 550 000
+	if got := rent[1]; math.Abs(got-2_550_000) > 0.01 {
+		t.Errorf("месяц 2 без уборки: want 2550000.00, got %.2f", got)
+	}
+
+	// Пустой список — уборки нет за весь период
+	in.CleaningMonths = nil
+	rent, _ = calcRentApartments(in, ExecutorAibiconKG, 6)
+	if got := rent[0]; math.Abs(got-baseM1) > 0.01 {
+		t.Errorf("без выбранных месяцев уборка должна быть 0: want %.2f, got %.2f",
+			baseM1, got)
+	}
+
+	// Номер месяца за пределами проекта не должен ничего ломать
+	in.CleaningMonths = []int{99}
+	rent, _ = calcRentApartments(in, ExecutorAibiconKG, 6)
+	for m, v := range rent {
+		if v == 0 {
+			continue
+		}
+		// уборки быть не должно ни в одном месяце — сверяем только её отсутствие
+		if m == 0 && math.Abs(v-baseM1) > 0.01 {
+			t.Errorf("месяц вне проекта не должен включать уборку: got %.2f", v)
+		}
+	}
+}
+
 // TestCalcRentApartments_Empty — отсутствие данных листа 4.2 не должно
 // ломать расчёт: обе строки нулевые.
 func TestCalcRentApartments_Empty(t *testing.T) {
@@ -215,23 +264,23 @@ func TestValidateRentApartments(t *testing.T) {
 func TestValidateInput(t *testing.T) {
 	// Корректные данные 4.2
 	ok := []byte(`{"price_1room":200000,"count_1room":[1,2],"cleaning_base":40000}`)
-	if err := ValidateInput(TypeRentApartments, ok, ExecutorAibicon); err != nil {
+	if err := ValidateInput(TypeRentApartments, ok, ExecutorAibicon, 6); err != nil {
 		t.Errorf("корректные данные 4.2: %v", err)
 	}
 
 	// Отрицательная цена
 	bad := []byte(`{"price_1room":-5}`)
-	if err := ValidateInput(TypeRentApartments, bad, ExecutorAibicon); err == nil {
+	if err := ValidateInput(TypeRentApartments, bad, ExecutorAibicon, 6); err == nil {
 		t.Error("отрицательная цена: ожидалась ошибка")
 	}
 
 	// Битый JSON для типа с валидацией
-	if err := ValidateInput(TypeRentApartments, []byte(`{"price_1room":`), ExecutorAibicon); err == nil {
+	if err := ValidateInput(TypeRentApartments, []byte(`{"price_1room":`), ExecutorAibicon, 6); err == nil {
 		t.Error("битый JSON: ожидалась ошибка")
 	}
 
 	// Тип без собственных правил — валидация пропускает
-	if err := ValidateInput(TypeInternet, []byte(`{"monthly_amounts":[1,2]}`), ExecutorAibicon); err != nil {
+	if err := ValidateInput(TypeInternet, []byte(`{"monthly_amounts":[1,2]}`), ExecutorAibicon, 6); err != nil {
 		t.Errorf("тип без правил не должен отклоняться: %v", err)
 	}
 }

@@ -78,12 +78,25 @@ func (s *Service) CreateVersion(projectID, userID int, req CreateVersionRequest)
 		}
 	}
 
+	// Порядковый номер версии внутри проекта. Считаем по всем версиям
+	// проекта, а не одного budget-а: у проекта может быть несколько
+	// записей budgets, а нумерация в ТЗ сквозная (1.1, 1.2, …).
+	var nextNo int
+	err = tx.Get(&nextNo, `
+		SELECT COALESCE(MAX(bv.version_no), 0) + 1
+		FROM budget_versions bv
+		JOIN budgets b ON b.id = bv.budget_id
+		WHERE b.project_id = $1`, projectID)
+	if err != nil {
+		return nil, err
+	}
+
 	var vID int
 	err = tx.QueryRowx(`
-		INSERT INTO budget_versions (budget_id, status, comment, copied_from, created_by)
-		VALUES ($1,'draft',$2,$3,$4)
+		INSERT INTO budget_versions (budget_id, version_no, status, comment, copied_from, created_by)
+		VALUES ($1,$2,'draft',$3,$4,$5)
 		RETURNING id`,
-		budgetID, nullStr(comment), copiedFrom, userID,
+		budgetID, nextNo, nullStr(comment), copiedFrom, userID,
 	).Scan(&vID)
 	if err != nil {
 		return nil, err
@@ -112,7 +125,7 @@ func (s *Service) CreateVersion(projectID, userID int, req CreateVersionRequest)
 func (s *Service) ListVersions(projectID int) ([]BudgetVersion, error) {
 	var versions []BudgetVersion
 	err := s.db.Select(&versions, `
-		SELECT bv.id, bv.budget_id, b.project_id, bv.version_label, bv.status,
+		SELECT bv.id, bv.budget_id, b.project_id, bv.version_no, bv.version_label, bv.status,
 		       bv.comment, bv.cost_no_vat, bv.profitability, bv.cost_override,
 		       bv.created_at, bv.created_by,
 		       u.full_name AS created_by_name,
@@ -138,7 +151,7 @@ func (s *Service) ListVersions(projectID int) ([]BudgetVersion, error) {
 func (s *Service) GetVersion(id int) (*BudgetVersion, error) {
 	var v BudgetVersion
 	err := s.db.QueryRowx(`
-		SELECT bv.id, bv.budget_id, b.project_id, bv.version_label, bv.status,
+		SELECT bv.id, bv.budget_id, b.project_id, bv.version_no, bv.version_label, bv.status,
 		       bv.comment, bv.cost_no_vat, bv.profitability, bv.cost_override,
 		       bv.created_at, bv.created_by,
 		       u.full_name AS created_by_name,
@@ -275,12 +288,25 @@ func (s *Service) NewVersion(projectID, userID int, req CreateVersionRequest) (*
 		}
 	}
 
+	// Порядковый номер версии внутри проекта. Считаем по всем версиям
+	// проекта, а не одного budget-а: у проекта может быть несколько
+	// записей budgets, а нумерация в ТЗ сквозная (1.1, 1.2, …).
+	var nextNo int
+	err = tx.Get(&nextNo, `
+		SELECT COALESCE(MAX(bv.version_no), 0) + 1
+		FROM budget_versions bv
+		JOIN budgets b ON b.id = bv.budget_id
+		WHERE b.project_id = $1`, projectID)
+	if err != nil {
+		return nil, err
+	}
+
 	var vID int
 	err = tx.QueryRowx(`
-		INSERT INTO budget_versions (budget_id, status, comment, copied_from, created_by)
-		VALUES ($1,'draft',$2,$3,$4)
+		INSERT INTO budget_versions (budget_id, version_no, status, comment, copied_from, created_by)
+		VALUES ($1,$2,'draft',$3,$4,$5)
 		RETURNING id`,
-		budgetID, nullStr(comment), copiedFrom, userID,
+		budgetID, nextNo, nullStr(comment), copiedFrom, userID,
 	).Scan(&vID)
 	if err != nil {
 		return nil, err

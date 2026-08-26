@@ -4,13 +4,29 @@ import type {
   Project, ProjectListItem,
   BudgetVersion, CalcResult,
   Executor, Position, WorkMode, CostItem,
-  AuditEntry, PaginatedResponse,
+  AuditEntry, PaginatedResponse, Profile,
 } from '../types';
 
 // ─── Auth ──────────────────────────────────────────────────────────────────
 export const authApi = {
-  login: (email: string, password: string) =>
-    client.post<AuthResponse>('/auth/login', { email, password }).then(r => r.data),
+  login: (email: string, password: string, rememberMe = false) =>
+    client
+      .post<AuthResponse>('/auth/login', { email, password, remember_me: rememberMe })
+      .then(r => r.data),
+};
+
+// ─── Личный кабинет ────────────────────────────────────────────────────────
+export const profileApi = {
+  get: () => client.get<Profile>('/users/me').then(r => r.data),
+
+  update: (data: { avatar?: string; notes?: string }) =>
+    client.put<Profile>('/users/me', data).then(r => r.data),
+
+  changePassword: (currentPassword: string, newPassword: string) =>
+    client.put<{ status: string }>('/users/me/password', {
+      current_password: currentPassword,
+      new_password: newPassword,
+    }).then(r => r.data),
 };
 
 // ─── Users ─────────────────────────────────────────────────────────────────

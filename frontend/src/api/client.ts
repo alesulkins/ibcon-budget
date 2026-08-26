@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getToken, touchActivity, clearAuth } from '../store/auth';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? '/api/v1';
 
@@ -7,21 +8,34 @@ export const client = axios.create({
   timeout: 30_000,
 });
 
-// Прикрепляем JWT из localStorage
+// Прикрепляем JWT. Токен может лежать в sessionStorage (обычный вход)
+// или в localStorage («Запомнить меня») — getToken() знает, где искать.
 client.interceptors.request.use((cfg) => {
-  const token = localStorage.getItem('token');
+  const token = getToken();
   if (token) cfg.headers.Authorization = `Bearer ${token}`;
   return cfg;
 });
 
-// Если 401 — разлогиниваем
 client.interceptors.response.use(
-  (r) => r,
+  (r) => {
+    // Успешный запрос — признак активности: продлевает и клиентский
+    // таймер бездействия, и серверный last_activity.
+    touchActivity();
+    return r;
+  },
   (err) => {
     if (err.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
+      // Сервер различает причины: истёкшая по бездействию сессия,
+      // отключённая учётка, невалидный токен.
+      const code = err.response?.data?.code;
+      const reason =
+        code === 'session_timeout' ? 'timeout' :
+        code === 'account_disabled' ? 'disabled' : '';
+
+      clearAuth({ keepSavedEmail: true });
+      if (window.location.pathname !== '/login') {
+        window.location.replace(reason ? `/login?reason=${reason}` : '/login');
+      }
     }
     return Promise.reject(err);
   },

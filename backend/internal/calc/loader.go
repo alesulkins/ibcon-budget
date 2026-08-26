@@ -15,7 +15,14 @@ const (
 	// TypeRentApartments — лист 4.2. Структура НЕ {monthly_amounts},
 	// а количество квартир по типам + цены (см. InputRentApartments).
 	// Строка «Риелтор» (179) считается отсюда же, отдельного типа ввода нет.
-	TypeRentApartments   = "rent_apartments"
+	TypeRentApartments = "rent_apartments"
+	// TypeTransport — лист 4.3. Структура НЕ {monthly_amounts}: покупки авто,
+	// аренда авто и аренда гаража отдельными таблицами (см. InputTransport).
+	// Даёт строки 180 (аренда транспорта + покупка) и 210 (гараж).
+	TypeTransport = "transport"
+	// TypeTransportRental / TypeGarageRent — СТАРЫЙ ввод листа 4.3 готовыми
+	// суммами по месяцам. Читаются только ради версий, сохранённых до
+	// перехода на расчёт по формуле; новые данные пишутся в TypeTransport.
 	TypeTransportRental  = "transport_rental"
 	TypeSiteSetup        = "site_setup"
 	TypeOfficeRent       = "office_rent"
@@ -130,6 +137,13 @@ func LoadInputs(
 				return nil, fmt.Errorf("parse %s: %w", typ, err)
 			}
 			inp.RentApts = &v
+
+		case TypeTransport:
+			var v InputTransport
+			if err := json.Unmarshal(raw, &v); err != nil {
+				return nil, fmt.Errorf("parse %s: %w", typ, err)
+			}
+			inp.Transport = &v
 
 		case TypeBudgetParams:
 			var v InputBudgetParams

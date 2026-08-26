@@ -5,7 +5,7 @@ import {
   Popconfirm,
 } from 'antd';
 import {
-  EditOutlined, PlusOutlined, ArrowLeftOutlined,
+  EditOutlined, PlusOutlined, ArrowLeftOutlined, DownloadOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
@@ -18,9 +18,18 @@ import {
 } from '../../types';
 import { fmtDate, fmtMoney, fmtPct } from '../../utils/fmt';
 import { hasRole } from '../../store/auth';
+import { shortName } from '../../utils/names';
 import { extractError } from '../../api/client';
 
 const { Title, Text } = Typography;
+
+/** «Согласовано от ДД.ММ.ГГГГ. » — обязательное начало комментария. */
+function approvalPrefixText(): string {
+  const d = new Date();
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `Согласовано от ${dd}.${mm}.${d.getFullYear()}. `;
+}
 
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -34,6 +43,10 @@ export default function ProjectDetailPage() {
   const [statusForm] = Form.useForm();
   const [editForm] = Form.useForm();
   const [budgetForm] = Form.useForm();
+  const [versionStatusForm] = Form.useForm();
+  const [versionStatusTarget, setVersionStatusTarget] =
+    useState<{ version: BudgetVersion; status: string } | null>(null);
+  const [versionApprovalPrefix, setVersionApprovalPrefix] = useState('');
 
   const { data: project, isLoading } = useQuery({
     queryKey: ['project', pid],
@@ -84,6 +97,20 @@ export default function ProjectDetailPage() {
     onError: (e) => message.error(extractError(e)),
   });
 
+  const versionStatusMutation = useMutation({
+    mutationFn: ({ vid, status, comment }: { vid: number; status: string; comment: string }) =>
+      budgetsApi.changeStatus(vid, status, comment),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['budget-versions', pid] });
+      qc.invalidateQueries({ queryKey: ['project', pid] });
+      qc.invalidateQueries({ queryKey: ['projects'] });
+      message.success('Статус бюджета изменён');
+      setVersionStatusTarget(null);
+      versionStatusForm.resetFields();
+    },
+    onError: (e) => message.error(extractError(e)),
+  });
+
   const createBudgetMutation = useMutation({
     mutationFn: (vals: { copy_from_id?: number; comment?: string }) => {
       const hasVersions = (versions ?? []).length > 0;
@@ -104,6 +131,19 @@ export default function ProjectDetailPage() {
 
   const canEdit = hasRole('GE', 'EP', 'IP');
   const isGE = hasRole('GE');
+  const canChangeBudgetStatus = hasRole('GE', 'EP');
+
+  /**
+   * Смена статуса версии прямо из таблицы. Причина обязательна, а при
+   * согласовании комментарий начинается с неудаляемой даты — правила те
+   * же, что и на экране самой версии.
+   */
+  function openVersionStatus(v: BudgetVersion, status: string) {
+    setVersionStatusTarget({ version: v, status });
+    const prefix = status === 'approved' ? approvalPrefixText() : '';
+    setVersionApprovalPrefix(prefix);
+    versionStatusForm.setFieldsValue({ comment: prefix });
+  }
 
   const validNextStatuses: Record<string, string[]> = {
     prospect: ['active', 'suspended', 'completed', 'unrealized'],
@@ -113,41 +153,78 @@ export default function ProjectDetailPage() {
     unrealized: ['prospect', 'active'],
   };
 
+  /** Статусы, в которые можно перевести версию из таблицы. */
+  const validBudgetNext: Record<string, string[]> = {
+    draft: ['under_review'],
+    under_review: ['approved', 'draft'],
+    approved: [],
+    archive: [],
+  };
+
   const versionColumns: ColumnsType<BudgetVersion> = [
     {
+      // ТЗ, таблица 4: у проекта с ID 1 бюджеты нумеруются 1.1, 1.2 …
+      title: 'ID бюджета',
+      key: 'budget_code',
+      width: 110,
+      render: (_, r) => <Text strong>{pid}.{r.version_no}</Text>,
+    },
+    {
       title: 'Версия',
-      dataIndex: 'version_label',
+      dataIndex: 'version_no',
       width: 80,
-      render: (v) => v ?? '—',
-    },
-    {
-      title: 'Статус',
-      dataIndex: 'status',
-      width: 140,
-      render: (s) => (
-        <Tag color={BUDGET_STATUS_COLORS[s]}>{BUDGET_STATUS_LABELS[s] ?? s}</Tag>
-      ),
-    },
-    {
-      title: 'Стоимость без НДС',
-      dataIndex: 'cost_no_vat',
-      render: fmtMoney,
-      align: 'right',
-    },
-    {
-      title: 'Рентабельность',
-      dataIndex: 'profitability',
-      render: fmtPct,
-      align: 'right',
+      render: (n: number) => n,
     },
     {
       title: 'Дата создания',
       dataIndex: 'created_at',
+      width: 130,
       render: fmtDate,
     },
     {
       title: 'Автор',
       dataIndex: 'created_by_name',
+      width: 160,
+      render: (n: string) => shortName(n),
+    },
+    {
+      title: 'Статус бюджета',
+      dataIndex: 'status',
+      width: 190,
+      render: (st: string, r) => {
+        const next = validBudgetNext[st] ?? [];
+        // Менять статус прямо из таблицы могут те же роли, что и на
+        // экране бюджета; в конечных статусах менять нечего.
+        if (!canChangeBudgetStatus || next.length === 0) {
+          return <Tag color={BUDGET_STATUS_COLORS[st]}>{BUDGET_STATUS_LABELS[st] ?? st}</Tag>;
+        }
+        return (
+          <Select
+            size="small"
+            style={{ width: 170 }}
+            value={st}
+            onChange={(v) => openVersionStatus(r, v)}
+            options={[
+              { value: st, label: BUDGET_STATUS_LABELS[st] ?? st, disabled: true },
+              ...next.map(v => ({ value: v, label: BUDGET_STATUS_LABELS[v] ?? v })),
+            ]}
+          />
+        );
+      },
+    },
+    {
+      title: 'Стоимость без НДС',
+      dataIndex: 'cost_no_vat',
+      width: 160,
+      render: fmtMoney,
+      align: 'right',
+    },
+    {
+      title: 'Рентабельность, %',
+      dataIndex: 'profitability',
+      width: 150,
+      render: fmtPct,
+      align: 'right',
     },
     {
       title: 'Комментарий',
@@ -156,18 +233,43 @@ export default function ProjectDetailPage() {
     },
     {
       title: '',
-      key: 'actions',
+      key: 'open',
       width: 100,
       render: (_, r) => (
-        <Button
-          size="small"
-          onClick={() => navigate(`/budget-versions/${r.id}`)}
-        >
+        <Button size="small" onClick={() => navigate(`/budget-versions/${r.id}`)}>
           Открыть
         </Button>
       ),
     },
+    {
+      title: '',
+      key: 'download',
+      width: 110,
+      render: (_, r) => (
+        <Tooltip title="Выгрузка XLSX появится вместе с формированием БДР/БДДС">
+          <Button size="small" icon={<DownloadOutlined />} disabled>
+            Скачать
+          </Button>
+        </Tooltip>
+      ),
+    },
   ];
+
+  /**
+   * Порядок вывода версий: Согласован → На согласовании → Черновик →
+   * Архив, внутри статуса — новые сверху.
+   */
+  const STATUS_ORDER: Record<string, number> = {
+    approved: 0,
+    under_review: 1,
+    draft: 2,
+    archive: 3,
+  };
+  const sortedVersions = [...(versions ?? [])].sort((a, b) => {
+    const d = (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9);
+    if (d !== 0) return d;
+    return b.created_at.localeCompare(a.created_at);
+  });
 
   if (isLoading || !project) return null;
 
@@ -227,7 +329,7 @@ export default function ProjectDetailPage() {
           <Descriptions.Item label="Администратор">{project.administrator}</Descriptions.Item>
           <Descriptions.Item label="Экономист">{project.economist}</Descriptions.Item>
           <Descriptions.Item label="Создан">{fmtDate(project.created_at)}</Descriptions.Item>
-          <Descriptions.Item label="Автор">{project.created_by_name}</Descriptions.Item>
+          <Descriptions.Item label="Автор">{shortName(project.created_by_name)}</Descriptions.Item>
         </Descriptions>
       </Card>
 
@@ -249,7 +351,7 @@ export default function ProjectDetailPage() {
         <Table
           rowKey="id"
           columns={versionColumns}
-          dataSource={versions ?? []}
+          dataSource={sortedVersions}
           loading={versionsLoading}
           size="small"
           pagination={false}
@@ -307,6 +409,57 @@ export default function ProjectDetailPage() {
           )}
           <Form.Item name="comment" label="Комментарий">
             <Input.TextArea rows={3} placeholder="Причина создания новой версии..." />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Смена статуса версии бюджета прямо из таблицы */}
+      <Modal
+        title={versionStatusTarget
+          ? `Версия ${pid}.${versionStatusTarget.version.version_no} → «${BUDGET_STATUS_LABELS[versionStatusTarget.status]}»`
+          : ''}
+        open={!!versionStatusTarget}
+        onCancel={() => { setVersionStatusTarget(null); versionStatusForm.resetFields(); }}
+        onOk={() => versionStatusForm.submit()}
+        confirmLoading={versionStatusMutation.isPending}
+        okText="Изменить"
+        cancelText="Отмена"
+        destroyOnClose
+      >
+        <Form
+          form={versionStatusForm}
+          layout="vertical"
+          onFinish={(vals: { comment: string }) => versionStatusTarget && versionStatusMutation.mutate({
+            vid: versionStatusTarget.version.id,
+            status: versionStatusTarget.status,
+            comment: vals.comment,
+          })}
+        >
+          <Form.Item
+            name="comment"
+            label="Причина изменения"
+            rules={[
+              { required: true, message: 'Укажите причину изменения статуса' },
+              {
+                validator: (_, value: string) =>
+                  !versionApprovalPrefix || (value ?? '').startsWith(versionApprovalPrefix)
+                    ? Promise.resolve()
+                    : Promise.reject(new Error(
+                      `Комментарий должен начинаться с «${versionApprovalPrefix.trim()}»`)),
+              },
+            ]}
+            extra={versionApprovalPrefix
+              ? 'Дата согласования подставлена автоматически и не удаляется.'
+              : undefined}
+          >
+            <Input.TextArea
+              rows={3}
+              onChange={(e) => {
+                if (versionApprovalPrefix && !e.target.value.startsWith(versionApprovalPrefix)) {
+                  versionStatusForm.setFieldValue('comment', versionApprovalPrefix);
+                }
+              }}
+            />
           </Form.Item>
         </Form>
       </Modal>

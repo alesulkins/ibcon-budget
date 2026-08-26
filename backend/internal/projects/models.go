@@ -74,8 +74,12 @@ type ProjectListItem struct {
 	BudgetStatus   *string  `db:"budget_status"   json:"budget_status"`
 	CostNoVat      *float64 `db:"cost_no_vat"     json:"cost_no_vat"`
 	Profitability  *float64 `db:"profitability"   json:"profitability"`
-	CreatedAt      string   `db:"created_at"      json:"created_at"`
-	CreatedByName  string   `db:"created_by_name" json:"created_by_name"`
+	// Отдаём время как есть, а не строкой 'DD.MM.YYYY': фронт форматирует
+	// сам, а предформатированную строку dayjs не разбирал и показывал
+	// «Invalid Date». В карточке проекта это поле всегда было time.Time —
+	// реестр был единственным местом с расхождением.
+	CreatedAt     time.Time `db:"created_at"      json:"created_at"`
+	CreatedByName string    `db:"created_by_name" json:"created_by_name"`
 }
 
 type CreateRequest struct {

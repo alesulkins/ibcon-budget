@@ -12,11 +12,18 @@ const (
 	maxFailedAttempts = 5
 	lockDuration      = 15 * time.Minute
 	sessionTimeout    = 60 * time.Minute
+
+	// rememberExpiryHours — срок жизни токена при «Запомнить меня»: 90 дней.
+	// Решение владельца. Обычный срок берётся из JWT_EXPIRY_HOURS.
+	// Внимание: автовыход по бездействию (60 мин) действует независимо от
+	// этого срока — см. middleware.Auth.
+	rememberExpiryHours = 90 * 24
 )
 
 type LoginRequest struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required"`
+	Email      string `json:"email" binding:"required,email"`
+	Password   string `json:"password" binding:"required"`
+	RememberMe bool   `json:"remember_me"`
 }
 
 type LoginResponse struct {
@@ -60,8 +67,16 @@ func (s *Service) Login(req LoginRequest) (*LoginResponse, error) {
 	}
 
 	if u.LockedUntil != nil && time.Now().Before(*u.LockedUntil) {
-		remaining := time.Until(*u.LockedUntil).Round(time.Minute)
-		return nil, fmt.Errorf("учётная запись заблокирована, попробуйте через %v", remaining)
+		return nil, fmt.Errorf(
+			"учётная запись заблокирована после %d неуспешных попыток входа. Повторите через %s",
+			maxFailedAttempts, humanMinutes(time.Until(*u.LockedUntil)))
+	}
+
+	// Блокировка истекла — счётчик обнуляется, иначе следующая же ошибка
+	// пароля снова упрётся в порог и заблокирует учётку повторно.
+	// ТЗ требует блокировку после 5 неуспешных попыток ПОДРЯД.
+	if u.LockedUntil != nil {
+		u.FailedAttempts = 0
 	}
 
 	if !CheckPassword(u.PasswordHash, req.Password) {
@@ -69,21 +84,28 @@ func (s *Service) Login(req LoginRequest) (*LoginResponse, error) {
 		if newFailed >= maxFailedAttempts {
 			locked := time.Now().Add(lockDuration)
 			_, _ = s.db.Exec(`UPDATE users SET failed_attempts=$1, locked_until=$2 WHERE id=$3`, newFailed, locked, u.ID)
-		} else {
-			_, _ = s.db.Exec(`UPDATE users SET failed_attempts=$1 WHERE id=$2`, newFailed, u.ID)
+			return nil, fmt.Errorf(
+				"учётная запись заблокирована на %s после %d неуспешных попыток входа",
+				humanMinutes(lockDuration), maxFailedAttempts)
 		}
+		_, _ = s.db.Exec(`UPDATE users SET failed_attempts=$1, locked_until=NULL WHERE id=$2`, newFailed, u.ID)
 		return nil, errors.New("неверный email или пароль")
 	}
 
 	now := time.Now()
 	_, _ = s.db.Exec(`UPDATE users SET failed_attempts=0, locked_until=NULL, last_activity=$1 WHERE id=$2`, now, u.ID)
 
+	expiry := s.expiryHours
+	if req.RememberMe {
+		expiry = rememberExpiryHours
+	}
+
 	token, err := GenerateToken(Claims{
 		UserID:   u.ID,
 		Email:    u.Email,
 		Role:     u.Role,
 		FullName: u.FullName,
-	}, s.jwtSecret, s.expiryHours)
+	}, s.jwtSecret, expiry)
 	if err != nil {
 		return nil, fmt.Errorf("generate token: %w", err)
 	}
@@ -94,6 +116,28 @@ func (s *Service) Login(req LoginRequest) (*LoginResponse, error) {
 		FullName: u.FullName,
 		Role:     u.Role,
 	}, nil
+}
+
+// humanMinutes округляет длительность вверх до минут и склоняет слово
+// «минута» по-русски: 1 минуту, 3 минуты, 15 минут.
+func humanMinutes(d time.Duration) string {
+	m := int(d.Minutes())
+	if d > time.Duration(m)*time.Minute {
+		m++ // 14 мин 30 с → «15 минут», а не «14»
+	}
+	if m < 1 {
+		m = 1
+	}
+
+	word := "минут"
+	switch {
+	case m%100 >= 11 && m%100 <= 14: // 11–14 минут
+	case m%10 == 1:
+		word = "минуту"
+	case m%10 >= 2 && m%10 <= 4:
+		word = "минуты"
+	}
+	return fmt.Sprintf("%d %s", m, word)
 }
 
 func (s *Service) UpdateActivity(userID int) {

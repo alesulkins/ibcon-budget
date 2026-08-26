@@ -9,6 +9,7 @@ import BudgetVersionPage from './pages/budgets/BudgetVersionPage';
 import ReferencesPage from './pages/references/ReferencesPage';
 import UsersPage from './pages/users/UsersPage';
 import AuditPage from './pages/audit/AuditPage';
+import ProfilePage from './pages/profile/ProfilePage';
 
 export default function App() {
   return (
@@ -29,6 +30,7 @@ export default function App() {
           <Route path="/references" element={<ReferencesPage />} />
           <Route path="/users" element={<UsersPage />} />
           <Route path="/audit" element={<AuditPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
         </Route>
         <Route path="*" element={<Navigate to="/projects" replace />} />
       </Routes>

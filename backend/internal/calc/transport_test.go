@@ -1,0 +1,287 @@
+package calc
+
+import (
+	"math"
+	"strings"
+	"testing"
+)
+
+// Эталонные данные листа 4.3 из calc_sheets_ibcon-project-russia.xlsm
+// (единственный из трёх файлов, где заполнена и аренда авто, и покупка,
+// и гараж). Длительность проекта 2.Бюджет!D8 = 6 месяцев.
+//
+// Что стоит в форме:
+//
+//	аренда авто   4.3!B6  = 70 000, кол-во 4.3!C5:BJ5  = 1, 2, 3, 3, 3, 6
+//	покупка авто  4.3!A17:C18 = мес.2 × 1 шт × 2 500 000
+//	                            мес.5 × 2 шт × 1 950 000
+//	аренда гаража 4.3!B11 = 50 000, кол-во 4.3!C10:BJ10 = 1, 1, 1, 2, 3, 3
+//
+// В платформе «количество в месяце» выражается числом строк, включивших
+// этот месяц: одна цена на строку, поэтому шесть машин в шестом месяце —
+// шесть строк. Итоговые суммы от этого не меняются.
+func referenceTransportInput() *InputTransport {
+	const carPrice = 70_000.0    // 4.3!B6
+	const garagePrice = 50_000.0 // 4.3!B11
+
+	car := func(name string, months ...int) RentedItem {
+		return RentedItem{Name: name, Price: carPrice, Months: months}
+	}
+	garage := func(name string, months ...int) RentedItem {
+		return RentedItem{Name: name, Price: garagePrice, Months: months}
+	}
+
+	return &InputTransport{
+		// 4.3!A17:C18 — количество 2 во второй покупке разложено в две строки
+		CarPurchases: []CarPurchase{
+			{Name: "Авто 1", Month: 2, Price: 2_500_000},
+			{Name: "Авто 2", Month: 5, Price: 1_950_000},
+			{Name: "Авто 3", Month: 5, Price: 1_950_000},
+		},
+		// даёт кол-во по месяцам 1, 2, 3, 3, 3, 6 (4.3!C5:BJ5)
+		CarRentals: []RentedItem{
+			car("Аренда 1", 1, 2, 3, 4, 5, 6),
+			car("Аренда 2", 2, 3, 4, 5, 6),
+			car("Аренда 3", 3, 4, 5, 6),
+			car("Аренда 4", 6),
+			car("Аренда 5", 6),
+			car("Аренда 6", 6),
+		},
+		// даёт кол-во по месяцам 1, 1, 1, 2, 3, 3 (4.3!C10:BJ10)
+		GarageRentals: []RentedItem{
+			garage("Гараж 1", 1, 2, 3, 4, 5, 6),
+			garage("Гараж 2", 4, 5, 6),
+			garage("Гараж 3", 5, 6),
+		},
+	}
+}
+
+// TestCalcTransport_Reference — численная сверка с эталоном.
+//
+// Ожидаемые значения взяты из calc_sheets_ibcon-project-russia.xlsm:
+// строка 4.3!C6:BJ6 (она же 2.Бюджет!H180:BO180) и 4.3!C11:BJ11
+// (она же 2.Бюджет!H210:BO210). Месяц 6 в форме лежит в колонке BJ.
+func TestCalcTransport_Reference(t *testing.T) {
+	transport, garage := calcTransport(referenceTransportInput(), 6)
+
+	// 4.3!C6, D6, E6, F6, G6, BJ6
+	wantTransport := []float64{
+		70_000,    // 1×70 000
+		2_640_000, // 2×70 000 + 2 500 000
+		210_000,   // 3×70 000
+		210_000,   // 3×70 000
+		4_110_000, // 3×70 000 + 2×1 950 000
+		420_000,   // 6×70 000
+	}
+	// 4.3!C11, D11, E11, F11, G11, BJ11
+	wantGarage := []float64{50_000, 50_000, 50_000, 100_000, 150_000, 150_000}
+
+	for i := range wantTransport {
+		if math.Abs(transport[i]-wantTransport[i]) > 0.01 {
+			t.Errorf("транспорт (180), месяц %d: want %.2f, got %.2f",
+				i+1, wantTransport[i], transport[i])
+		}
+		if math.Abs(garage[i]-wantGarage[i]) > 0.01 {
+			t.Errorf("гараж (210), месяц %d: want %.2f, got %.2f",
+				i+1, wantGarage[i], garage[i])
+		}
+	}
+
+	// Итоги за проект: 4.3!BK6 = 2.Бюджет!G180, 4.3!BK11 = 2.Бюджет!G210
+	if got := sumFloats(transport); math.Abs(got-7_660_000) > 0.01 {
+		t.Errorf("итого транспорт (4.3!BK6): want 7 660 000, got %.2f", got)
+	}
+	if got := sumFloats(garage); math.Abs(got-550_000) > 0.01 {
+		t.Errorf("итого гараж (4.3!BK11): want 550 000, got %.2f", got)
+	}
+}
+
+// TestCalcTransport_InBudget — те же эталонные суммы, но через полный
+// расчёт: проверяем, что 4.3 попадает именно в строки 180 и 210
+// (индексы 2 и 32 массива Overhead) и ничего по дороге не теряется.
+func TestCalcTransport_InBudget(t *testing.T) {
+	res := Run(&BudgetInputs{
+		DurationMonths: 6,
+		ExecutorName:   ExecutorAibiconProject,
+		Transport:      referenceTransportInput(),
+	})
+
+	wantTransport := []float64{70_000, 2_640_000, 210_000, 210_000, 4_110_000, 420_000}
+	wantGarage := []float64{50_000, 50_000, 50_000, 100_000, 150_000, 150_000}
+
+	for m := 0; m < 6; m++ {
+		if got := res.Monthly[m].Overhead[2]; math.Abs(got-wantTransport[m]) > 0.01 {
+			t.Errorf("2.Бюджет!180, месяц %d: want %.2f, got %.2f", m+1, wantTransport[m], got)
+		}
+		if got := res.Monthly[m].Overhead[32]; math.Abs(got-wantGarage[m]) > 0.01 {
+			t.Errorf("2.Бюджет!210, месяц %d: want %.2f, got %.2f", m+1, wantGarage[m], got)
+		}
+	}
+}
+
+// TestCalcTransport_LegacyFallback — версии, сохранённые до перехода 4.3 на
+// расчёт по формуле, продолжают считаться по старым готовым суммам.
+func TestCalcTransport_LegacyFallback(t *testing.T) {
+	res := Run(&BudgetInputs{
+		DurationMonths:  3,
+		ExecutorName:    ExecutorAibicon,
+		TransportRental: []float64{100, 200, 300},
+		GarageRent:      []float64{10, 20, 30},
+	})
+	for m, want := range []float64{100, 200, 300} {
+		if got := res.Monthly[m].Overhead[2]; got != want {
+			t.Errorf("старый ввод 180, месяц %d: want %.0f, got %.0f", m+1, want, got)
+		}
+	}
+	for m, want := range []float64{10, 20, 30} {
+		if got := res.Monthly[m].Overhead[32]; got != want {
+			t.Errorf("старый ввод 210, месяц %d: want %.0f, got %.0f", m+1, want, got)
+		}
+	}
+
+	// Как только у версии появился новый ввод, старые суммы игнорируются.
+	res = Run(&BudgetInputs{
+		DurationMonths:  3,
+		ExecutorName:    ExecutorAibicon,
+		TransportRental: []float64{100, 200, 300},
+		GarageRent:      []float64{10, 20, 30},
+		Transport: &InputTransport{
+			CarPurchases: []CarPurchase{{Month: 1, Price: 999}},
+		},
+	})
+	if got := res.Monthly[0].Overhead[2]; got != 999 {
+		t.Errorf("новый ввод должен перекрывать старый: want 999, got %.0f", got)
+	}
+	if got := res.Monthly[0].Overhead[32]; got != 0 {
+		t.Errorf("старый гараж не должен просачиваться: want 0, got %.0f", got)
+	}
+}
+
+// TestCalcTransport_SplitFormulaFixed — исправление расщеплённой формулы.
+//
+// В форме проверка «месяц покупки внутри проекта» стоит только у строк
+// 17–24 (`D17 = IF(A17<=$D$8, C17*B17, 0)`), а у строк 25–27 её нет
+// (`D25 = C25*B25`), из-за чего результат зависел от того, в какую строку
+// таблицы попал ввод. Здесь правило одно для всех строк: покупка вне
+// проекта не считается, каким бы номером строка ни была.
+func TestCalcTransport_SplitFormulaFixed(t *testing.T) {
+	in := &InputTransport{CarPurchases: []CarPurchase{
+		{Name: "внутри проекта", Month: 3, Price: 1_000_000},
+		{Name: "за пределами", Month: 7, Price: 5_000_000},
+		{Name: "месяц не заполнен", Month: 0, Price: 3_000_000},
+	}}
+	transport, _ := calcTransport(in, 6)
+
+	if got := sumFloats(transport); math.Abs(got-1_000_000) > 0.01 {
+		t.Errorf("в итог должна попасть только покупка 3-го месяца: want 1 000 000, got %.2f", got)
+	}
+	if transport[2] != 1_000_000 {
+		t.Errorf("месяц 3: want 1 000 000, got %.2f", transport[2])
+	}
+}
+
+// TestCalcTransport_DuplicateMonths — дубль месяца внутри одной строки
+// аренды не должен удваивать начисление: чекбокс нельзя поставить дважды,
+// но в сохранённом JSON дубль теоретически возможен.
+func TestCalcTransport_DuplicateMonths(t *testing.T) {
+	transport, _ := calcTransport(&InputTransport{
+		CarRentals: []RentedItem{{Price: 1000, Months: []int{2, 2, 2}}},
+	}, 3)
+	if transport[1] != 1000 {
+		t.Errorf("месяц 2: want 1000, got %.2f", transport[1])
+	}
+}
+
+// TestCalcTransport_Empty — пустой ввод и нулевая длительность не роняют расчёт.
+func TestCalcTransport_Empty(t *testing.T) {
+	transport, garage := calcTransport(nil, 4)
+	if len(transport) != 4 || len(garage) != 4 {
+		t.Fatalf("длина массивов: want 4/4, got %d/%d", len(transport), len(garage))
+	}
+	if sumFloats(transport) != 0 || sumFloats(garage) != 0 {
+		t.Error("пустой ввод должен давать нули")
+	}
+	if transport, garage = calcTransport(referenceTransportInput(), 0); len(transport) != 0 || len(garage) != 0 {
+		t.Error("нулевая длительность должна давать пустые массивы")
+	}
+}
+
+// TestValidateTransport — месяц вне проекта отклоняем, пустой месяц пропускаем.
+func TestValidateTransport(t *testing.T) {
+	if err := ValidateTransport(referenceTransportInput(), 6); err != nil {
+		t.Errorf("эталонный ввод должен проходить валидацию: %v", err)
+	}
+
+	cases := []struct {
+		name string
+		in   *InputTransport
+		want string // подстрока ожидаемой ошибки, "" — ошибки быть не должно
+	}{
+		{
+			name: "покупка без месяца — строка просто игнорируется",
+			in:   &InputTransport{CarPurchases: []CarPurchase{{Price: 100}}},
+		},
+		{
+			name: "покупка за пределами проекта",
+			in:   &InputTransport{CarPurchases: []CarPurchase{{Name: "Газель", Month: 7, Price: 100}}},
+			want: "месяц покупки 7 вне проекта",
+		},
+		{
+			name: "отрицательный месяц покупки",
+			in:   &InputTransport{CarPurchases: []CarPurchase{{Month: -1, Price: 100}}},
+			want: "вне проекта",
+		},
+		{
+			name: "отрицательная цена покупки",
+			in:   &InputTransport{CarPurchases: []CarPurchase{{Month: 1, Price: -5}}},
+			want: "цена не может быть отрицательной",
+		},
+		{
+			name: "месяц аренды авто за пределами проекта",
+			in:   &InputTransport{CarRentals: []RentedItem{{Price: 1, Months: []int{1, 9}}}},
+			want: "аренда авто",
+		},
+		{
+			name: "месяц аренды гаража за пределами проекта",
+			in:   &InputTransport{GarageRentals: []RentedItem{{Price: 1, Months: []int{0}}}},
+			want: "аренда гаража",
+		},
+	}
+
+	for _, c := range cases {
+		err := ValidateTransport(c.in, 6)
+		switch {
+		case c.want == "" && err != nil:
+			t.Errorf("%s: ожидалось без ошибки, получено %v", c.name, err)
+		case c.want != "" && err == nil:
+			t.Errorf("%s: ожидалась ошибка со словами «%s», ошибки нет", c.name, c.want)
+		case c.want != "" && err != nil && !strings.Contains(err.Error(), c.want):
+			t.Errorf("%s: ожидалась ошибка со словами «%s», получено %v", c.name, c.want, err)
+		}
+	}
+}
+
+// TestValidateInput_Transport — тот же контроль через диспетчер сохранения.
+func TestValidateInput_Transport(t *testing.T) {
+	ok := []byte(`{"car_purchases":[{"name":"Газель","month":2,"price":100}]}`)
+	if err := ValidateInput(TypeTransport, ok, ExecutorAibicon, 6); err != nil {
+		t.Errorf("корректный ввод отклонён: %v", err)
+	}
+
+	bad := []byte(`{"car_purchases":[{"name":"Газель","month":8,"price":100}]}`)
+	if err := ValidateInput(TypeTransport, bad, ExecutorAibicon, 6); err == nil {
+		t.Error("месяц 8 при длительности 6 должен отклоняться")
+	}
+
+	if err := ValidateInput(TypeTransport, []byte(`{"car_purchases":`), ExecutorAibicon, 6); err == nil {
+		t.Error("битый JSON должен отклоняться")
+	}
+}
+
+func sumFloats(a []float64) float64 {
+	var s float64
+	for _, v := range a {
+		s += v
+	}
+	return s
+}

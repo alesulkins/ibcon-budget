@@ -30,11 +30,27 @@ func Auth(jwtSecret string, db *sqlx.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Проверка сессионного таймаута по last_activity
+		// Учётка должна существовать и быть активной. Раньше ошибка запроса
+		// молча игнорировалась, поэтому отключённый пользователь продолжал
+		// работать с уже выданным токеном до истечения его срока.
 		var lastActivity *time.Time
-		_ = db.Get(&lastActivity, `SELECT last_activity FROM users WHERE id=$1 AND active=TRUE`, claims.UserID)
+		err = db.Get(&lastActivity, `SELECT last_activity FROM users WHERE id=$1 AND active=TRUE`, claims.UserID)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "учётная запись отключена или не найдена",
+				"code":  "account_disabled",
+			})
+			return
+		}
+
+		// Автовыход по бездействию (ТЗ 3.8 п.6): 60 минут без запросов.
+		// Действует независимо от «Запомнить меня» — тот управляет только
+		// сроком жизни токена.
 		if lastActivity != nil && time.Since(*lastActivity) > sessionTimeout {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "сессия истекла, войдите снова"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "сессия истекла из-за бездействия, войдите снова",
+				"code":  "session_timeout",
+			})
 			return
 		}
 

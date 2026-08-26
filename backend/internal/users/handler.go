@@ -6,8 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"ibcon-budget/internal/auth"
 	"ibcon-budget/internal/auditlog"
+	"ibcon-budget/internal/auth"
 	"ibcon-budget/internal/middleware"
 )
 
@@ -21,6 +21,16 @@ func NewHandler(svc *Service, audit *auditlog.Service) *Handler {
 }
 
 func (h *Handler) Register(r gin.IRouter) {
+	// Личный кабинет доступен любому авторизованному пользователю.
+	// Регистрируем ДО группы с RequireRole(GE), иначе «me» попал бы под
+	// проверку роли главного экономиста.
+	me := r.Group("/users/me")
+	{
+		me.GET("", h.getProfile)
+		me.PUT("", h.updateProfile)
+		me.PUT("/password", h.changeOwnPassword)
+	}
+
 	g := r.Group("/users", middleware.RequireRole(auth.RoleGE))
 	{
 		g.GET("", h.list)
@@ -149,4 +159,55 @@ func (h *Handler) revokeAccess(c *gin.Context) {
 		Comment: strconv.Itoa(userID),
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "доступ отозван"})
+}
+
+// ─── Личный кабинет ─────────────────────────────────────────────────────
+
+func (h *Handler) getProfile(c *gin.Context) {
+	claims := middleware.GetClaims(c)
+	p, err := h.svc.GetProfile(claims.UserID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, p)
+}
+
+func (h *Handler) updateProfile(c *gin.Context) {
+	claims := middleware.GetClaims(c)
+	var req UpdateProfileRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	p, err := h.svc.UpdateProfile(claims.UserID, req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, p)
+}
+
+func (h *Handler) changeOwnPassword(c *gin.Context) {
+	claims := middleware.GetClaims(c)
+	var req ChangePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.svc.ChangeOwnPassword(claims.UserID, req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	h.audit.Log(auditlog.Entry{
+		UserID:     &claims.UserID,
+		UserRole:   claims.Role,
+		Action:     "change_own_password",
+		ObjectType: "user",
+		ObjectID:   &claims.UserID,
+		Comment:    "Пользователь сменил свой пароль",
+	})
+
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }

@@ -6,10 +6,9 @@ import {
 import { CalculatorOutlined, FileExcelOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
-import dayjs from 'dayjs';
 import { budgetsApi } from '../../api';
 import type { MonthlyResult } from '../../types';
-import { fmtMoney, fmtPct } from '../../utils/fmt';
+import { fmtMoney, fmtPct, monthLabel } from '../../utils/fmt';
 import { extractError } from '../../api/client';
 
 const { Title, Text } = Typography;
@@ -41,15 +40,11 @@ export default function CalcResults({ versionId, projectId, duration, startDate 
     onError: (e) => message.error(extractError(e)),
   });
 
-  function monthLabel(monthIdx: number): string {
-    return dayjs(startDate).add(monthIdx, 'month').format('MMM YY');
-  }
-
   const r = result ?? calcMutation.data;
 
   const summaryRows = r ? [
     { label: 'ФОТ (вкл. взносы и НДФЛ)', value: fmtMoney(r.total_fot) },
-    { label: 'Расходы по проекту + АУП + непредвиденные', value: fmtMoney(r.total_costs) },
+    { label: 'Итого расходы без НДС', value: fmtMoney(r.total_costs) },
     { label: 'Итого стоимость работ (без НДС)', value: fmtMoney(r.total_revenue), highlight: true },
     { label: 'Выручка с НДС', value: fmtMoney(r.total_revenue_with_vat) },
     { label: 'Операционная прибыль', value: fmtMoney(r.operating_profit) },
@@ -62,8 +57,8 @@ export default function CalcResults({ versionId, projectId, duration, startDate 
     {
       title: 'Месяц',
       dataIndex: 'month',
-      width: 80,
-      render: (m) => monthLabel(m - 1),
+      width: 90,
+      render: (m: number) => monthLabel(startDate, m - 1),
       fixed: 'left',
     },
     { title: 'ФОТ вкл. взносы', dataIndex: 'total_fot', render: fmtMoney, align: 'right' },

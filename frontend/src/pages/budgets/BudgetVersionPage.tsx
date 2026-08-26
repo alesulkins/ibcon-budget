@@ -1,27 +1,39 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  Card, Steps, Button, Space, Tag, Typography, Spin, message,
-  Modal, Form, Input, Select, Tabs, Statistic, Row, Col, Alert,
+  Card, Button, Space, Tag, Typography, Spin, message,
+  Modal, Form, Input, Select, Row, Col, Alert,
 } from 'antd';
-import {
-  ArrowLeftOutlined, CalculatorOutlined, FileExcelOutlined,
-} from '@ant-design/icons';
+import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { budgetsApi, projectsApi } from '../../api';
 import { BUDGET_STATUS_LABELS, BUDGET_STATUS_COLORS } from '../../types';
 import { hasRole } from '../../store/auth';
+import { resetSaveState } from '../../store/autosave';
 import { fmtMoney, fmtPct, fmtDate } from '../../utils/fmt';
 import { extractError } from '../../api/client';
+import WizardSteps from '../../components/WizardSteps';
+import { useStickyState } from '../../hooks/useStickyState';
+import SaveIndicator from '../../components/SaveIndicator';
+import { useUnsavedWarning } from '../../hooks/useUnsavedWarning';
 import EmployeesInput from './inputs/EmployeesInput';
 import BonusesInput from './inputs/BonusesInput';
 import RentApartmentsInput from './inputs/RentApartmentsInput';
+import TransportInput from './inputs/TransportInput';
 import SimpleCostInput from './inputs/SimpleCostInput';
 import OverheadInput from './inputs/OverheadInput';
 import BudgetParamsInput from './inputs/BudgetParamsInput';
 import CalcResults from './CalcResults';
 
 const { Title, Text } = Typography;
+
+/** «Согласовано от ДД.ММ.ГГГГ. » — обязательное начало комментария. */
+function approvalPrefixText(): string {
+  const d = new Date();
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `Согласовано от ${dd}.${mm}.${d.getFullYear()}. `;
+}
 
 // Шаги визарда (соответствуют листам 4.1-4.12 + накладные + параметры + результаты)
 const WIZARD_STEPS = [
@@ -47,14 +59,27 @@ export default function BudgetVersionPage() {
   const versionId = Number(vid);
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const [step, setStep] = useState(0);
+  // Открытый шаг мастера переживает переход в справочники и обратно
+  const [step, setStep] = useStickyState(`wizard-step:${vid}`, 0);
   const [statusForm] = Form.useForm();
   const [showStatus, setShowStatus] = useState(false);
+  // Неудаляемый префикс комментария при согласовании
+  const [approvalPrefix, setApprovalPrefix] = useState('');
 
   const { data: version, isLoading } = useQuery({
     queryKey: ['budget-version', versionId],
     queryFn: () => budgetsApi.getVersion(versionId),
   });
+
+  // Закрытие вкладки с несохранённым — предупреждаем
+  useUnsavedWarning();
+
+  // Индикатор автосохранения не должен показывать чужое время
+  // при переходе на другую версию бюджета.
+  useEffect(() => {
+    resetSaveState();
+    return () => resetSaveState();
+  }, [versionId]);
 
   const { data: project } = useQuery({
     queryKey: ['project', version?.project_id],
@@ -102,6 +127,7 @@ export default function BudgetVersionPage() {
             versionId={versionId}
             duration={duration}
             startDate={project!.start_date}
+            executor={project!.executor_name}
             readonly={isReadonly}
           />
         );
@@ -125,33 +151,15 @@ export default function BudgetVersionPage() {
           />
         );
       case 'transport_garage':
+        // Покупка авто, аренда авто и аренда гаража; суммы считает
+        // бэкенд (calcTransport, лист 4.3).
         return (
-          <div>
-            <Alert
-              type="info"
-              showIcon
-              style={{ marginBottom: 12 }}
-              message='Строка "Аренда транспорта" в бюджете включает как ежемесячную аренду, так и разовые покупки авто. Если в каком-то месяце планируется покупка — добавьте её стоимость к аренде за этот месяц.'
-            />
-            <SimpleCostInput
-              versionId={versionId}
-              type="transport_rental"
-              title="Аренда авто (включая покупку) — лист 4.3"
-              duration={duration}
-              startDate={project!.start_date}
-              readonly={isReadonly}
-            />
-            <div style={{ marginTop: 16 }}>
-              <SimpleCostInput
-                versionId={versionId}
-                type="garage_rent"
-                title="Аренда гаража — лист 4.3"
-                duration={duration}
-                startDate={project!.start_date}
-                readonly={isReadonly}
-              />
-            </div>
-          </div>
+          <TransportInput
+            versionId={versionId}
+            duration={duration}
+            startDate={project!.start_date}
+            readonly={isReadonly}
+          />
         );
       case 'site_setup':
         return (
@@ -266,6 +274,7 @@ export default function BudgetVersionPage() {
           <OverheadInput
             versionId={versionId}
             duration={duration}
+            startDate={project!.start_date}
             readonly={isReadonly}
           />
         );
@@ -273,6 +282,7 @@ export default function BudgetVersionPage() {
         return (
           <BudgetParamsInput
             versionId={versionId}
+            executor={project!.executor_name}
             readonly={isReadonly}
           />
         );
@@ -370,20 +380,22 @@ export default function BudgetVersionPage() {
       {/* Навигационные вкладки по шагам */}
       <Card bodyStyle={{ padding: 0 }}>
         <div style={{ padding: '16px 24px', borderBottom: '1px solid #f0f0f0' }}>
-          <Steps
+          <WizardSteps
+            items={isAP ? [WIZARD_STEPS[apOnlyStepIdx]] : WIZARD_STEPS}
             current={isAP ? 0 : step}
             onChange={isAP ? undefined : setStep}
-            size="small"
-            items={(isAP ? [WIZARD_STEPS[apOnlyStepIdx]] : WIZARD_STEPS).map((s) => ({
-              title: s.title,
-              description: s.desc,
-            }))}
-            style={{ overflowX: 'auto' }}
           />
         </div>
         <div style={{ padding: 24 }}>
           {isAP
-            ? <OverheadInput versionId={versionId} duration={project.duration_months} readonly />
+            ? (
+              <OverheadInput
+                versionId={versionId}
+                duration={project.duration_months}
+                startDate={project.start_date}
+                readonly
+              />
+            )
             : renderStepContent()}
         </div>
         <div style={{
@@ -431,21 +443,48 @@ export default function BudgetVersionPage() {
                 label: BUDGET_STATUS_LABELS[s] ?? s,
               }))}
               onChange={(v) => {
-                if (v === 'approved') {
-                  const today = new Date();
-                  const dd = String(today.getDate()).padStart(2, '0');
-                  const mm = String(today.getMonth() + 1).padStart(2, '0');
-                  const yyyy = today.getFullYear();
-                  statusForm.setFieldValue('comment', `Согласовано от ${dd}.${mm}.${yyyy}. `);
+                setApprovalPrefix(v === 'approved' ? approvalPrefixText() : '');
+                statusForm.setFieldValue(
+                  'comment',
+                  v === 'approved' ? approvalPrefixText() : '',
+                );
+              }}
+            />
+          </Form.Item>
+          <Form.Item
+            name="comment"
+            label="Комментарий"
+            rules={[
+              { required: true, message: 'Укажите причину изменения статуса' },
+              // Префикс «Согласовано от ДД.ММ.ГГГГ» стереть нельзя —
+              // он фиксирует дату согласования.
+              {
+                validator: (_, value: string) =>
+                  !approvalPrefix || (value ?? '').startsWith(approvalPrefix)
+                    ? Promise.resolve()
+                    : Promise.reject(new Error(
+                      `Комментарий должен начинаться с «${approvalPrefix.trim()}»`)),
+              },
+            ]}
+            extra={approvalPrefix
+              ? 'Дата согласования подставлена автоматически и не удаляется.'
+              : undefined}
+          >
+            <Input.TextArea
+              rows={3}
+              onChange={(e) => {
+                // Не даём стереть префикс правкой изнутри поля
+                if (approvalPrefix && !e.target.value.startsWith(approvalPrefix)) {
+                  statusForm.setFieldValue('comment', approvalPrefix);
                 }
               }}
             />
           </Form.Item>
-          <Form.Item name="comment" label="Комментарий" rules={[{ required: true }]}>
-            <Input.TextArea rows={3} />
-          </Form.Item>
         </Form>
       </Modal>
+
+      {/* «сохранено N сек назад» — снизу по центру */}
+      <SaveIndicator />
     </div>
   );
 }

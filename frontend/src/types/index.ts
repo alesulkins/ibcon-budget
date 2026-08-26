@@ -158,6 +158,8 @@ export const BUDGET_STATUS_COLORS: Record<string, string> = {
 };
 
 export interface BudgetVersion {
+  /** Порядковый номер версии внутри проекта (1, 2, 3…). */
+  version_no: number;
   id: number;
   budget_id: number;
   project_id: number;
@@ -226,6 +228,39 @@ export interface InputRentApartments {
   cleaning_base: number;
   /** Базовая стоимость услуг риелтора за одну квартиру (4.2!B13) */
   realtor_base: number;
+  /**
+   * Номера месяцев проекта (1-based), в которых начисляется уборка.
+   * Пустой список — уборки нет за весь период.
+   */
+  cleaning_months: number[];
+}
+
+/** Одна покупка авто (таблица 4.3!A17:D27). */
+export interface CarPurchase {
+  name: string;
+  /** Месяц покупки, 1-based. 0 — строка не заполнена, в расчёт не идёт. */
+  month: number;
+  price: number;
+}
+
+/** Один арендуемый предмет: авто (4.3 строки 5-6) или гараж (4.3 строки 10-11). */
+export interface RentedItem {
+  name: string;
+  /** Цена аренды за месяц, одна на все месяцы. */
+  price: number;
+  /** Номера месяцев проекта (1-based), в которых предмет арендуется. */
+  months: number[];
+}
+
+/**
+ * Транспорт (лист 4.3). Суммы НЕ передаются: их считает calcTransport
+ * на бэкенде. Покупка авто и аренда авто уходят одной строкой бюджета
+ * («Аренда транспорта»), гараж — отдельной.
+ */
+export interface InputTransport {
+  car_purchases: CarPurchase[];
+  car_rentals: RentedItem[];
+  garage_rentals: RentedItem[];
 }
 
 export interface InputEmployees {
@@ -255,7 +290,11 @@ export interface InputBudgetParams {
    * Коэффициент наценки бэкенд считает сам: E234/(1-F240-E234).
    */
   target_rent_pct: number;
-  manual_revenue: number;
+  /**
+   * ТКП — стоимость договора (2.Бюджет!G251). Единственный ручной ввод
+   * блока выручки. Отдельного поля «ручная стоимость работ» больше нет:
+   * в форме это формула F236 = G252 = ТКП без НДС, бэкенд выводит её сам.
+   */
   contract_value: number;
 }
 
@@ -305,11 +344,15 @@ export interface AuditEntry {
   id: number;
   occurred_at: string;
   user_id?: number;
+  user_name: string;
   user_role: string;
   action: string;
   object_type: string;
   object_id?: number;
   comment: string;
+  /** Проект записи: для действий над версией бюджета — через её бюджет. */
+  project_id?: number;
+  project_name: string;
 }
 
 // ─── API generics ───────────────────────────────────────────────────────────
@@ -318,4 +361,16 @@ export interface PaginatedResponse<T> {
   total: number;
   page: number;
   limit: number;
+}
+
+/** Данные личного кабинета (GET /users/me). */
+export interface Profile {
+  id: number;
+  email: string;
+  /** Полное ФИО. Сокращённую форму даёт shortName() из utils/names. */
+  full_name: string;
+  role: string;
+  /** Эмодзи или data:-URL загруженной картинки. Пусто — показываем инициалы. */
+  avatar: string;
+  notes: string;
 }

@@ -7,8 +7,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"ibcon-budget/internal/auth"
 	"ibcon-budget/internal/auditlog"
+	"ibcon-budget/internal/auth"
 	"ibcon-budget/internal/calc"
 	"ibcon-budget/internal/middleware"
 	"ibcon-budget/internal/projects"
@@ -283,13 +283,18 @@ func (h *Handler) saveInput(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "тело должно быть валидным JSON"})
 		return
 	}
-	// Часть проверок зависит от исполнителя (например, достижимость целевой
-	// рентабельности при его ставке налога), поэтому берём проект версии.
-	var executorName string
+	// Часть проверок зависит от проекта: от исполнителя (достижимость целевой
+	// рентабельности при его ставке налога) и от длительности (месяц покупки
+	// авто должен лежать внутри проекта), поэтому берём проект версии.
+	var (
+		executorName string
+		duration     int
+	)
 	if proj, perr := h.projectsSvc.Get(v.ProjectID); perr == nil {
 		executorName = proj.ExecutorName
+		duration = proj.DurationMonths
 	}
-	if err = calc.ValidateInput(inputType, body, executorName); err != nil {
+	if err = calc.ValidateInput(inputType, body, executorName, duration); err != nil {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
 	}

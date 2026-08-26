@@ -9,15 +9,14 @@ func Run(inp *BudgetInputs) *CalcResult {
 
 	// ── 1. ФОТ ────────────────────────────────────────────────────────────────
 	var emps []Employee
-	var ticketPrice, perDiemRF, perDiemOther float64 = 40_000, defaultPerDiemRF(), 2_500
+	// Суточные по РФ — фиксированная формула формы, не пользовательский ввод.
+	var ticketPrice, perDiemOther float64 = 40_000, 2_500
+	perDiemRF := perDiemRFRate
 
 	if inp.Employees != nil {
 		emps = inp.Employees.Employees
 		if inp.Employees.TicketPrice > 0 {
 			ticketPrice = inp.Employees.TicketPrice
-		}
-		if inp.Employees.PerDiemRF > 0 {
-			perDiemRF = inp.Employees.PerDiemRF
 		}
 		if inp.Employees.PerDiemOther > 0 {
 			perDiemOther = inp.Employees.PerDiemOther
@@ -39,18 +38,29 @@ func Run(inp *BudgetInputs) *CalcResult {
 	// Строка 178 = аренда, строка 179 = риелтор.
 	rentAptsArr, realtorArr := calcRentApartments(inp.RentApts, inp.ExecutorName, n)
 
+	// ── 1b. Лист 4.3: транспорт и гараж ──────────────────────────────────────
+	// Строка 180 = аренда авто + покупка авто (в форме это одна строка),
+	// строка 210 = аренда гаража.
+	transportArr, garageArr := calcTransport(inp.Transport, n)
+	if inp.Transport == nil {
+		// Версия бюджета сохранена до перехода 4.3 на расчёт по формуле —
+		// берём старые готовые суммы, чтобы её итоги не обнулились.
+		// Удалить вместе с TypeTransportRental / TypeGarageRent.
+		transportArr, garageArr = inp.TransportRental, inp.GarageRent
+	}
+
 	// ── 2. Премии и компенсации (4.1) суммарно → 2.Бюджет строка 169 ────────
 	bonusArr := bonusRes.Total
 
 	// ── 3. Параметры бюджета ──────────────────────────────────────────────────
 	var (
-		unpredPct, aupPct float64
-		otherMode         string
-		otherVal          float64
+		unpredPct, aupPct    float64
+		otherMode            string
+		otherVal             float64
 		bgExec, bgWar, bgAdv BankGuarantee
-		markup            float64
-		manualRevenue     float64
-		contractValue     float64
+		markup               float64
+		manualRevenue        float64
+		contractValue        float64
 		// contractTKP — ИСХОДНАЯ стоимость договора (2.Бюджет!G251), без
 		// подстановки расчётной выручки. От неё считаются банковские
 		// гарантии и налог киргизского спецрежима: и то и другое в форме
@@ -68,9 +78,11 @@ func Run(inp *BudgetInputs) *CalcResult {
 		// Коэффициент наценки на расходы (2.Бюджет!F234) считается из
 		// целевой рентабельности и ставки налога, а не вводится напрямую.
 		markup = markupRate(inp.Params.TargetRentPct, inp.ExecutorName)
-		manualRevenue = inp.Params.ManualRevenue
 		contractValue = inp.Params.ContractValue
 		contractTKP = inp.Params.ContractValue
+		// Ручная стоимость работ (2.Бюджет!F236) — не самостоятельный ввод,
+		// а ТКП без НДС: F236 = G252 = IF(КГ, G251, IF(АП, G251, G251/1.22)).
+		manualRevenue = contractNetOfVAT(contractTKP, inp.ExecutorName)
 	}
 
 	// ── 4. Рассчитываем месячные итоги (строки 212, 214-216) ─────────────────
@@ -89,40 +101,40 @@ func Run(inp *BudgetInputs) *CalcResult {
 
 	// ── 5. Базовые суммы накладных за месяц ───────────────────────────────────
 	overheadLines := [34][]float64{
-		rentAptsArr,          // 0 → 178 Аренда квартир, вкл. уборку (4.2, авторасчёт)
-		realtorArr,           // 1 → 179 Риелтор (4.2, авторасчёт)
-		inp.TransportRental,  // 2 → 180
-		inp.SiteSetup,        // 3 → 181
-		inp.OfficeRent,       // 4 → 182
-		inp.OfficeCleaning,   // 5 → 183
-		ticketsArr,           // 6 → 184 Билеты (авторасчёт)
-		perDiemArr,           // 7 → 185 Командировочные (авторасчёт)
-		inp.Internet,         // 8 → 186
-		inp.Mobile,           // 9 → 187
-		inp.LabResearch,      // 10 → 188
-		inp.ControlEquipment, // 11 → 189
-		inp.Training,         // 12 → 190
-		inp.Medical,          // 13 → 191
-		inp.Uniform,          // 14 → 192
-		inp.Software,         // 15 → 193
-		inp.Computers,        // 16 → 194
-		inp.Furniture,        // 17 → 195
-		inp.OfficeSupplies,   // 18 → 196
-		inp.Postal,           // 19 → 197
-		inp.Fuel,             // 20 → 198
-		inp.TransportServices,// 21 → 199
-		inp.SubcontractExt,   // 22 → 200
-		inp.SubcontractEmp,   // 23 → 201
-		inp.SubcontractGen,   // 24 → 202
-		inp.SubcontractOrg,   // 25 → 203
-		inp.Representative,   // 26 → 204
-		inp.CorporateEvents,  // 27 → 205
-		inp.BankServices,     // 28 → 206
-		inp.InsuranceLiab,    // 29 → 207
-		inp.Utilities,        // 30 → 208
-		inp.Security,         // 31 → 209
-		inp.GarageRent,       // 32 → 210
-		inp.AutoInsurance,    // 33 → 211
+		rentAptsArr,           // 0 → 178 Аренда квартир, вкл. уборку (4.2, авторасчёт)
+		realtorArr,            // 1 → 179 Риелтор (4.2, авторасчёт)
+		transportArr,          // 2 → 180 Аренда транспорта + покупка авто (4.3, авторасчёт)
+		inp.SiteSetup,         // 3 → 181
+		inp.OfficeRent,        // 4 → 182
+		inp.OfficeCleaning,    // 5 → 183
+		ticketsArr,            // 6 → 184 Билеты (авторасчёт)
+		perDiemArr,            // 7 → 185 Командировочные (авторасчёт)
+		inp.Internet,          // 8 → 186
+		inp.Mobile,            // 9 → 187
+		inp.LabResearch,       // 10 → 188
+		inp.ControlEquipment,  // 11 → 189
+		inp.Training,          // 12 → 190
+		inp.Medical,           // 13 → 191
+		inp.Uniform,           // 14 → 192
+		inp.Software,          // 15 → 193
+		inp.Computers,         // 16 → 194
+		inp.Furniture,         // 17 → 195
+		inp.OfficeSupplies,    // 18 → 196
+		inp.Postal,            // 19 → 197
+		inp.Fuel,              // 20 → 198
+		inp.TransportServices, // 21 → 199
+		inp.SubcontractExt,    // 22 → 200
+		inp.SubcontractEmp,    // 23 → 201
+		inp.SubcontractGen,    // 24 → 202
+		inp.SubcontractOrg,    // 25 → 203
+		inp.Representative,    // 26 → 204
+		inp.CorporateEvents,   // 27 → 205
+		inp.BankServices,      // 28 → 206
+		inp.InsuranceLiab,     // 29 → 207
+		inp.Utilities,         // 30 → 208
+		inp.Security,          // 31 → 209
+		garageArr,             // 32 → 210 Аренда гаража (4.3, авторасчёт)
+		inp.AutoInsurance,     // 33 → 211
 	}
 
 	// ── 6. Первый проход: считаем расходы и предварительную выручку ───────────
@@ -152,7 +164,19 @@ func Run(inp *BudgetInputs) *CalcResult {
 		// Строка 214: непредвиденные
 		d.unpred = (projectCosts + totalFOT) * unpredPct
 
-		// Строка 215: АУП (для месяцев <= duration+2)
+		// Строка 215: АУП.
+		// Формула H215 = IF(H11 <= $D$8+2, (H212+H214+H176)*$F$215, 0).
+		//
+		// Про «+2»: форма разрешает начислять АУП ещё два месяца после
+		// окончания проекта, но база там всегда нулевая — строки 212, 214
+		// и 176 сами закрыты проверкой «месяц <= D8» и за пределами
+		// проекта дают 0. Проверено на заполненном файле: в колонках
+		// месяцев 7 и 8 (M и N при D=6) АУП равен нулю, а G215 совпадает
+		// с суммой первых шести месяцев до копейки.
+		//
+		// Поэтому в платформе, где массивы длиной ровно duration, условие
+		// выполняется для всех месяцев и ничего не отсекает. Оставляем
+		// его явным, чтобы правило формы было видно в коде.
 		if m+1 <= n+2 {
 			d.aup = (projectCosts + d.unpred + totalFOT) * aupPct
 		}
@@ -265,7 +289,7 @@ func Run(inp *BudgetInputs) *CalcResult {
 		case ExecutorAibiconProject, ExecutorAibiconKG:
 			revWithVATArr[m] = revArr[m] // без НДС
 		default: // Айбикон
-			revWithVATArr[m] = revArr[m] * 1.22
+			revWithVATArr[m] = revArr[m] * vatMultiplier
 		}
 	}
 
@@ -457,6 +481,28 @@ func calcBGAdvMonthly(bg BankGuarantee, contractValue float64, n int) []float64 
 // Вырожденный случай (targetRent + ставка налога >= 1) должен отсекаться
 // валидацией ValidateBudgetParams; здесь возвращаем 0, чтобы в расчёт
 // не попала отрицательная наценка.
+// vatMultiplier — ставка НДС 22% как множитель (2.Бюджет!H247, G252).
+const vatMultiplier = 1.22
+
+// contractNetOfVAT приводит ТКП к сумме без НДС — формула 2.Бюджет!G252:
+//
+//	=IF(D10="Айбикон Киргизия", G251, IF(D10="Айбикон-Проект", G251, G251/1.22))
+//
+// У «Айбикон» ТКП задаётся С НДС (подпись F251 «В ТКП с НДС»), у остальных
+// двух исполнителей — уже без НДС, поэтому делить не нужно.
+func contractNetOfVAT(tkp float64, executor string) float64 {
+	if tkp == 0 {
+		return 0
+	}
+	switch {
+	case sameExecutor(executor, ExecutorAibiconKG),
+		sameExecutor(executor, ExecutorAibiconProject):
+		return tkp
+	default: // Айбикон
+		return tkp / vatMultiplier
+	}
+}
+
 func markupRate(targetRentPct float64, executor string) float64 {
 	r := targetRentPct / 100
 	if r <= 0 {
@@ -489,10 +535,19 @@ func profitTaxRate(executor string) float64 {
 	}
 }
 
-// defaultPerDiemRF — суточные по РФ из Excel: 700 + 300/0.87*1.3
-func defaultPerDiemRF() float64 {
-	return 700 + 300/0.87*1.3
-}
+// perDiemRFRate — суточные командировочные по РФ, ₽/день.
+//
+// Источник: 4.6!D9 = `=700+300/0.87*1.3` ≈ 1148.28. Это ФОРМУЛА формы, а
+// не поле ввода: 700 — суточные, 300 — питание, 0.87 — gross-up на НДФЛ
+// 13% (npflGrossUpDivisor), 1.3 — районный коэффициент. Значение,
+// введённое пользователем, здесь НЕ применяется.
+//
+// Для сравнения: суточные по другим странам (4.6!D10 = 2500) — обычная
+// константа-ввод, их пользователь задаёт сам.
+//
+// БУДУЩЕЕ: слагаемые вынести в настройки платформы вместе с процентами
+// НДФЛ и взносов — см. docs/open_questions.md, «Глобальные настройки».
+const perDiemRFRate = 700 + 300/npflGrossUpDivisor*1.3
 
 // lineVal возвращает значение из массива по индексу (0-based), 0 если за пределами.
 func lineVal(arr []float64, idx int) float64 {

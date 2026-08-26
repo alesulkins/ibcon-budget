@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
-import { Card, Button, message, Typography, Space } from 'antd';
-import { SaveOutlined } from '@ant-design/icons';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Card, Typography, InputNumber } from 'antd';
+import { useQuery } from '@tanstack/react-query';
 import { budgetsApi } from '../../../api';
-import { extractError } from '../../../api/client';
+import { monthLabel, thousandFormatter, thousandParser } from '../../../utils/fmt';
+import MonthGrid, { monthGridCell, monthGridHeadCell } from '../../../components/MonthGrid';
+import { useAutosave } from '../../../hooks/useAutosave';
 
 const { Text } = Typography;
 
@@ -35,40 +36,50 @@ const OVERHEAD_LINES: { key: string; label: string }[] = [
 interface Props {
   versionId: number;
   duration: number;
+  startDate?: string;
   readonly?: boolean;
 }
 
 type OverheadData = Record<string, { monthly_amounts: number[] }>;
 
-export default function OverheadInput({ versionId, duration, readonly }: Props) {
+export default function OverheadInput({ versionId, duration, startDate, readonly }: Props) {
   const [data, setData] = useState<OverheadData>({});
 
   // Загружаем все статьи разом
-  const { data: allInputs, isLoading } = useQuery({
+  const { data: allInputs, isLoading, isSuccess } = useQuery({
     queryKey: ['budget-inputs-all', versionId],
     queryFn: () => budgetsApi.getAllInputs(versionId),
   });
 
+  const [hydrated, setHydrated] = useState(false);
+
+  // Каждая статья — отдельная запись budget_inputs, поэтому шлём только
+  // изменившиеся: 21 запрос на каждое нажатие клавиши был бы перебором.
+  const savedSnapshot = useRef<OverheadData>({});
+
   useEffect(() => {
-    if (!allInputs) return;
+    if (!isSuccess || !allInputs) return;
     const next: OverheadData = {};
     for (const line of OVERHEAD_LINES) {
       const raw = allInputs[line.key] as { monthly_amounts?: number[] } | undefined;
       next[line.key] = { monthly_amounts: (raw?.monthly_amounts ?? Array(duration).fill(0)) };
     }
     setData(next);
-  }, [allInputs, duration]);
+    savedSnapshot.current = JSON.parse(JSON.stringify(next));
+    setHydrated(true);
+  }, [allInputs, duration, isSuccess]);
 
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      // Сохраняем каждую статью отдельно
-      for (const line of OVERHEAD_LINES) {
-        await budgetsApi.saveInput(versionId, line.key, data[line.key] ?? { monthly_amounts: Array(duration).fill(0) });
-      }
-    },
-    onSuccess: () => message.success('Прочие расходы сохранены'),
-    onError: (e) => message.error(extractError(e)),
-  });
+  const save = useCallback(async (current: OverheadData) => {
+    for (const line of OVERHEAD_LINES) {
+      const next = current[line.key] ?? { monthly_amounts: Array(duration).fill(0) };
+      const prev = savedSnapshot.current[line.key];
+      if (prev && JSON.stringify(prev) === JSON.stringify(next)) continue;
+      await budgetsApi.saveInput(versionId, line.key, next);
+      savedSnapshot.current[line.key] = next;
+    }
+  }, [versionId, duration]);
+
+  useAutosave({ data, ready: hydrated, save, enabled: !readonly });
 
   function updateAmount(key: string, monthIdx: number, value: number) {
     const amounts = [...(data[key]?.monthly_amounts ?? Array(duration).fill(0))];
@@ -82,70 +93,61 @@ export default function OverheadInput({ versionId, duration, readonly }: Props) 
   }
 
   return (
-    <Card
-      title="Прочие накладные расходы"
-      size="small"
-      extra={
-        !readonly && (
-          <Button
-            size="small"
-            icon={<SaveOutlined />}
-            onClick={() => saveMutation.mutate()}
-            loading={saveMutation.isPending}
-            style={{ background: '#1a3a6b' }}
-            type="primary"
-          >
-            Сохранить всё
-          </Button>
-        )
-      }
-    >
+    <Card title="Прочие накладные расходы" size="small">
       <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
         Введите суммы по каждой статье помесячно. Пустые строки не войдут в итоговый расчёт.
       </Text>
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
+      <MonthGrid
+        months={Array.from({ length: duration }, (_, i) => monthLabel(startDate, i))}
+        labelWidth={240}
+        trailingWidth={110}
+        head={(
           <thead>
             <tr>
-              <th style={{ padding: '4px 8px', textAlign: 'left', minWidth: 220 }}>Статья</th>
+              <th style={{ ...monthGridHeadCell, textAlign: 'left', color: '#333', fontWeight: 500 }}>
+                Статья
+              </th>
               {Array.from({ length: duration }).map((_, i) => (
-                <th key={i} style={{ padding: '4px 6px', textAlign: 'center', minWidth: 80, color: '#888', fontWeight: 400 }}>
-                  М{i + 1}
-                </th>
+                <th key={i} style={monthGridHeadCell}>{monthLabel(startDate, i)}</th>
               ))}
-              <th style={{ padding: '4px 8px', textAlign: 'right', minWidth: 100 }}>Итого</th>
+              <th style={{ ...monthGridHeadCell, textAlign: 'right', color: '#333', fontWeight: 500 }}>
+                Итого
+              </th>
             </tr>
           </thead>
-          <tbody>
-            {OVERHEAD_LINES.map((line) => (
-              <tr key={line.key} style={{ borderTop: '1px solid #f0f0f0' }}>
-                <td style={{ padding: '4px 8px', fontWeight: 400 }}>{line.label}</td>
-                {Array.from({ length: duration }).map((_, monthIdx) => {
-                  const val = data[line.key]?.monthly_amounts?.[monthIdx] ?? 0;
-                  return (
-                    <td key={monthIdx} style={{ padding: '2px 4px', textAlign: 'center' }}>
-                      {readonly ? (
-                        <span>{val ? val.toLocaleString('ru-RU') : '—'}</span>
-                      ) : (
-                        <input
-                          type="number"
-                          style={{ width: 76, border: '1px solid #d9d9d9', borderRadius: 4, padding: '2px 4px', fontSize: 12, textAlign: 'right' }}
-                          value={val || ''}
-                          min={0}
-                          onChange={(e) => updateAmount(line.key, monthIdx, Number(e.target.value) || 0)}
-                        />
-                      )}
-                    </td>
-                  );
-                })}
-                <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }}>
-                  {lineTotal(line.key).toLocaleString('ru-RU')}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+        )}
+      >
+        <tbody>
+          {OVERHEAD_LINES.map((line) => (
+            <tr key={line.key} style={{ borderTop: '1px solid #f0f0f0' }}>
+              <td style={{ ...monthGridCell, textAlign: 'left', fontSize: 12 }}>{line.label}</td>
+              {Array.from({ length: duration }).map((_, monthIdx) => {
+                const val = data[line.key]?.monthly_amounts?.[monthIdx] ?? 0;
+                return (
+                  <td key={monthIdx} style={monthGridCell}>
+                    {readonly ? (
+                      <span style={{ fontSize: 12 }}>{val ? val.toLocaleString('ru-RU') : '—'}</span>
+                    ) : (
+                      <InputNumber
+                        size="small"
+                        style={{ width: '100%' }}
+                        value={val || null}
+                        min={0}
+                        onChange={(v) => updateAmount(line.key, monthIdx, v ?? 0)}
+                        formatter={thousandFormatter}
+                        parser={thousandParser}
+                      />
+                    )}
+                  </td>
+                );
+              })}
+              <td style={{ ...monthGridCell, textAlign: 'right', fontWeight: 500, fontSize: 12 }}>
+                {lineTotal(line.key).toLocaleString('ru-RU')}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </MonthGrid>
     </Card>
   );
 }

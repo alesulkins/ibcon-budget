@@ -3,15 +3,15 @@ package users
 import "time"
 
 type User struct {
-	ID           int        `db:"id"             json:"id"`
-	Email        string     `db:"email"          json:"email"`
-	FullName     string     `db:"full_name"      json:"full_name"`
-	Role         string     `db:"role"           json:"role"`
-	Active       bool       `db:"active"         json:"active"`
-	FailedAttempts int      `db:"failed_attempts" json:"failed_attempts"`
-	LockedUntil  *time.Time `db:"locked_until"   json:"locked_until,omitempty"`
-	CreatedAt    time.Time  `db:"created_at"     json:"created_at"`
-	CreatedBy    *int       `db:"created_by"     json:"created_by,omitempty"`
+	ID             int        `db:"id"             json:"id"`
+	Email          string     `db:"email"          json:"email"`
+	FullName       string     `db:"full_name"      json:"full_name"`
+	Role           string     `db:"role"           json:"role"`
+	Active         bool       `db:"active"         json:"active"`
+	FailedAttempts int        `db:"failed_attempts" json:"failed_attempts"`
+	LockedUntil    *time.Time `db:"locked_until"   json:"locked_until,omitempty"`
+	CreatedAt      time.Time  `db:"created_at"     json:"created_at"`
+	CreatedBy      *int       `db:"created_by"     json:"created_by,omitempty"`
 }
 
 type CreateRequest struct {

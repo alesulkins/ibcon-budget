@@ -41,6 +41,19 @@ func apartmentCount(in *InputRentApartments, monthIdx int) int {
 		intVal(in.Count3Room, monthIdx)
 }
 
+// cleaningEnabled сообщает, начисляется ли уборка в месяце monthIdx (0-based).
+//
+// Пустой список означает «уборки нет за весь период» — так решил владелец
+// 2026-08-23. Это расширение сверх формы: в Excel уборка безусловна.
+func cleaningEnabled(in *InputRentApartments, monthIdx int) bool {
+	for _, m := range in.CleaningMonths {
+		if m == monthIdx+1 { // в списке номера месяцев 1-based
+			return true
+		}
+	}
+	return false
+}
+
 // calcRentApartments рассчитывает аренду квартир и услуги риелтора по месяцам
 // (лист 4.2). Возвращает два массива длиной duration:
 //
@@ -78,8 +91,12 @@ func calcRentApartments(in *InputRentApartments, executor string, duration int) 
 			in.Price2Room*float64(q2) +
 			in.Price3Room*float64(q3)
 
-		// Уборка: базовая стоимость × общее количество квартир (4.2!C9)
-		cleaning := in.CleaningBase * float64(count)
+		// Уборка: базовая стоимость × общее количество квартир (4.2!C9),
+		// но только в выбранных экономистом месяцах.
+		var cleaning float64
+		if cleaningEnabled(in, m) {
+			cleaning = in.CleaningBase * float64(count)
+		}
 
 		// Итого аренда — уборка входит внутрь, отдельной строкой не идёт (4.2!C5)
 		total := base + cleaning
@@ -195,11 +212,56 @@ func ValidateBudgetParams(p *InputBudgetParams, executor string) error {
 	return nil
 }
 
+// ValidateEmployees проверяет список сотрудников перед сохранением.
+//
+// Главное правило — страна НО «Киргизия» допустима ТОЛЬКО у исполнителя
+// «Айбикон Киргизия». У остальных исполнителей киргизских сотрудников не
+// бывает: взносы Киргизии (2.Бюджет!174) считаются лишь в киргизской
+// ветке, и такой сотрудник молча остался бы без страховых взносов вовсе.
+func ValidateEmployees(in *InputEmployees, executor string) error {
+	if in == nil {
+		return nil
+	}
+
+	isKGExecutor := sameExecutor(executor, ExecutorAibiconKG)
+
+	for i, e := range in.Employees {
+		country := normalizeCountry(e.Country)
+
+		switch country {
+		case CountryRF, CountrySelfEmployed:
+			// допустимы у любого исполнителя
+		case CountryKG:
+			if !isKGExecutor {
+				return fmt.Errorf(
+					"сотрудник %d (%s): страна НО «Киргизия» допустима только "+
+						"у исполнителя «Айбикон Киргизия», а у проекта указан «%s»",
+					i+1, employeeName(&in.Employees[i]), executor)
+			}
+		case "":
+			return fmt.Errorf("сотрудник %d (%s): не указана страна НО",
+				i+1, employeeName(&in.Employees[i]))
+		default:
+			return fmt.Errorf(
+				"сотрудник %d (%s): неизвестная страна НО «%s». Допустимы: "+
+					"Россия, Киргизия, «Самозанятый, без НО»",
+				i+1, employeeName(&in.Employees[i]), e.Country)
+		}
+
+		if e.SalaryNet < 0 {
+			return fmt.Errorf("сотрудник %d (%s): план ФОТ на руки не может быть отрицательным",
+				i+1, employeeName(&in.Employees[i]))
+		}
+	}
+	return nil
+}
+
 // ValidateInput проверяет входные данные одного типа перед сохранением.
 // Для типов без собственных правил возвращает nil.
 //
-// executor нужен для проверок, зависящих от исполнителя (ставка налога).
-func ValidateInput(inputType string, raw []byte, executor string) error {
+// executor нужен для проверок, зависящих от исполнителя (ставка налога),
+// duration — для проверок, где месяц должен лежать внутри проекта (лист 4.3).
+func ValidateInput(inputType string, raw []byte, executor string, duration int) error {
 	switch inputType {
 	case TypeRentApartments:
 		var v InputRentApartments
@@ -214,6 +276,20 @@ func ValidateInput(inputType string, raw []byte, executor string) error {
 			return fmt.Errorf("параметры бюджета: некорректный формат данных: %w", err)
 		}
 		return ValidateBudgetParams(&v, executor)
+
+	case TypeEmployees:
+		var v InputEmployees
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return fmt.Errorf("сотрудники: некорректный формат данных: %w", err)
+		}
+		return ValidateEmployees(&v, executor)
+
+	case TypeTransport:
+		var v InputTransport
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return fmt.Errorf("транспорт: некорректный формат данных: %w", err)
+		}
+		return ValidateTransport(&v, duration)
 	}
 	return nil
 }

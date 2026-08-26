@@ -1,0 +1,3 @@
+ALTER TABLE budget_versions DROP COLUMN IF EXISTS version_no;
+ALTER TABLE users DROP COLUMN IF EXISTS avatar;
+ALTER TABLE users DROP COLUMN IF EXISTS notes;

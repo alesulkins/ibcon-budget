@@ -1,13 +1,10 @@
-import React, { useEffect, useState } from 'react';
-import {
-  Card, InputNumber, Button, Row, Col, Typography, Space, message,
-  Switch, Tooltip,
-} from 'antd';
-import { SaveOutlined, InfoCircleOutlined } from '@ant-design/icons';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import dayjs from 'dayjs';
+import { useCallback, useEffect, useState } from 'react';
+import { Card, InputNumber, Button, Row, Col, Typography, Switch } from 'antd';
+import { useQuery } from '@tanstack/react-query';
 import { budgetsApi } from '../../../api';
-import { extractError } from '../../../api/client';
+import { monthLabel, thousandFormatter, thousandParser } from '../../../utils/fmt';
+import MonthGrid, { monthGridCell, monthGridHeadCell } from '../../../components/MonthGrid';
+import { useAutosave } from '../../../hooks/useAutosave';
 
 const { Text } = Typography;
 
@@ -29,56 +26,38 @@ export default function SimpleCostInput({ versionId, type, title, duration, read
   const [uniformMode, setUniformMode] = useState(false);
   const [uniformValue, setUniformValue] = useState<number>(0);
 
-  const { data } = useQuery({
+  const [hydrated, setHydrated] = useState(false);
+
+  const { data, isSuccess } = useQuery({
     queryKey: ['budget-input', versionId, type],
     queryFn: () => budgetsApi.getInput<SimpleCostData>(versionId, type),
   });
 
   useEffect(() => {
+    if (!isSuccess) return;
     if (data?.monthly_amounts) {
       const arr = Array(duration).fill(0);
       data.monthly_amounts.forEach((v, i) => { if (i < duration) arr[i] = v; });
       setAmounts(arr);
     }
-  }, [data, duration]);
+    setHydrated(true);
+  }, [data, duration, isSuccess]);
 
-  const saveMutation = useMutation({
-    mutationFn: () => budgetsApi.saveInput(versionId, type, { monthly_amounts: amounts }),
-    onSuccess: () => message.success('Данные сохранены'),
-    onError: (e) => message.error(extractError(e)),
-  });
+  const save = useCallback(
+    (amts: number[]) => budgetsApi.saveInput(versionId, type, { monthly_amounts: amts }),
+    [versionId, type],
+  );
+
+  useAutosave({ data: amounts, ready: hydrated, save, enabled: !readonly });
 
   function applyUniform() {
     setAmounts(Array(duration).fill(uniformValue));
   }
 
-  function monthLabel(idx: number): string {
-    if (!startDate) return `М${idx + 1}`;
-    const d = dayjs(startDate).add(idx, 'month');
-    return d.format('MMM YY');
-  }
-
   const total = amounts.reduce((s, v) => s + (v || 0), 0);
 
   return (
-    <Card
-      title={title}
-      size="small"
-      extra={
-        !readonly && (
-          <Button
-            type="primary"
-            icon={<SaveOutlined />}
-            onClick={() => saveMutation.mutate()}
-            loading={saveMutation.isPending}
-            size="small"
-            style={{ background: '#1a3a6b' }}
-          >
-            Сохранить
-          </Button>
-        )
-      }
-    >
+    <Card title={title} size="small">
       {!readonly && (
         <Row align="middle" gutter={8} style={{ marginBottom: 16 }}>
           <Col>
@@ -97,7 +76,8 @@ export default function SimpleCostInput({ versionId, type, title, duration, read
                   value={uniformValue}
                   onChange={(v) => setUniformValue(v ?? 0)}
                   min={0}
-                  formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}
+                  formatter={thousandFormatter}
+                  parser={thousandParser}
                   addonAfter="₽"
                 />
               </Col>
@@ -109,49 +89,51 @@ export default function SimpleCostInput({ versionId, type, title, duration, read
         </Row>
       )}
 
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+      <MonthGrid
+        months={amounts.map((_, i) => monthLabel(startDate, i))}
+        trailingWidth={130}
+        head={(
           <thead>
             <tr>
               {amounts.map((_, i) => (
-                <th key={i} style={{ padding: '4px 8px', fontWeight: 400, color: '#888', fontSize: 12, textAlign: 'center', minWidth: 90 }}>
-                  {monthLabel(i)}
-                </th>
+                <th key={i} style={monthGridHeadCell}>{monthLabel(startDate, i)}</th>
               ))}
-              <th style={{ padding: '4px 8px', fontWeight: 600, color: '#333', textAlign: 'right', minWidth: 120 }}>
+              <th style={{ ...monthGridHeadCell, fontWeight: 600, color: '#333', textAlign: 'right' }}>
                 Итого
               </th>
             </tr>
           </thead>
-          <tbody>
-            <tr>
-              {amounts.map((v, i) => (
-                <td key={i} style={{ padding: '4px 4px', textAlign: 'center' }}>
-                  {readonly ? (
-                    <Text>{v ? v.toLocaleString('ru-RU') : '—'}</Text>
-                  ) : (
-                    <InputNumber
-                      size="small"
-                      style={{ width: 90 }}
-                      value={v || undefined}
-                      min={0}
-                      onChange={(val) => {
-                        const next = [...amounts];
-                        next[i] = val ?? 0;
-                        setAmounts(next);
-                      }}
-                      formatter={(val) => `${val}`.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}
-                    />
-                  )}
-                </td>
-              ))}
-              <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 600 }}>
-                {total.toLocaleString('ru-RU')} ₽
+        )}
+      >
+        <tbody>
+          <tr>
+            {amounts.map((v, i) => (
+              <td key={i} style={monthGridCell}>
+                {readonly ? (
+                  <Text>{v ? v.toLocaleString('ru-RU') : '—'}</Text>
+                ) : (
+                  <InputNumber
+                    size="small"
+                    style={{ width: '100%' }}
+                    value={v || null}
+                    min={0}
+                    onChange={(val) => {
+                      const next = [...amounts];
+                      next[i] = val ?? 0;
+                      setAmounts(next);
+                    }}
+                    formatter={thousandFormatter}
+                    parser={thousandParser}
+                  />
+                )}
               </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+            ))}
+            <td style={{ ...monthGridCell, textAlign: 'right', fontWeight: 600 }}>
+              {total.toLocaleString('ru-RU')} ₽
+            </td>
+          </tr>
+        </tbody>
+      </MonthGrid>
     </Card>
   );
 }

@@ -94,7 +94,8 @@ export default function UsersPage() {
   const roleOptions = Object.values(ROLES).map((r) => ({ value: r, label: ROLE_LABELS[r] }));
 
   const columns: ColumnsType<User> = [
-    { title: 'ФИО', dataIndex: 'full_name', sorter: (a, b) => a.full_name.localeCompare(b.full_name) },
+    // В управлении пользователями ФИО показывается ПОЛНОСТЬЮ
+    { title: 'ФИО', dataIndex: 'full_name', sorter: (a, b) => a.full_name.localeCompare(b.full_name, 'ru') },
     { title: 'Email', dataIndex: 'email' },
     {
       title: 'Роль',
@@ -174,7 +175,14 @@ export default function UsersPage() {
         confirmLoading={createMutation.isPending}
       >
         <Form form={createForm} layout="vertical" onFinish={createMutation.mutate}>
-          <Form.Item name="full_name" label="ФИО" rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item
+            name="full_name"
+            label="ФИО полностью"
+            rules={[{ required: true, message: 'Не заполнено обязательное поле: ФИО' }]}
+            extra="Фамилия Имя Отчество. В таблицах и шапке показывается сокращённо: Фамилия И.О."
+          >
+            <Input placeholder="Иванов Иван Иванович" />
+          </Form.Item>
           <Form.Item name="email" label="Email" rules={[{ required: true }, { type: 'email' }]}><Input /></Form.Item>
           <Form.Item name="role" label="Роль" rules={[{ required: true }]}>
             <Select options={roleOptions} />
@@ -193,7 +201,14 @@ export default function UsersPage() {
         confirmLoading={updateMutation.isPending}
       >
         <Form form={editForm} layout="vertical" onFinish={updateMutation.mutate}>
-          <Form.Item name="full_name" label="ФИО" rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item
+            name="full_name"
+            label="ФИО полностью"
+            rules={[{ required: true, message: 'Не заполнено обязательное поле: ФИО' }]}
+            extra="Фамилия Имя Отчество. В таблицах и шапке показывается сокращённо: Фамилия И.О."
+          >
+            <Input placeholder="Иванов Иван Иванович" />
+          </Form.Item>
           <Form.Item name="role" label="Роль" rules={[{ required: true }]}>
             <Select options={roleOptions} />
           </Form.Item>

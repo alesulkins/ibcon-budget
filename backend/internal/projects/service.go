@@ -39,6 +39,17 @@ func (s *Service) Create(req CreateRequest, createdBy int) (*Project, error) {
 	}
 	endDate := startDate.AddDate(0, req.DurationMonths, 0)
 
+	// Приводим текстовые поля к единому виду: названия — с заглавной,
+	// ФИО — к формату «Фамилия И.О.». Делаем это на сервере, чтобы
+	// правило действовало независимо от того, откуда пришли данные.
+	req.Name = capitalizeFirst(req.Name)
+	req.Customer = capitalizeFirst(req.Customer)
+	req.Location = capitalizeFirst(req.Location)
+	req.Director = normalizeFullName(req.Director)
+	req.Manager = normalizeFullName(req.Manager)
+	req.Administrator = normalizeFullName(req.Administrator)
+	req.Economist = normalizeFullName(req.Economist)
+
 	var p Project
 	err = s.db.QueryRowx(`
 		INSERT INTO projects
@@ -149,7 +160,7 @@ func (s *Service) List(params ListParams) ([]ProjectListItem, int, error) {
 		       latest.budget_status,
 		       latest.cost_no_vat,
 		       latest.profitability,
-		       to_char(p.created_at,'DD.MM.YYYY') AS created_at,
+		       p.created_at,
 		       u.full_name AS created_by_name
 		%s ORDER BY p.id DESC LIMIT $%d OFFSET $%d`,
 		baseQuery, argN, argN+1,
@@ -187,6 +198,22 @@ func (s *Service) Update(id int, req UpdateRequest, updatedBy int) (*Project, er
 	}
 	calc := effStart.AddDate(0, effDuration, 0)
 	endDate = &calc
+
+	// Те же правила нормализации, что и при создании. Поля тут
+	// указательные: nil означает «не менять», трогаем только заданные.
+	applyStr := func(p *string, f func(string) string) {
+		if p != nil {
+			v := f(*p)
+			*p = v
+		}
+	}
+	applyStr(req.Name, capitalizeFirst)
+	applyStr(req.Customer, capitalizeFirst)
+	applyStr(req.Location, capitalizeFirst)
+	applyStr(req.Director, normalizeFullName)
+	applyStr(req.Manager, normalizeFullName)
+	applyStr(req.Administrator, normalizeFullName)
+	applyStr(req.Economist, normalizeFullName)
 
 	_, err := s.db.Exec(`
 		UPDATE projects SET

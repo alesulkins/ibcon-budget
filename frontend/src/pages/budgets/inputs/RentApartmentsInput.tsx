@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
-import { Card, Button, InputNumber, Switch, message, Space, Typography, Alert } from 'antd';
-import { SaveOutlined } from '@ant-design/icons';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import dayjs from 'dayjs';
+import { useCallback, useEffect, useState } from 'react';
+import { Card, InputNumber, Switch, Space, Typography, Checkbox, Button } from 'antd';
+import { useQuery } from '@tanstack/react-query';
 import { budgetsApi } from '../../../api';
 import type { InputRentApartments } from '../../../types';
-import { extractError } from '../../../api/client';
+import { monthLabel } from '../../../utils/fmt';
+import MonthGrid, {
+  monthGridCell, monthGridHeadCell, LABEL_COL_WIDTH,
+} from '../../../components/MonthGrid';
+import { useAutosave } from '../../../hooks/useAutosave';
 
 const { Text } = Typography;
 
@@ -52,14 +54,19 @@ export default function RentApartmentsInput({ versionId, duration, startDate, re
   });
   const [cleaningBase, setCleaningBase] = useState(0);
   const [realtorBase, setRealtorBase] = useState(0);
+  // Месяцы (1-based), в которых начисляется уборка. Пусто — уборки нет.
+  const [cleaningMonths, setCleaningMonths] = useState<number[]>([]);
 
-  const { data: saved } = useQuery({
+  const { data: saved, isSuccess } = useQuery({
     queryKey: ['budget-input', versionId, 'rent_apartments'],
     queryFn: () => budgetsApi.getInput<InputRentApartments>(versionId, 'rent_apartments'),
   });
 
+  const [hydrated, setHydrated] = useState(false);
+
   useEffect(() => {
-    if (!saved) return;
+    if (!isSuccess) return;
+    if (!saved) { setHydrated(true); return; }
     const pick = (arr: number[] | undefined): number[] => {
       const out = Array(duration).fill(0);
       (arr ?? []).slice(0, duration).forEach((v, i) => { out[i] = v; });
@@ -72,27 +79,30 @@ export default function RentApartmentsInput({ versionId, duration, startDate, re
     });
     setCleaningBase(saved.cleaning_base ?? 0);
     setRealtorBase(saved.realtor_base ?? 0);
-  }, [saved, duration]);
+    setCleaningMonths(saved.cleaning_months ?? []);
+    setHydrated(true);
+  }, [saved, duration, isSuccess]);
 
-  const saveMutation = useMutation({
-    mutationFn: () => {
-      // Передаём количества и цены. Аренду (с уборкой) и риелтора
-      // считает бэкенд — calcRentApartments, лист 4.2.
-      const payload: InputRentApartments = {
-        price_1room: rows['1room'].price,
-        price_2room: rows['2room'].price,
-        price_3room: rows['3room'].price,
-        count_1room: rows['1room'].counts,
-        count_2room: rows['2room'].counts,
-        count_3room: rows['3room'].counts,
-        cleaning_base: cleaningBase,
-        realtor_base: realtorBase,
-      };
-      return budgetsApi.saveInput(versionId, 'rent_apartments', payload);
-    },
-    onSuccess: () => message.success('Данные по аренде квартир сохранены'),
-    onError: (e) => message.error(extractError(e)),
-  });
+  // Передаём количества и цены. Аренду (с уборкой) и риелтора
+  // считает бэкенд — calcRentApartments, лист 4.2.
+  const payload: InputRentApartments = {
+    price_1room: rows['1room'].price,
+    price_2room: rows['2room'].price,
+    price_3room: rows['3room'].price,
+    count_1room: rows['1room'].counts,
+    count_2room: rows['2room'].counts,
+    count_3room: rows['3room'].counts,
+    cleaning_base: cleaningBase,
+    realtor_base: realtorBase,
+    cleaning_months: [...cleaningMonths].sort((a, b) => a - b),
+  };
+
+  const save = useCallback(
+    (d: InputRentApartments) => budgetsApi.saveInput(versionId, 'rent_apartments', d),
+    [versionId],
+  );
+
+  useAutosave({ data: payload, ready: hydrated, save, enabled: !readonly });
 
   function setPrice(key: RoomKey, price: number) {
     setRows(prev => ({ ...prev, [key]: { ...prev[key], price } }));
@@ -109,6 +119,12 @@ export default function RentApartmentsInput({ versionId, duration, startDate, re
     });
   }
 
+  function toggleCleaningMonth(monthNum: number, on: boolean) {
+    setCleaningMonths(prev => on
+      ? [...prev, monthNum]
+      : prev.filter(m => m !== monthNum));
+  }
+
   function setUniform(key: RoomKey, uniform: boolean) {
     setRows(prev => {
       const row = prev[key];
@@ -118,103 +134,108 @@ export default function RentApartmentsInput({ versionId, duration, startDate, re
     });
   }
 
-  const months = Array.from({ length: duration }, (_, i) =>
-    dayjs(startDate).add(i, 'month').format('MM.YY'));
+  const months = Array.from({ length: duration }, (_, i) => monthLabel(startDate, i));
 
   return (
     <div>
-      <Card
-        title="Аренда квартир — лист 4.2"
-        size="small"
-        style={{ marginBottom: 16 }}
-        extra={!readonly && (
-          <Button
-            size="small"
-            type="primary"
-            icon={<SaveOutlined />}
-            onClick={() => saveMutation.mutate()}
-            loading={saveMutation.isPending}
-          >
-            Сохранить
-          </Button>
-        )}
-      >
-        <Alert
-          type="info"
-          showIcon
-          style={{ marginBottom: 12 }}
-          message="Суммы считаются автоматически"
-          description={
-            'Стоимость аренды = количество × цена + уборка, и уходит в бюджет ' +
-            'одной строкой (уборка входит внутрь). Риелтор считается отдельно: ' +
-            'в первый месяц — за все квартиры, далее — только за прирост ' +
-            'количества. В последний месяц проекта риелтор не начисляется.'
-          }
-        />
-
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ borderCollapse: 'collapse', fontSize: 13 }}>
+      <Card title="Аренда квартир" size="small" style={{ marginBottom: 16 }}>
+        <MonthGrid
+          months={months}
+          labelWidth={LABEL_COL_WIDTH}
+          trailingWidth={90}
+          head={(
             <thead>
               <tr>
-                <th style={headCell} rowSpan={2}>Тип</th>
-                <th style={headCell} rowSpan={2}>Цена за месяц, ₽</th>
-                <th style={headCell} colSpan={duration}>Количество по месяцам</th>
-                <th style={headCell} rowSpan={2}>Единое<br />значение</th>
-              </tr>
-              <tr>
+                <th style={{ ...monthGridHeadCell, textAlign: 'left' }}>Тип / цена, ₽</th>
                 {months.map((m, i) => (
-                  <th key={i} style={{ ...headCell, minWidth: 70, fontWeight: 400, color: '#888' }}>
-                    {m}
-                  </th>
+                  <th key={i} style={monthGridHeadCell}>{m}</th>
                 ))}
+                <th style={monthGridHeadCell}>Единое<br />значение</th>
               </tr>
             </thead>
-            <tbody>
-              {ROOM_TYPES.map(({ key, label }) => {
-                const row = rows[key];
-                return (
-                  <tr key={key}>
-                    <td style={{ ...cell, fontWeight: 500 }}>{label}</td>
-                    <td style={cell}>
+          )}
+        >
+          <tbody>
+            {ROOM_TYPES.map(({ key, label }) => {
+              const row = rows[key];
+              return (
+                <tr key={key}>
+                  <td style={{ ...monthGridCell, textAlign: 'left' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontWeight: 500, fontSize: 13 }}>{label}</span>
                       <InputNumber
                         size="small"
                         min={0}
                         value={row.price}
                         onChange={v => setPrice(key, v ?? 0)}
                         disabled={readonly}
-                        style={{ width: 110 }}
+                        style={{ width: '100%' }}
                       />
-                    </td>
-                    {row.counts.map((v, i) => (
-                      <td key={i} style={cell}>
-                        <InputNumber
-                          size="small"
-                          min={0}
-                          value={v}
-                          onChange={val => setCount(key, i, val ?? 0)}
-                          // В режиме «единое значение» правим только первую ячейку
-                          disabled={readonly || (row.uniform && i > 0)}
-                          style={{ width: 56 }}
-                        />
-                      </td>
-                    ))}
-                    <td style={cell}>
-                      <Switch
+                    </div>
+                  </td>
+                  {row.counts.map((v, i) => (
+                    <td key={i} style={monthGridCell}>
+                      <InputNumber
                         size="small"
-                        checked={row.uniform}
-                        onChange={c => setUniform(key, c)}
-                        disabled={readonly}
+                        min={0}
+                        value={v}
+                        onChange={val => setCount(key, i, val ?? 0)}
+                        // В режиме «единое значение» правим только первую ячейку
+                        disabled={readonly || (row.uniform && i > 0)}
+                        style={{ width: '100%' }}
                       />
                     </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                  ))}
+                  <td style={monthGridCell}>
+                    <Switch
+                      size="small"
+                      checked={row.uniform}
+                      onChange={c => setUniform(key, c)}
+                      disabled={readonly}
+                    />
+                  </td>
+                </tr>
+              );
+            })}
+
+            {/* Месяцы, в которых начисляется уборка */}
+            <tr>
+              <td style={{ ...monthGridCell, textAlign: 'left', fontSize: 12, paddingTop: 12 }}>
+                Уборка в месяце
+              </td>
+              {months.map((_, i) => (
+                <td key={i} style={{ ...monthGridCell, paddingTop: 12 }}>
+                  <Checkbox
+                    checked={cleaningMonths.includes(i + 1)}
+                    disabled={readonly}
+                    onChange={e => toggleCleaningMonth(i + 1, e.target.checked)}
+                  />
+                </td>
+              ))}
+              <td style={{ ...monthGridCell, paddingTop: 12 }}>
+                {!readonly && (
+                  <Button
+                    size="small"
+                    type="link"
+                    style={{ padding: 0, fontSize: 12 }}
+                    onClick={() => setCleaningMonths(
+                      cleaningMonths.length === duration
+                        ? []
+                        : Array.from({ length: duration }, (_, i) => i + 1),
+                    )}
+                  >
+                    {cleaningMonths.length === duration ? 'снять' : 'все'}
+                  </Button>
+                )}
+              </td>
+            </tr>
+          </tbody>
+        </MonthGrid>
         <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
           «Единое значение» — одно количество на все месяцы проекта. Выключено —
           количество задаётся для каждого месяца отдельно.
+          Уборка начисляется только в отмеченных месяцах; если не отмечен ни
+          один — уборка за весь период равна нулю.
         </Text>
       </Card>
 
@@ -222,6 +243,10 @@ export default function RentApartmentsInput({ versionId, duration, startDate, re
         <Card title="Уборка квартир" size="small">
           <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
             Стоимость уборки одной квартиры за месяц. Входит в стоимость аренды.
+            Месяцы начисления отмечаются в таблице выше
+            {cleaningMonths.length === 0
+              ? ' — сейчас не отмечен ни один, уборка не начисляется.'
+              : ` — отмечено месяцев: ${cleaningMonths.length}.`}
           </Text>
           <InputNumber
             min={0}
