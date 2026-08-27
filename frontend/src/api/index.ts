@@ -134,6 +134,33 @@ export const budgetsApi = {
 
   calculate: (vid: number) =>
     client.get<CalcResult>(`/budget-versions/${vid}/calculate`).then(r => r.data),
+
+  /**
+   * Выгружает версию бюджета в xlsx и отдаёт файл браузеру.
+   *
+   * Имя файла берём из Content-Disposition: сервер кладёт его туда в
+   * filename* с кодировкой UTF-8, иначе русское название проекта
+   * сохранилось бы крякозябрами.
+   */
+  exportXlsx: async (vid: number) => {
+    const res = await client.get(`/budget-versions/${vid}/export`, {
+      responseType: 'blob',
+    });
+
+    const disposition = String(res.headers['content-disposition'] ?? '');
+    const utf8 = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
+    const name = utf8 ? decodeURIComponent(utf8[1]) : `budget-${vid}.xlsx`;
+
+    const url = URL.createObjectURL(res.data as Blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    return name;
+  },
 };
 
 // ─── Audit ─────────────────────────────────────────────────────────────────

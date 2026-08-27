@@ -2,7 +2,9 @@ package budgets
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -42,6 +44,7 @@ func (h *Handler) Register(r gin.IRouter) {
 	ver.GET("/inputs/:type", h.getInput)
 	ver.GET("/inputs", h.getAllInputs)
 	ver.GET("/calculate", h.calculate)
+	ver.GET("/export", h.export)
 }
 
 func (h *Handler) projectID(c *gin.Context) int {
@@ -70,6 +73,26 @@ func (h *Handler) canEdit(claims *auth.Claims, projectID int) bool {
 	}
 	_, canEdit, _ := h.usersSvc.HasProjectAccess(claims.UserID, projectID)
 	return canEdit
+}
+
+// canEditVersion — можно ли править данные конкретной версии.
+//
+// Общее право на проект даёт canEdit. Сверх него действует правило
+// владельца 2026-08-27: согласованную и архивную версию нельзя менять
+// напрямую — исключение сделано для АВТОРА версии и главного экономиста.
+// Остальным остаётся создать новую версию копированием.
+func (h *Handler) canEditVersion(claims *auth.Claims, v *BudgetVersion) (bool, string) {
+	if !h.canEdit(claims, v.ProjectID) {
+		return false, "нет права на редактирование"
+	}
+	if !IsFrozen(v.Status) {
+		return true, ""
+	}
+	if CanEditFrozenVersion(claims.Role, claims.UserID, v.CreatedBy) {
+		return true, ""
+	}
+	return false, "согласованную и архивную версию может править только её автор " +
+		"или главный экономист — создайте новую версию копированием"
 }
 
 // checkProjectNotFrozen проверяет, что бюджет можно создавать/редактировать
@@ -244,8 +267,8 @@ func (h *Handler) updateCostOverride(c *gin.Context) {
 		return
 	}
 	claims := middleware.GetClaims(c)
-	if !h.canEdit(claims, v.ProjectID) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "нет права на редактирование"})
+	if ok, reason := h.canEditVersion(claims, v); !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": reason})
 		return
 	}
 	var req UpdateCostOverrideRequest
@@ -269,8 +292,8 @@ func (h *Handler) saveInput(c *gin.Context) {
 		return
 	}
 	claims := middleware.GetClaims(c)
-	if !h.canEdit(claims, v.ProjectID) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "нет права на редактирование"})
+	if ok, reason := h.canEditVersion(claims, v); !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": reason})
 		return
 	}
 	inputType := c.Param("type")
@@ -398,4 +421,74 @@ func (h *Handler) getAllInputs(c *gin.Context) {
 		result[k] = json.RawMessage(v)
 	}
 	c.JSON(http.StatusOK, result)
+}
+
+// export отдаёт версию бюджета книгой xlsx.
+//
+// Выгрузка — осознанное действие человека, поэтому пишется в журнал
+// изменений (в отличие от автосохранения, которое из журнала убрано).
+func (h *Handler) export(c *gin.Context) {
+	vid := h.versionID(c)
+	v, err := h.svc.GetVersion(vid)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "версия не найдена"})
+		return
+	}
+	claims := middleware.GetClaims(c)
+	if !h.canAccess(claims, v.ProjectID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "нет доступа"})
+		return
+	}
+
+	proj, err := h.projectsSvc.Get(v.ProjectID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "проект не найден"})
+		return
+	}
+
+	rawInputs, err := h.svc.GetAllInputs(vid)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	inp, err := calc.LoadInputs(rawInputs, proj.StartDate, proj.DurationMonths, proj.ExecutorName)
+	if err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+		return
+	}
+	result := calc.Run(inp)
+
+	meta := ExportMeta{
+		ProjectID:      proj.ID,
+		ProjectName:    proj.Name,
+		Customer:       proj.Customer,
+		ExecutorName:   proj.ExecutorName,
+		VersionNo:      v.VersionNo,
+		Status:         v.Status,
+		StartDate:      proj.StartDate,
+		DurationMonths: proj.DurationMonths,
+	}
+	if v.VersionLabel != nil {
+		meta.VersionLabel = *v.VersionLabel
+	}
+
+	data, err := BuildExport(meta, result)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "не удалось собрать файл: " + err.Error()})
+		return
+	}
+
+	h.audit.Log(auditlog.Entry{
+		UserID: &claims.UserID, UserRole: claims.Role,
+		Action: "export_budget", ObjectType: "budget_version", ObjectID: &vid,
+		Comment: fmt.Sprintf("Бюджет %d.%d — %s", proj.ID, v.VersionNo, proj.Name),
+	})
+
+	name := ExportFileName(meta)
+	// filename* с кодировкой UTF-8: имя файла русское, без этого браузер
+	// сохранит его крякозябрами.
+	c.Header("Content-Disposition",
+		"attachment; filename=\"budget.xlsx\"; filename*=UTF-8''"+url.PathEscape(name))
+	c.Data(http.StatusOK,
+		"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", data)
 }

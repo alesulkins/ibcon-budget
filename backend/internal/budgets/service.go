@@ -332,13 +332,13 @@ func (s *Service) NewVersion(projectID, userID int, req CreateVersionRequest) (*
 
 // SaveInput сохраняет исходные данные по типу (upsert)
 func (s *Service) SaveInput(versionID, userID int, inputType string, data []byte) error {
-	v, err := s.GetVersion(versionID)
-	if err != nil {
+	if _, err := s.GetVersion(versionID); err != nil {
 		return errors.New("версия не найдена")
 	}
-	if v.Status == StatusApproved || v.Status == StatusArchive {
-		return errors.New("нельзя редактировать согласованную или архивную версию")
-	}
+	var err error
+	// Проверка права на правку — в обработчике (canEditVersion): для
+	// согласованной и архивной версии решение зависит от роли и авторства,
+	// а их сервис не знает. Здесь остаётся только запись.
 	_, err = s.db.Exec(`
 		INSERT INTO budget_inputs (budget_version_id, input_type, data, updated_by)
 		VALUES ($1,$2,$3,$4)
@@ -385,14 +385,12 @@ func (s *Service) GetAllInputs(versionID int) (map[string][]byte, error) {
 
 // UpdateCostOverride обновляет ручную корректировку стоимости
 func (s *Service) UpdateCostOverride(versionID int, override *float64, userID int) (*BudgetVersion, error) {
-	v, err := s.GetVersion(versionID)
-	if err != nil {
+	if _, err := s.GetVersion(versionID); err != nil {
 		return nil, errors.New("версия не найдена")
 	}
-	if v.Status == StatusApproved || v.Status == StatusArchive {
-		return nil, errors.New("нельзя редактировать согласованную или архивную версию")
-	}
-	_, err = s.db.Exec(`
+	// Право на правку согласованной и архивной версии проверяет
+	// обработчик (canEditVersion).
+	_, err := s.db.Exec(`
 		UPDATE budget_versions SET cost_override=$1, updated_at=NOW(), updated_by=$2 WHERE id=$3`,
 		override, userID, versionID,
 	)

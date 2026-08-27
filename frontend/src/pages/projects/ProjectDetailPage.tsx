@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import {
   Card, Descriptions, Button, Space, Modal, Form, Select,
-  Input, Table, Typography, message, Tooltip, DatePicker, InputNumber,
-  Popconfirm,
+  Input, Table, Typography, message, DatePicker, InputNumber,
 } from 'antd';
 import {
   EditOutlined, PlusOutlined, DownloadOutlined,
@@ -131,6 +130,21 @@ export default function ProjectDetailPage() {
     onError: (e) => message.error(extractError(e)),
   });
 
+  /**
+   * Выгрузка версии в xlsx. Индикатор держим по id строки: кнопок в
+   * таблице столько же, сколько версий, и крутиться должна нажатая.
+   */
+  const [exportingId, setExportingId] = useState<number | null>(null);
+  const exportMutation = useMutation({
+    mutationFn: async (vid: number) => {
+      setExportingId(vid);
+      return budgetsApi.exportXlsx(vid);
+    },
+    onSuccess: (name) => message.success(`Файл «${name}» скачан`),
+    onError: (e) => message.error(extractError(e)),
+    onSettled: () => setExportingId(null),
+  });
+
   const canEdit = hasRole('GE', 'EP', 'IP');
   const isGE = hasRole('GE');
   const canChangeBudgetStatus = hasRole('GE', 'EP');
@@ -179,11 +193,17 @@ export default function ProjectDetailPage() {
       ),
     },
     {
+      // Номер версии есть только у архивных бюджетов: в.1, в.2, в.3…
+      // Черновик, «на согласовании» и согласованный — это текущее
+      // состояние работы, нумеровать там нечего. Метку «в.N» проставляет
+      // бэкенд в момент ухода версии в архив.
       title: 'Версия',
-      dataIndex: 'version_no',
-      className: 'ibcon-num',
-      width: 80,
-      render: (n: number) => n,
+      dataIndex: 'version_label',
+      width: 90,
+      render: (label: string | undefined, r) =>
+        r.status === 'archive' && label
+          ? <Text strong>{label}</Text>
+          : <Text type="secondary">—</Text>,
     },
     {
       title: 'Дата создания',
@@ -253,25 +273,20 @@ export default function ProjectDetailPage() {
       ellipsis: true,
     },
     {
-      title: '',
-      key: 'open',
-      width: 100,
-      render: (_, r) => (
-        <Button size="small" onClick={() => navigate(`/budget-versions/${r.id}`)}>
-          Открыть
-        </Button>
-      ),
-    },
-    {
+      // Кнопки «Открыть» нет: версия открывается кликом по коду бюджета
+      // в первой колонке — там же, где на него смотрят.
       title: '',
       key: 'download',
-      width: 110,
+      width: 120,
       render: (_, r) => (
-        <Tooltip title="Выгрузка XLSX появится вместе с формированием БДР/БДДС">
-          <Button size="small" icon={<DownloadOutlined />} disabled>
-            Скачать
-          </Button>
-        </Tooltip>
+        <Button
+          size="small"
+          icon={<DownloadOutlined />}
+          loading={exportingId === r.id}
+          onClick={() => exportMutation.mutate(r.id)}
+        >
+          Скачать
+        </Button>
       ),
     },
   ];

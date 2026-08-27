@@ -7,7 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import { budgetsApi, projectsApi } from '../../api';
 import { BUDGET_STATUS_LABELS, BUDGET_STATUS_COLORS } from '../../types';
-import { hasRole } from '../../store/auth';
+import { hasRole, currentUser } from '../../store/auth';
 import { resetSaveState } from '../../store/autosave';
 import { fmtMoney, fmtDate } from '../../utils/fmt';
 import Profitability from '../../components/Profitability';
@@ -29,6 +29,7 @@ import OverheadInput from './inputs/OverheadInput';
 import BudgetParamsInput from './inputs/BudgetParamsInput';
 import CalcResults from './CalcResults';
 import StatusTag from '../../components/StatusTag';
+import VersionSwitch from '../../components/VersionSwitch';
 
 const { Title, Text } = Typography;
 
@@ -91,6 +92,14 @@ export default function BudgetVersionPage() {
     enabled: !!version?.project_id,
   });
 
+  // Соседние версии для переключателя «старая / новая». Ключ тот же, что
+  // у таблицы версий на карточке проекта, — берётся из кэша.
+  const { data: siblings = [] } = useQuery({
+    queryKey: ['budget-versions', version?.project_id],
+    queryFn: () => budgetsApi.listVersions(version!.project_id),
+    enabled: !!version?.project_id,
+  });
+
   const statusMutation = useMutation({
     mutationFn: ({ status, comment }: { status: string; comment: string }) =>
       budgetsApi.changeStatus(versionId, status, comment),
@@ -107,7 +116,14 @@ export default function BudgetVersionPage() {
   const isAP = hasRole('AP');
   const apOnlyStepIdx = WIZARD_STEPS.findIndex(s => s.key === 'overhead');
 
-  const canEdit = hasRole('GE', 'EP', 'IP') && !['approved', 'archive'].includes(version?.status ?? '');
+  /**
+   * Согласованную и архивную версию нельзя менять напрямую. Исключение —
+   * автор версии и главный экономист (правило владельца 2026-08-27).
+   * Тот же порядок независимо проверяет бэкенд в canEditVersion.
+   */
+  const me = currentUser();
+  const isFrozen = ['approved', 'archive'].includes(version?.status ?? '');
+  const mayEditFrozen = hasRole('GE') || (!!me && me.id === version?.created_by);
   const canChangeStatus = hasRole('GE', 'EP');
 
   const validNextStatuses: Record<string, string[]> = {
@@ -119,7 +135,7 @@ export default function BudgetVersionPage() {
 
   if (isLoading || !version || !project) return <Spin size="large" />;
 
-  const isReadonly = ['approved', 'archive'].includes(version.status);
+  const isReadonly = isFrozen && !mayEditFrozen;
 
   function renderStepContent() {
     const duration = project!.duration_months;
@@ -335,7 +351,7 @@ export default function BudgetVersionPage() {
       {/* Возврат к проекту — по хлебным крошкам в шапке. */}
       <Card
         title={
-          <Space>
+          <Space size={12} wrap>
             <Title level={4} style={{ margin: 0 }}>
               {project.name}
               {version.version_label ? ` — ${version.version_label}` : ''}
@@ -343,6 +359,7 @@ export default function BudgetVersionPage() {
             <StatusTag color={BUDGET_STATUS_COLORS[version.status]}>
               {BUDGET_STATUS_LABELS[version.status]}
             </StatusTag>
+            <VersionSwitch current={version} versions={siblings} />
           </Space>
         }
         extra={
@@ -384,8 +401,22 @@ export default function BudgetVersionPage() {
           <Alert
             style={{ marginTop: 12 }}
             type="info"
-            message="Версия доступна только для просмотра (согласована или архивная)"
             showIcon
+            message="Версия доступна только для просмотра"
+            description={'Согласованную и архивную версию правит только её автор '
+              + 'или главный экономист. Чтобы внести изменения, создайте новую '
+              + 'версию копированием — данные перенесутся.'}
+          />
+        )}
+        {isFrozen && mayEditFrozen && (
+          <Alert
+            style={{ marginTop: 12 }}
+            type="warning"
+            showIcon
+            message="Правка согласованной версии"
+            description={'Обычно такие версии не меняют. Вам правка открыта как '
+              + (hasRole('GE') ? 'главному экономисту' : 'автору версии')
+              + ' — изменения попадут в уже согласованный бюджет.'}
           />
         )}
       </Card>

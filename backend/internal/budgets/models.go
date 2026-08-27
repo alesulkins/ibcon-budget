@@ -1,6 +1,10 @@
 package budgets
 
-import "time"
+import (
+	"time"
+
+	"ibcon-budget/internal/auth"
+)
 
 // Статусы версии бюджета
 const (
@@ -25,6 +29,23 @@ func CanTransition(from, to string) bool {
 		}
 	}
 	return false
+}
+
+// IsFrozen — статусы, в которых прямая правка данных закрыта общим
+// правилом.
+func IsFrozen(status string) bool {
+	return status == StatusApproved || status == StatusArchive
+}
+
+// CanEditFrozenVersion — кому открыта правка согласованной или архивной
+// версии (правило владельца 2026-08-27): автору версии и главному
+// экономисту. Остальным остаётся создать новую версию копированием.
+//
+// Вынесено отдельной функцией, чтобы правило проверялось тестом, а не
+// только живым запросом: подобрать учётные записи под все сочетания
+// роли и авторства вручную не выйдет.
+func CanEditFrozenVersion(role string, userID, createdBy int) bool {
+	return role == auth.RoleGE || userID == createdBy
 }
 
 // Версия бюджета
