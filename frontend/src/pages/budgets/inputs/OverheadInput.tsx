@@ -122,7 +122,7 @@ export default function OverheadInput({ versionId, duration, startDate, readonly
       >
         <tbody>
           {OVERHEAD_LINES.map((line) => (
-            <tr key={line.key} style={{ borderTop: '1px solid #f0f0f0' }}>
+            <tr key={line.key}>
               <td style={{ ...monthGridCell, textAlign: 'left', fontSize: 12 }}>{line.label}</td>
               {Array.from({ length: duration }).map((_, monthIdx) => {
                 const val = data[line.key]?.monthly_amounts?.[monthIdx] ?? 0;

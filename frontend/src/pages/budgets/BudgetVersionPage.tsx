@@ -324,7 +324,10 @@ export default function BudgetVersionPage() {
   }
 
   return (
-    <div>
+    // ibcon-blocks — обводка блоков линией: на одном экране их до десятка
+    // подряд, и без рамки не видно, где кончается один и начинается
+    // следующий. Правило в index.css.
+    <div className="ibcon-blocks">
       {/* Возврат к проекту — по хлебным крошкам в шапке. */}
       <Card
         title={
@@ -394,7 +397,7 @@ export default function BudgetVersionPage() {
 
       {/* Навигационные вкладки по шагам */}
       <Card bodyStyle={{ padding: 0 }}>
-        <div style={{ padding: '16px 24px', borderBottom: '1px solid #f0f0f0' }}>
+        <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--ibcon-line)' }}>
           <WizardSteps
             items={isAP ? [WIZARD_STEPS[apOnlyStepIdx]] : WIZARD_STEPS}
             current={isAP ? 0 : step}
@@ -415,7 +418,7 @@ export default function BudgetVersionPage() {
         </div>
         <div style={{
           padding: '16px 24px',
-          borderTop: '1px solid #f0f0f0',
+          borderTop: '1px solid var(--ibcon-line)',
           display: 'flex',
           justifyContent: 'space-between',
         }}>

@@ -185,7 +185,7 @@ export default function CostLinesInput({
               const amounts = padAmounts(l.monthly_amounts, duration);
               const isUniform = !!uniform[idx];
               return (
-                <tr key={idx} style={{ borderTop: '1px solid #f0f0f0' }}>
+                <tr key={idx}>
                   <td style={{ ...cell, textAlign: 'left' }}>
                     {readonly ? (
                       <Text style={{ fontSize: 12 }}>{l.name || '—'}</Text>

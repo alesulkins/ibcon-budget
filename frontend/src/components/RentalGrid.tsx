@@ -130,7 +130,7 @@ export default function RentalGrid({
               const counts = padCounts(r.counts, duration);
               const isUniform = !!uniform[idx];
               return (
-                <tr key={idx} style={{ borderTop: '1px solid #f0f0f0' }}>
+                <tr key={idx}>
                   <td style={{ ...monthCountCell, textAlign: 'left' }}>
                     {readonly ? (
                       <div style={{ fontSize: 12 }}>

@@ -96,7 +96,7 @@ export default function PurchaseTable({
 
   return (
     <div>
-      <table style={table}>
+      <table style={table} className="ibcon-grid">
         <colgroup>
           {withName && <col />}
           {/* Без колонки описания тянется колонка месяца, иначе таблица
@@ -131,7 +131,7 @@ export default function PurchaseTable({
         </thead>
         <tbody>
           {items.map((p, idx) => (
-            <tr key={idx} style={{ borderTop: '1px solid #f0f0f0' }}>
+            <tr key={idx}>
               {withName && (
                 <td style={{ ...monthGridCell, textAlign: 'left' }}>
                   {readonly ? (

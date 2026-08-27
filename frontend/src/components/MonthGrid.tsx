@@ -54,7 +54,9 @@ export default function MonthGrid({
   months, labelWidth = 0, trailingWidth = 0, head, children,
 }: Props) {
   return (
-    <table style={monthGridTable}>
+    // ibcon-grid — разлиновка строк из index.css: каждая строка отделена
+    // той же линией, что и шапки блоков.
+    <table style={monthGridTable} className="ibcon-grid">
       <colgroup>
         {labelWidth > 0 && <col style={{ width: labelWidth }} />}
         {months.map((_, i) => <col key={i} />)}

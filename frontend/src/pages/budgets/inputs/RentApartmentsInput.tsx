@@ -41,7 +41,7 @@ function emptyRow(duration: number): RoomRow {
 }
 
 const cell: React.CSSProperties = {
-  border: '1px solid #f0f0f0',
+  border: '1px solid var(--ibcon-line)',
   padding: '2px 4px',
   textAlign: 'center',
 };

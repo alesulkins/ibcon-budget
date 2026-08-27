@@ -15,7 +15,7 @@ const TOTAL_COL = 130;
  */
 export const totalsRow: React.CSSProperties = {
   background: '#fafafa',
-  borderTop: '2px solid #e8e8e8',
+  borderTop: '2px solid rgba(24, 62, 77, 0.18)',
 };
 
 export const totalsLabelCell: React.CSSProperties = {

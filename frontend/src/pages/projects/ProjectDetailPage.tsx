@@ -170,7 +170,13 @@ export default function ProjectDetailPage() {
       key: 'budget_code',
       className: 'ibcon-num',
       width: 110,
-      render: (_, r) => <Text strong>{pid}.{r.version_no}</Text>,
+      // Код бюджета открывает версию — то же, что кнопка «Открыть»
+      // в конце строки: по номеру в неё тянутся раньше, чем ищут кнопку.
+      render: (_, r) => (
+        <a onClick={() => navigate(`/budget-versions/${r.id}`)}>
+          <Text strong style={{ color: 'inherit' }}>{pid}.{r.version_no}</Text>
+        </a>
+      ),
     },
     {
       title: 'Версия',

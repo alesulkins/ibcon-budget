@@ -489,7 +489,7 @@ export default function EmployeesInput({
                 style={{
                   flex: '0 0 240px',
                   background: '#fafafa',
-                  border: '1px solid #f0f0f0',
+                  border: '1px solid var(--ibcon-line)',
                   borderRadius: 6,
                   padding: '10px 12px',
                 }}

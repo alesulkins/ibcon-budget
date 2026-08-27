@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Card, Button, Row, Col, Statistic, Table, Typography, Space,
+  Card, Button, Table, Typography, Space,
   message, Spin,
 } from 'antd';
 import { CalculatorOutlined, FileExcelOutlined } from '@ant-design/icons';
@@ -12,7 +12,7 @@ import { fmtMoney, monthLabel, fmtNum } from '../../utils/fmt';
 import { profitabilityGrade } from '../../utils/profitability';
 import Profitability from '../../components/Profitability';
 import { extractError } from '../../api/client';
-import { BRAND, FONT_NUM, LINE, STATUS } from '../../theme';
+import { BRAND, FONT_NUM, LINE, STATUS, TEXT_SOFT, RADIUS_LG } from '../../theme';
 
 const { Title, Text } = Typography;
 
@@ -107,53 +107,79 @@ export default function CalcResults({ versionId, projectId, duration, startDate 
 
       {r && !calcMutation.isPending && (
         <>
-          {/* Итоговые показатели */}
-          <Row gutter={16} style={{ marginBottom: 24 }}>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="Стоимость работ без НДС (G236)"
-                  value={r.total_revenue}
-                  formatter={(v) => `${fmtNum(Number(v))} ₽`}
-                  valueStyle={{ color: BRAND, fontWeight: 700 }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="Рентабельность (G244)"
-                  value={r.profitability}
-                  precision={2}
-                  suffix="%"
-                  // Цвет — по единой шкале, той же, что в реестре проектов.
-                  valueStyle={{
-                    color: profitabilityGrade(r.profitability).color,
-                    fontWeight: 700,
-                  }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="Чистая прибыль"
-                  value={r.net_profit}
-                  formatter={(v) => `${fmtNum(Number(v))} ₽`}
-                  valueStyle={{ color: r.net_profit >= 0 ? STATUS.green : STATUS.red }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="ФОТ (вкл. взносы)"
-                  value={r.total_fot}
-                  formatter={(v) => `${fmtNum(Number(v))} ₽`}
-                />
-              </Card>
-            </Col>
-          </Row>
+          {/* Итоговые показатели — всегда одной строкой.
+              Сетка Row/Col ломала их в столбик на узком экране, а
+              показатели читают вместе: рентабельность рядом со
+              стоимостью. Колонки сжимаются до минимума, а если и его не
+              хватает — строка прокручивается вбок. */}
+          <div style={{
+            display: 'flex',
+            flexWrap: 'nowrap',
+            gap: 16,
+            marginBottom: 24,
+            overflowX: 'auto',
+            paddingBottom: 4,
+          }}>
+            {[
+              {
+                title: 'Стоимость работ без НДС (G236)',
+                value: `${fmtNum(r.total_revenue)} ₽`,
+                color: BRAND,
+                bold: true,
+              },
+              {
+                title: 'Рентабельность (G244)',
+                value: `${fmtNum(r.profitability)} %`,
+                // Цвет — по единой шкале, той же, что в реестре проектов.
+                color: profitabilityGrade(r.profitability).color,
+                bold: true,
+              },
+              {
+                title: 'Чистая прибыль',
+                value: `${fmtNum(r.net_profit)} ₽`,
+                color: r.net_profit >= 0 ? STATUS.green : STATUS.red,
+                bold: false,
+              },
+              {
+                title: 'ФОТ (вкл. взносы)',
+                value: `${fmtNum(r.total_fot)} ₽`,
+                color: undefined,
+                bold: false,
+              },
+            ].map((s) => (
+              <div
+                key={s.title}
+                style={{
+                  flex: '1 1 0',
+                  minWidth: 180,
+                  padding: '14px 16px',
+                  // Та же линия, что разлиновывает таблицы.
+                  border: `1px solid ${LINE}`,
+                  borderRadius: RADIUS_LG,
+                }}
+              >
+                <div style={{
+                  fontSize: 12,
+                  color: TEXT_SOFT,
+                  marginBottom: 6,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}>
+                  {s.title}
+                </div>
+                <div style={{
+                  fontSize: 20,
+                  fontWeight: s.bold ? 700 : 500,
+                  color: s.color,
+                  fontFamily: FONT_NUM,
+                  whiteSpace: 'nowrap',
+                }}>
+                  {s.value}
+                </div>
+              </div>
+            ))}
+          </div>
 
           {/* Сводная таблица */}
           <Card title="Итоги расчёта" size="small" style={{ marginBottom: 24 }}>
