@@ -68,6 +68,7 @@ func (h *Handler) create(c *gin.Context) {
 	h.audit.Log(auditlog.Entry{
 		UserID: &cl.UserID, UserRole: cl.Role,
 		Action: "create_user", ObjectType: "user", ObjectID: &u.ID,
+		Comment: u.FullName + " (" + u.Email + ")",
 	})
 	c.JSON(http.StatusCreated, u)
 }
@@ -98,6 +99,7 @@ func (h *Handler) update(c *gin.Context) {
 	h.audit.Log(auditlog.Entry{
 		UserID: &cl.UserID, UserRole: cl.Role,
 		Action: "update_user", ObjectType: "user", ObjectID: &u.ID,
+		Comment: u.FullName + " (" + u.Email + ")",
 	})
 	c.JSON(http.StatusOK, u)
 }
@@ -140,7 +142,9 @@ func (h *Handler) grantAccess(c *gin.Context) {
 	h.audit.Log(auditlog.Entry{
 		UserID: &cl.UserID, UserRole: cl.Role,
 		Action: "grant_project_access", ObjectType: "project", ObjectID: &projectID,
-		Comment: strconv.Itoa(userID),
+		// Кому выдали. Раньше писался голый id — по нему в журнале
+		// невозможно было понять, о ком речь.
+		Comment: h.userTitle(userID) + accessKind(body.CanEdit),
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "доступ выдан"})
 }
@@ -156,7 +160,7 @@ func (h *Handler) revokeAccess(c *gin.Context) {
 	h.audit.Log(auditlog.Entry{
 		UserID: &cl.UserID, UserRole: cl.Role,
 		Action: "revoke_project_access", ObjectType: "project", ObjectID: &projectID,
-		Comment: strconv.Itoa(userID),
+		Comment: h.userTitle(userID),
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "доступ отозван"})
 }
@@ -210,4 +214,22 @@ func (h *Handler) changeOwnPassword(c *gin.Context) {
 	})
 
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+// userTitle — как назвать пользователя в журнале: «Иванов И.И. (mail)».
+// Если запись не читается, остаётся хотя бы номер.
+func (h *Handler) userTitle(id int) string {
+	u, err := h.svc.Get(id)
+	if err != nil || u == nil {
+		return "пользователь №" + strconv.Itoa(id)
+	}
+	return u.FullName + " (" + u.Email + ")"
+}
+
+// accessKind — с правом правки или только на чтение.
+func accessKind(canEdit bool) string {
+	if canEdit {
+		return " — с правом редактирования"
+	}
+	return " — только просмотр"
 }

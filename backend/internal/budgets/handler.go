@@ -158,6 +158,7 @@ func (h *Handler) createVersion(c *gin.Context) {
 	h.audit.Log(auditlog.Entry{
 		UserID: &claims.UserID, UserRole: claims.Role,
 		Action: "create_budget_version", ObjectType: "budget_version", ObjectID: &v.ID,
+		Comment: h.versionTitle(pid, v, req.CopyFromID),
 	})
 	c.JSON(http.StatusCreated, v)
 }
@@ -192,6 +193,7 @@ func (h *Handler) newVersion(c *gin.Context) {
 	h.audit.Log(auditlog.Entry{
 		UserID: &claims.UserID, UserRole: claims.Role,
 		Action: "create_new_budget_version", ObjectType: "budget_version", ObjectID: &v.ID,
+		Comment: h.versionTitle(pid, v, req.CopyFromID),
 	})
 	c.JSON(http.StatusCreated, v)
 }
@@ -491,4 +493,18 @@ func (h *Handler) export(c *gin.Context) {
 		"attachment; filename=\"budget.xlsx\"; filename*=UTF-8''"+url.PathEscape(name))
 	c.Data(http.StatusOK,
 		"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", data)
+}
+
+// versionTitle — как назвать созданную версию в журнале.
+// «Бюджет 9.2» или «Бюджет 9.2 — копия бюджета 9.1», если копировали.
+func (h *Handler) versionTitle(projectID int, v *BudgetVersion, copyFrom *int) string {
+	title := fmt.Sprintf("Бюджет %d.%d", projectID, v.VersionNo)
+	if copyFrom == nil {
+		return title
+	}
+	src, err := h.svc.GetVersion(*copyFrom)
+	if err != nil {
+		return title
+	}
+	return fmt.Sprintf("%s — копия бюджета %d.%d", title, projectID, src.VersionNo)
 }

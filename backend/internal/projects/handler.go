@@ -151,6 +151,7 @@ func (h *Handler) update(c *gin.Context) {
 	h.audit.Log(auditlog.Entry{
 		UserID: &claims.UserID, UserRole: claims.Role,
 		Action: "update_project", ObjectType: "project", ObjectID: &id,
+		Comment: p.Name,
 	})
 	c.JSON(http.StatusOK, p)
 }

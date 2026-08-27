@@ -11,23 +11,32 @@ interface Props {
 }
 
 /**
- * Переключатель между версией-источником и версией-копией.
+ * Переключатель РОВНО МЕЖДУ ДВУМЯ версиями: новой и той, из которой её
+ * скопировали. Историю версий здесь не листают.
  *
- * Новая версия создаётся копированием предыдущей, и при сверке правок
- * приходится смотреть то одну, то другую. Пара связана полем
- * `copied_from`, поэтому цепочку строим в обе стороны: у копии ищем
- * родителя, у родителя — копию.
+ * Пара связана полем `copied_from` и одна и та же с обеих сторон:
+ * стоя на копии, видим её источник; стоя на источнике — его копию.
  *
- * Если версия ни с чем не связана, переключать нечего — не рисуем.
+ * Когда версия участвует сразу в двух связях (её саму скопировали из
+ * прежней, и с неё уже сняли новую), берём СВЕЖУЮ связь — ту, где эта
+ * версия старая. Иначе переключатель превратился бы в ленту истории,
+ * а сверяют всегда последнюю пару.
  */
 export default function VersionSwitch({ current, versions }: Props) {
   const navigate = useNavigate();
 
-  const parent = versions.find(v => v.id === current.copied_from);
   const child = versions.find(v => v.copied_from === current.id);
+  const parent = versions.find(v => v.id === current.copied_from);
 
-  const chain = [parent, current, child].filter(Boolean) as BudgetVersion[];
-  if (chain.length < 2) return null;
+  // [старая, новая] — всегда две версии, не больше.
+  const pair: BudgetVersion[] | null = child
+    ? [current, child]
+    : parent
+      ? [parent, current]
+      : null;
+
+  if (!pair) return null;
+  const [older, newer] = pair;
 
   return (
     <div style={{
@@ -38,12 +47,9 @@ export default function VersionSwitch({ current, versions }: Props) {
       border: `1px solid ${LINE}`,
       borderRadius: RADIUS,
     }}>
-      {chain.map((v) => {
+      {[older, newer].map((v) => {
         const active = v.id === current.id;
-        const label = v.id === current.id && parent ? 'новая'
-          : v.id === parent?.id ? 'старая'
-          : v.id === child?.id ? 'новая'
-          : 'текущая';
+        const label = v.id === older.id ? 'старая' : 'новая';
 
         return (
           <Tooltip
