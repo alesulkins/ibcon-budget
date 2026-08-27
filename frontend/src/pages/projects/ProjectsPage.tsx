@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  Table, Button, Tag, Space, Input, Select,
+  Table, Button, Input, Select,
   Modal, Form, DatePicker, InputNumber, message, Tooltip,
 } from 'antd';
 import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
@@ -21,7 +21,7 @@ import { extractError } from '../../api/client';
 import { useStickyState } from '../../hooks/useStickyState';
 import { currentUser } from '../../store/auth';
 import Fireworks, { shouldShowFireworks, markFireworksShown } from '../../components/Fireworks';
-import { BRAND } from '../../theme';
+import StatusTag from '../../components/StatusTag';
 
 
 export default function ProjectsPage() {
@@ -157,15 +157,19 @@ export default function ProjectsPage() {
       title: 'Статус проекта',
       dataIndex: 'status',
       render: (s) => (
-        <Tag color={PROJECT_STATUS_COLORS[s]}>{PROJECT_STATUS_LABELS[s] ?? s}</Tag>
+        <StatusTag color={PROJECT_STATUS_COLORS[s]}>
+          {PROJECT_STATUS_LABELS[s] ?? s}
+        </StatusTag>
       ),
     },
     {
       title: 'Статус бюджета',
       dataIndex: 'budget_status',
-      render: (s) => s ? (
-        <Tag color={BUDGET_STATUS_COLORS[s]}>{BUDGET_STATUS_LABELS[s] ?? s}</Tag>
-      ) : <Tag>Отсутствует</Tag>,
+      render: (s) => (
+        <StatusTag color={s ? BUDGET_STATUS_COLORS[s] : 'grey'}>
+          {s ? (BUDGET_STATUS_LABELS[s] ?? s) : 'Отсутствует'}
+        </StatusTag>
+      ),
     },
     {
       title: 'Стоимость без НДС',
@@ -273,7 +277,7 @@ export default function ProjectsPage() {
             onClick={() => setShowCreate(true)}
             // marginLeft: auto — кнопка уходит вправо, а фильтры остаются
             // слева; при переносе строки она встаёт в конец последней.
-            style={{ background: BRAND, marginLeft: 'auto' }}
+            style={{ marginLeft: 'auto' }}
           >
             Создать проект
           </Button>

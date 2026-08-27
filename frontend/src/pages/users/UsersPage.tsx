@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
-  Table, Button, Tag, Space, Modal, Form, Input, Select,
-  message, Popconfirm,
+  Table, Button, Space, Modal, Form, Input, Select,
+  message,
 } from 'antd';
 import {
   PlusOutlined, EditOutlined, KeyOutlined, UnlockOutlined, UserAddOutlined,
@@ -12,7 +12,7 @@ import { usersApi, projectsApi } from '../../api';
 import type { User } from '../../types';
 import { ROLES, ROLE_LABELS } from '../../types';
 import { extractError } from '../../api/client';
-import { BRAND } from '../../theme';
+import StatusTag from '../../components/StatusTag';
 
 
 export default function UsersPage() {
@@ -100,15 +100,19 @@ export default function UsersPage() {
     {
       title: 'Роль',
       dataIndex: 'role',
-      render: (r) => <Tag>{ROLE_LABELS[r as keyof typeof ROLE_LABELS] ?? r}</Tag>,
+      render: (r) => <StatusTag>{ROLE_LABELS[r as keyof typeof ROLE_LABELS] ?? r}</StatusTag>,
     },
     {
       title: 'Статус',
       dataIndex: 'active',
       render: (active: boolean, row: User) => (
         <Space>
-          <Tag color={active ? 'green' : 'red'}>{active ? 'Активен' : 'Заблокирован'}</Tag>
-          {row.failed_attempts >= 5 && <Tag color="orange">Много попыток входа</Tag>}
+          <StatusTag color={active ? 'green' : 'red'}>
+            {active ? 'Активен' : 'Заблокирован'}
+          </StatusTag>
+          {row.failed_attempts >= 5 && (
+            <StatusTag color="amber">Много попыток входа</StatusTag>
+          )}
         </Space>
       ),
     },
@@ -151,7 +155,7 @@ export default function UsersPage() {
     <div>
       {/* Название раздела живёт в шапке (AppLayout). */}
       <Button
-        type="primary" icon={<PlusOutlined />} style={{ marginBottom: 12, background: BRAND }}
+        type="primary" icon={<PlusOutlined />} style={{ marginBottom: 12 }}
         onClick={() => { setShowCreate(true); createForm.resetFields(); }}
       >
         Создать пользователя

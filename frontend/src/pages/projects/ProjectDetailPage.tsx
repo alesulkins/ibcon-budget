@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  Card, Descriptions, Tag, Button, Space, Modal, Form, Select,
+  Card, Descriptions, Button, Space, Modal, Form, Select,
   Input, Table, Typography, message, Tooltip, DatePicker, InputNumber,
   Popconfirm,
 } from 'antd';
@@ -21,7 +21,7 @@ import Profitability from '../../components/Profitability';
 import { hasRole } from '../../store/auth';
 import { shortName } from '../../utils/names';
 import { extractError } from '../../api/client';
-import { BRAND } from '../../theme';
+import StatusTag from '../../components/StatusTag';
 
 const { Title, Text } = Typography;
 
@@ -201,7 +201,11 @@ export default function ProjectDetailPage() {
         // Менять статус прямо из таблицы могут те же роли, что и на
         // экране бюджета; в конечных статусах менять нечего.
         if (!canChangeBudgetStatus || next.length === 0) {
-          return <Tag color={BUDGET_STATUS_COLORS[st]}>{BUDGET_STATUS_LABELS[st] ?? st}</Tag>;
+          return (
+            <StatusTag color={BUDGET_STATUS_COLORS[st]}>
+              {BUDGET_STATUS_LABELS[st] ?? st}
+            </StatusTag>
+          );
         }
         return (
           <Select
@@ -291,9 +295,9 @@ export default function ProjectDetailPage() {
         title={
           <Space>
             <Title level={4} style={{ margin: 0 }}>{project.name}</Title>
-            <Tag color={PROJECT_STATUS_COLORS[project.status]}>
+            <StatusTag color={PROJECT_STATUS_COLORS[project.status]}>
               {PROJECT_STATUS_LABELS[project.status]}
-            </Tag>
+            </StatusTag>
           </Space>
         }
         extra={
@@ -346,8 +350,7 @@ export default function ProjectDetailPage() {
             <Button
               type="primary"
               icon={<PlusOutlined />}
-              style={{ background: BRAND }}
-              onClick={() => setShowCreateBudget(true)}
+                onClick={() => setShowCreateBudget(true)}
             >
               {(versions ?? []).length > 0 ? 'Новая версия' : 'Создать бюджет'}
             </Button>

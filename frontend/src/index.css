@@ -12,9 +12,13 @@
   --ibcon-bg: #f2edeb;
   /* Единственная линия в оформлении: ею разделяется всё — строки
      таблиц, шапки блоков, края шапки страницы. */
-  --ibcon-line: rgba(24, 62, 77, 0.11);
+  --ibcon-line: rgba(24, 62, 77, 0.10);
   --ibcon-muted: #6a8089;
   --ibcon-num: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Подсветка при наведении — тот же фирменный цвет, взятый почти
+     прозрачным. Своего серого для ховера в оформлении нет. */
+  --ibcon-hover: rgba(24, 62, 77, 0.055);
+  --ibcon-hover-dark: rgba(253, 249, 248, 0.08);
 }
 
 /**
@@ -123,8 +127,8 @@ html body {
 .ibcon-panel.ant-card {
   background: var(--ibcon-white);
   box-shadow:
-    0 1px 2px rgba(16, 40, 50, 0.06),
-    0 18px 40px -22px rgba(16, 40, 50, 0.45);
+    0 2px 6px rgba(16, 40, 50, 0.035),
+    0 20px 50px -26px rgba(16, 40, 50, 0.25);
 }
 
 /* Модал остаётся поднятой поверхностью: он лежит поверх страницы, и
@@ -164,13 +168,66 @@ html body {
   border-bottom: 0;
 }
 
-/* ── Статусы мягкие ───────────────────────────────────────────── */
+/* Строки таблиц дышат: у size="small" вертикальный отступ 8px, при
+   котором список сумм читается как сплошная стена. */
+.ant-table-tbody > tr > td,
+.ant-table-thead > tr > th {
+  padding-block: 12px;
+}
 
-.ant-tag {
+/* Подсветка строки под курсором — та же, что у пунктов меню. */
+.ant-table-tbody > tr:hover > td {
+  background: var(--ibcon-hover);
+}
+
+/* ── Наведение ────────────────────────────────────────────────── */
+
+.ant-menu-dark .ant-menu-item:not(.ant-menu-item-selected):hover {
+  background: var(--ibcon-hover-dark);
+}
+
+.ant-btn-text:hover,
+.ant-btn-default:hover {
+  background: var(--ibcon-hover);
+}
+
+/* ── Кнопки в стиле сайдбара ──────────────────────────────────── */
+
+/**
+ * Основная кнопка повторяет панель: та же растяжка фирменного цвета,
+ * та же светлая грань сверху. Плоская заливка рядом с матовым
+ * сайдбаром выглядела деталью из другого набора.
+ */
+.ant-btn-primary:not(:disabled) {
+  background: linear-gradient(170deg, #22576c 0%, #183e4d 100%);
   border-color: transparent;
-  border-radius: 999px;
-  padding-inline: 10px;
-  font-weight: 500;
+  box-shadow: inset 0 1px 0 rgba(253, 249, 248, 0.10);
+}
+
+.ant-btn-primary:not(:disabled):hover {
+  background: linear-gradient(170deg, #2a6580 0%, #1c4859 100%);
+}
+
+.ant-btn-primary:not(:disabled):active {
+  background: linear-gradient(170deg, #1c4859 0%, #143441 100%);
+}
+
+/* Опасное действие (удаление) остаётся красным — фирменная растяжка
+   на нём сняла бы предупреждение. */
+.ant-btn-primary.ant-btn-dangerous:not(:disabled) {
+  background: #9c2b2b;
+  box-shadow: none;
+}
+
+/* ── Тени мягче ───────────────────────────────────────────────── */
+
+.ant-modal-content,
+.ant-dropdown-menu,
+.ant-select-dropdown,
+.ant-popover-inner {
+  box-shadow:
+    0 2px 6px rgba(16, 40, 50, 0.04),
+    0 16px 48px -20px rgba(16, 40, 50, 0.28);
 }
 
 /* ── Числа моноширинные ───────────────────────────────────────── */

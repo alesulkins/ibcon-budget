@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { Layout, Menu, Avatar, Dropdown, Typography, Breadcrumb } from 'antd';
 import {
-  ProjectOutlined, BookOutlined, UserOutlined,
-  HistoryOutlined, LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
+  UserOutlined, LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
   RightOutlined,
 } from '@ant-design/icons';
+import {
+  IconProjects, IconReferences, IconUsers, IconHistory,
+} from './SidebarIcons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { profileApi, projectsApi, budgetsApi } from '../api';
 import type { Profile, ProjectListItem, PaginatedResponse } from '../types';
@@ -91,22 +93,22 @@ export default function AppLayout() {
   const menuItems = [
     {
       key: '/projects',
-      icon: <ProjectOutlined />,
+      icon: <IconProjects />,
       label: 'Проекты',
     },
     {
       key: '/references',
-      icon: <BookOutlined />,
+      icon: <IconReferences />,
       label: 'Справочники',
     },
     ...(hasRole('GE') ? [{
       key: '/users',
-      icon: <UserOutlined />,
+      icon: <IconUsers />,
       label: 'Пользователи',
     }] : []),
     ...(hasRole('GE', 'EP', 'IP') ? [{
       key: '/audit',
-      icon: <HistoryOutlined />,
+      icon: <IconHistory />,
       label: 'История изменений',
     }] : []),
   ];
@@ -260,7 +262,7 @@ export default function AppLayout() {
           height: '100vh',
           borderRight: '1px solid rgba(253, 249, 248, 0.14)',
           boxShadow: 'inset -1px 0 0 rgba(253, 249, 248, 0.06),'
-            + ' 3px 0 18px rgba(12, 26, 51, 0.14)',
+            + ' 4px 0 24px rgba(12, 26, 51, 0.07)',
           zIndex: 30,
         }}
         trigger={null}
@@ -271,6 +273,7 @@ export default function AppLayout() {
         <div style={{
           height: 64,
           display: 'flex',
+          flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
           padding: collapsed ? '0 12px' : '0 20px',
@@ -285,12 +288,25 @@ export default function AppLayout() {
             // Высота фиксирована, ширина считается по пропорции: знак
             // широкий (270×60), обрезанная буква почти квадратная.
             style={{
-              height: collapsed ? 28 : 26,
+              height: collapsed ? 28 : 24,
               width: 'auto',
               maxWidth: '100%',
               display: 'block',
             }}
           />
+          {/* Название продукта под знаком: сам знак — марка компании,
+              а систем у неё несколько. В свёрнутой панели не помещается. */}
+          {!collapsed && (
+            <span style={{
+              marginTop: 4,
+              fontSize: 8,
+              letterSpacing: '0.3em',
+              textTransform: 'uppercase',
+              color: 'rgba(253, 249, 248, 0.62)',
+            }}>
+              Бюджет
+            </span>
+          )}
         </div>
         <Menu
           theme="dark"
@@ -298,6 +314,9 @@ export default function AppLayout() {
           selectedKeys={[selectedKey]}
           // Прозрачное меню поверх растяжки сайдбара: со своей заливкой
           // оно ложилось ровным прямоугольником и гасило градиент.
+          // inlineIndent по умолчанию 24 — при нём «История изменений»
+          // не помещалась в ширину панели и обрезалась многоточием.
+          inlineIndent={12}
           style={{ background: 'transparent', borderRight: 0, marginTop: 8 }}
           items={menuItems}
           onClick={({ key }) => onMenuClick(key)}
@@ -370,7 +389,7 @@ export default function AppLayout() {
           justifyContent: 'space-between',
           gap: 16,
           borderBottom: '1px solid rgba(0,0,0,0.06)',
-          boxShadow: '0 1px 2px rgba(16, 30, 54, 0.04)',
+          boxShadow: '0 2px 10px rgba(16, 30, 54, 0.035)',
         }}>
           <div style={{
             display: 'flex',

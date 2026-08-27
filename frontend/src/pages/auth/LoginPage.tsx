@@ -166,7 +166,6 @@ export default function LoginPage() {
               size="large"
               block
               loading={loading}
-              style={{ background: BRAND }}
             >
               Войти
             </Button>

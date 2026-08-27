@@ -89,11 +89,12 @@ export const PROJECT_STATUS_LABELS: Record<string, string> = {
   unrealized: 'Не реализован',
 };
 
+/** Ключи палитры STATUS из theme.ts — приглушённые, не палитра antd. */
 export const PROJECT_STATUS_COLORS: Record<string, string> = {
   prospect: 'blue',
   active: 'green',
   suspended: 'orange',
-  completed: 'default',
+  completed: 'grey',
   unrealized: 'red',
 };
 
@@ -150,11 +151,12 @@ export const BUDGET_STATUS_LABELS: Record<string, string> = {
   archive: 'Архив',
 };
 
+/** Ключи палитры STATUS из theme.ts. */
 export const BUDGET_STATUS_COLORS: Record<string, string> = {
-  draft: 'default',
-  under_review: 'orange',
+  draft: 'grey',
+  under_review: 'amber',
   approved: 'green',
-  archive: 'default',
+  archive: 'grey',
 };
 
 export interface BudgetVersion {

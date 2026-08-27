@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   Card, Button, Row, Col, Statistic, Table, Typography, Space,
-  message, Spin, Tag,
+  message, Spin,
 } from 'antd';
 import { CalculatorOutlined, FileExcelOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -12,7 +12,7 @@ import { fmtMoney, monthLabel, fmtNum } from '../../utils/fmt';
 import { profitabilityGrade } from '../../utils/profitability';
 import Profitability from '../../components/Profitability';
 import { extractError } from '../../api/client';
-import { BRAND, FONT_NUM } from '../../theme';
+import { BRAND, FONT_NUM, LINE, STATUS } from '../../theme';
 
 const { Title, Text } = Typography;
 
@@ -85,7 +85,6 @@ export default function CalcResults({ versionId, projectId, duration, startDate 
           icon={<CalculatorOutlined />}
           loading={calcMutation.isPending}
           onClick={() => calcMutation.mutate()}
-          style={{ background: BRAND }}
           size="large"
         >
           Рассчитать бюджет
@@ -141,7 +140,7 @@ export default function CalcResults({ versionId, projectId, duration, startDate 
                   title="Чистая прибыль"
                   value={r.net_profit}
                   formatter={(v) => `${fmtNum(Number(v))} ₽`}
-                  valueStyle={{ color: r.net_profit >= 0 ? '#52c41a' : '#ff4d4f' }}
+                  valueStyle={{ color: r.net_profit >= 0 ? STATUS.green : STATUS.red }}
                 />
               </Card>
             </Col>
@@ -161,7 +160,10 @@ export default function CalcResults({ versionId, projectId, duration, startDate 
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <tbody>
                 {summaryRows.map((row, i) => (
-                  <tr key={i} style={{ background: row.highlight ? '#f6ffed' : undefined, borderTop: '1px solid #f0f0f0' }}>
+                  <tr key={i} style={{
+                    background: row.highlight ? 'rgba(24, 62, 77, 0.04)' : undefined,
+                    borderTop: `1px solid ${LINE}`,
+                  }}>
                     <td style={{ padding: '8px 12px', fontWeight: row.highlight ? 600 : 400 }}>{row.label}</td>
                     <td style={{
                       padding: '8px 12px',
@@ -189,7 +191,7 @@ export default function CalcResults({ versionId, projectId, duration, startDate 
               scroll={{ x: 900 }}
               summary={(rows) => (
                 <Table.Summary fixed>
-                  <Table.Summary.Row style={{ background: '#f0f5ff', fontWeight: 600 }}>
+                  <Table.Summary.Row style={{ background: 'rgba(24, 62, 77, 0.05)', fontWeight: 600 }}>
                     <Table.Summary.Cell index={0}>ИТОГО</Table.Summary.Cell>
                     <Table.Summary.Cell index={1} align="right">{fmtMoney(r.total_fot)}</Table.Summary.Cell>
                     <Table.Summary.Cell index={2} align="right">

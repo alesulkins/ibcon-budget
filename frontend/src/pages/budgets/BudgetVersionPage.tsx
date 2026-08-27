@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Card, Button, Space, Tag, Typography, Spin, message,
+  Card, Button, Space, Typography, Spin, message,
   Modal, Form, Input, Select, Row, Col, Alert,
 } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -28,7 +28,7 @@ import GphEmployeesInput from './inputs/GphEmployeesInput';
 import OverheadInput from './inputs/OverheadInput';
 import BudgetParamsInput from './inputs/BudgetParamsInput';
 import CalcResults from './CalcResults';
-import { BRAND } from '../../theme';
+import StatusTag from '../../components/StatusTag';
 
 const { Title, Text } = Typography;
 
@@ -333,9 +333,9 @@ export default function BudgetVersionPage() {
               {project.name}
               {version.version_label ? ` — ${version.version_label}` : ''}
             </Title>
-            <Tag color={BUDGET_STATUS_COLORS[version.status]}>
+            <StatusTag color={BUDGET_STATUS_COLORS[version.status]}>
               {BUDGET_STATUS_LABELS[version.status]}
-            </Tag>
+            </StatusTag>
           </Space>
         }
         extra={
@@ -429,7 +429,6 @@ export default function BudgetVersionPage() {
             type="primary"
             disabled={step === WIZARD_STEPS.length - 1 || isAP}
             onClick={() => setStep(s => s + 1)}
-            style={{ background: BRAND }}
           >
             Далее →
           </Button>

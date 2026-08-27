@@ -9,6 +9,7 @@ import 'dayjs/locale/ru';
 import App from './App';
 import {
   BRAND, BRAND_WHITE, PAGE_BG, FONT_UI, RADIUS, RADIUS_LG, RADIUS_SM,
+  TEXT, TEXT_SOFT, LINE,
 } from './theme';
 import './index.css';
 
@@ -45,6 +46,17 @@ createRoot(document.getElementById('root')!).render(
             // Совпадает с --ibcon-bg в index.css: иначе на краях страницы
             // виден стык двух почти одинаковых фонов.
             colorBgLayout: PAGE_BG,
+            // Текст и линии — из пульта оформления. Серые по умолчанию у
+            // antd нейтральные и рядом с фирменным цветом выглядят
+            // грязноватыми; эти уведены в ту же сине-зелёную сторону.
+            colorText: TEXT,
+            colorTextHeading: TEXT,
+            colorTextSecondary: TEXT_SOFT,
+            colorTextDescription: TEXT_SOFT,
+            colorTextPlaceholder: TEXT_SOFT,
+            colorBorder: LINE,
+            colorBorderSecondary: LINE,
+            colorSplit: LINE,
             fontFamily: FONT_UI,
             borderRadius: RADIUS,
             borderRadiusLG: RADIUS_LG,

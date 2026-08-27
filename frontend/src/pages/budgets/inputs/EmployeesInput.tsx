@@ -15,7 +15,6 @@ import MonthGrid, {
 import DeleteRowButton from '../../../components/DeleteRowButton';
 import EmptyBlock from '../../../components/EmptyBlock';
 import { useAutosave } from '../../../hooks/useAutosave';
-import { BRAND } from '../../../theme';
 
 const { Text } = Typography;
 
@@ -301,8 +300,7 @@ export default function EmployeesInput({
               type="primary"
               icon={<PlusOutlined />}
               onClick={() => { empForm.resetFields(); setEditingIdx(null); setShowAddModal(true); }}
-              style={{ background: BRAND }}
-            >
+              >
               Добавить сотрудника
             </Button>
           )

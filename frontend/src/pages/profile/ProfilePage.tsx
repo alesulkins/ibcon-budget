@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   Card, Avatar, Typography, Button, Input, Space, message, Modal,
-  Form, Row, Col, Descriptions, Upload, Tag, Alert, Popconfirm,
+  Form, Row, Col, Descriptions, Upload, Alert, Popconfirm,
 } from 'antd';
 import {
   LockOutlined, UploadOutlined, SaveOutlined, DeleteOutlined,
@@ -14,6 +14,7 @@ import type { Profile } from '../../types';
 import { initials } from '../../utils/names';
 import { extractError } from '../../api/client';
 import { BRAND } from '../../theme';
+import StatusTag from '../../components/StatusTag';
 
 const { Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -167,7 +168,7 @@ export default function ProfilePage() {
               </Descriptions.Item>
               <Descriptions.Item label="Email">{profile.email}</Descriptions.Item>
               <Descriptions.Item label="Роль">
-                <Tag color="blue">{ROLE_LABELS[profile.role] ?? profile.role}</Tag>
+                <StatusTag color="blue">{ROLE_LABELS[profile.role] ?? profile.role}</StatusTag>
               </Descriptions.Item>
             </Descriptions>
             <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
@@ -195,7 +196,7 @@ export default function ProfilePage() {
                 type="primary"
                 size="small"
                 icon={<SaveOutlined />}
-                style={{ background: BRAND, color: 'white' }}
+                
                 disabled={!notesDirty}
                 loading={updateMutation.isPending}
                 onClick={() => updateMutation.mutate({ notes })}

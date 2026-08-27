@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Tabs, Table, Button, Tag, Modal, Form, Input, Switch,
+  Tabs, Table, Button, Modal, Form, Input, Switch,
   message,
 } from 'antd';
 import { PlusOutlined, EditOutlined } from '@ant-design/icons';
@@ -10,7 +10,7 @@ import { refsApi } from '../../api';
 import type { Executor, Position, WorkMode } from '../../types';
 import { hasRole } from '../../store/auth';
 import { extractError } from '../../api/client';
-import { BRAND } from '../../theme';
+import StatusTag from '../../components/StatusTag';
 
 const canEdit = () => hasRole('GE');
 
@@ -83,7 +83,11 @@ function ExecutorsTab({ addSignal }: TabProps) {
     { title: 'Полное наименование', dataIndex: 'full_name' },
     {
       title: 'Статус', dataIndex: 'active',
-      render: (v) => <Tag color={v ? 'green' : 'default'}>{v ? 'Активен' : 'Неактивен'}</Tag>,
+      render: (v) => (
+        <StatusTag color={v ? 'green' : 'grey'}>
+          {v ? 'Активен' : 'Неактивен'}
+        </StatusTag>
+      ),
     },
     ...(canEdit() ? [{
       title: '', key: 'edit', width: 60,
@@ -165,7 +169,10 @@ function PositionsTab({ addSignal }: TabProps) {
 
   const columns: ColumnsType<Position> = [
     { title: 'Должность', dataIndex: 'name', sorter: (a, b) => a.name.localeCompare(b.name) },
-    { title: 'Статус', dataIndex: 'active', render: (v) => <Tag color={v ? 'green' : 'default'}>{v ? 'Активна' : 'Неактивна'}</Tag> },
+    { title: 'Статус', dataIndex: 'active',
+      render: (v) => (
+        <StatusTag color={v ? 'green' : 'grey'}>{v ? 'Активна' : 'Неактивна'}</StatusTag>
+      ) },
     ...(canEdit() ? [{ title: '', key: 'edit', width: 60, render: (_: unknown, r: Position) => (
       <Button size="small" icon={<EditOutlined />}
         onClick={() => { setEditing(r); form.setFieldsValue(r); setShowModal(true); }} />
@@ -235,7 +242,10 @@ function WorkModesTab({ addSignal }: TabProps) {
   const columns: ColumnsType<WorkMode> = [
     { title: 'Код', dataIndex: 'code', width: 100 },
     { title: 'Полное наименование', dataIndex: 'full_name', sorter: (a, b) => a.full_name.localeCompare(b.full_name) },
-    { title: 'Статус', dataIndex: 'active', render: (v) => <Tag color={v ? 'green' : 'default'}>{v ? 'Активен' : 'Неактивен'}</Tag> },
+    { title: 'Статус', dataIndex: 'active',
+      render: (v) => (
+        <StatusTag color={v ? 'green' : 'grey'}>{v ? 'Активен' : 'Неактивен'}</StatusTag>
+      ) },
     ...(canEdit() ? [{ title: '', key: 'edit', width: 60, render: (_: unknown, r: WorkMode) => (
       <Button size="small" icon={<EditOutlined />}
         onClick={() => { setEditing(r); form.setFieldsValue(r); setShowModal(true); }} />
@@ -288,7 +298,6 @@ export default function ReferencesPage() {
           <Button
             type="primary"
             icon={<PlusOutlined />}
-            style={{ background: BRAND }}
             onClick={() => setAddSignal(s => s + 1)}
           >
             {ADD_LABELS[tab]}

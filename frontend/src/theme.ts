@@ -46,6 +46,36 @@ export const FONT_NUM =
  * Соотношение взято из пульта оформления: контролы примерно 0.6 от
  * плиты, иначе кнопка внутри карточки выглядит круглее самой карточки.
  */
-export const RADIUS_LG = 14;
-export const RADIUS = 8;
-export const RADIUS_SM = 6;
+export const RADIUS_LG = 8;
+export const RADIUS = 6;
+export const RADIUS_SM = 4;
+
+/** Цвет текста и подписей — из пульта оформления. */
+export const TEXT = '#16323D';
+export const TEXT_SOFT = '#6A8089';
+
+/** Единственная линия оформления: строки таблиц, шапки блоков, края. */
+export const LINE = 'rgba(24, 62, 77, 0.10)';
+
+/**
+ * Палитра статусов — приглушённая, из пульта оформления.
+ *
+ * Готовые цвета antd («green», «orange») здесь не годятся: они заметно
+ * насыщеннее и в таблице с десятком строк начинают спорить с цифрами
+ * рентабельности, которым цвет нужен по делу.
+ *
+ * Фон плашки — тот же цвет с прозрачностью 15 % (суффикс «26» в записи
+ * #RRGGBBAA), текст — цвет как есть. См. StatusTag.
+ */
+export const STATUS = {
+  green: '#2F7D3A',
+  amber: '#B07A12',
+  blue: '#2D6A86',
+  grey: '#6B7D84',
+  orange: '#A8621A',
+  red: '#9C2B2B',
+  teal: '#2F7D78',
+  violet: '#6A5A92',
+} as const;
+
+export type StatusColor = keyof typeof STATUS;
