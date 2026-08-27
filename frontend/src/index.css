@@ -10,6 +10,11 @@
   /* Фон рабочей области: должен совпадать с colorBgLayout у antd, иначе
      на краях страницы виден стык двух почти одинаковых тонов. */
   --ibcon-bg: #f2edeb;
+  /* Единственная линия в оформлении: ею разделяется всё — строки
+     таблиц, шапки блоков, края шапки страницы. */
+  --ibcon-line: rgba(24, 62, 77, 0.11);
+  --ibcon-muted: #6a8089;
+  --ibcon-num: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 /**
@@ -23,6 +28,10 @@
 html,
 body {
   background: var(--ibcon-bg);
+  /* Табличные цифры по всему приложению: одинаковой ширины, поэтому
+     суммы в соседних строках встают разряд под разряд даже там, где
+     моноширинный шрифт не используется. */
+  font-variant-numeric: tabular-nums;
 }
 
 html {
@@ -82,4 +91,109 @@ html body {
 .ibcon-scroll {
   scrollbar-width: thin;
   scrollbar-color: rgba(24, 62, 77, 0.28) transparent;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ОФОРМЛЕНИЕ, ВЫБРАННОЕ ВЛАДЕЛЬЦЕМ 2026-08-27 (пульт оформления)
+
+   Плиты сняты: содержимое лежит прямо на рабочей области, а вместо
+   заливок и теней его делит одна тонкая линия. Из-за этого фирменный
+   белый остаётся только там, где он несёт смысл: поля ввода, модалы,
+   выпадающие списки — то, что «поднято» над страницей.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Плиты сняты ──────────────────────────────────────────────── */
+
+.ant-card {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* Заголовок блока отделяется линией, а не сменой фона. */
+.ant-card > .ant-card-head {
+  border-bottom: 1px solid var(--ibcon-line);
+}
+
+/**
+ * Возврат поверхности там, где карточка стоит одна на пустом фоне и
+ * держаться ей больше не на чем, — экран входа. В рабочей области
+ * такой карточки нет, и класс нигде больше не применяется.
+ */
+.ibcon-panel.ant-card {
+  background: var(--ibcon-white);
+  box-shadow:
+    0 1px 2px rgba(16, 40, 50, 0.06),
+    0 18px 40px -22px rgba(16, 40, 50, 0.45);
+}
+
+/* Модал остаётся поднятой поверхностью: он лежит поверх страницы, и
+   без собственного фона сквозь него читался бы контент. */
+.ant-modal-content,
+.ant-drawer-content,
+.ant-dropdown-menu,
+.ant-select-dropdown,
+.ant-popover-inner {
+  background: var(--ibcon-white);
+}
+
+/* ── Таблицы: тихая шапка и линейки ───────────────────────────── */
+
+.ant-table {
+  background: transparent;
+}
+
+.ant-table-thead > tr > th {
+  background: transparent;
+  color: var(--ibcon-muted);
+  font-weight: 500;
+  border-bottom: 1px solid var(--ibcon-line);
+}
+
+/* У antd между ячейками шапки есть вертикальный разделитель —
+   в разлиновке «линейки» он лишний. */
+.ant-table-thead > tr > th::before {
+  display: none;
+}
+
+.ant-table-tbody > tr > td {
+  border-bottom: 1px solid var(--ibcon-line);
+}
+
+.ant-table-tbody > tr:last-child > td {
+  border-bottom: 0;
+}
+
+/* ── Статусы мягкие ───────────────────────────────────────────── */
+
+.ant-tag {
+  border-color: transparent;
+  border-radius: 999px;
+  padding-inline: 10px;
+  font-weight: 500;
+}
+
+/* ── Числа моноширинные ───────────────────────────────────────── */
+
+/**
+ * Колонка сумм читается только если разряды стоят друг под другом.
+ * Моноширинный шрифт даёт это сам, tabular-nums — страховка на
+ * случай подстановки запасного шрифта из стека.
+ *
+ * Класс ibcon-num вешается на денежные и числовые колонки таблиц;
+ * поля ввода и показатели расчёта перечислены следом.
+ */
+.ibcon-num,
+.ibcon-num .ant-typography,
+.ant-input-number-input,
+.ant-statistic-content-value,
+.ant-statistic-content-suffix {
+  font-family: var(--ibcon-num);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Подпись поля («₽», «чел.») остаётся набранной основным шрифтом:
+   моноширинные буквы рядом с числом выглядят как опечатка. */
+.ant-input-number-group-addon {
+  font-family: inherit;
 }

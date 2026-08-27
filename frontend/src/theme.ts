@@ -22,6 +22,30 @@ export const BRAND_WHITE = '#FDF9F8';
  */
 export const PAGE_BG = '#F2EDEB';
 
-/** Верхняя и нижняя точки растяжки сайдбара — оттенки фирменного цвета. */
+/**
+ * Оттенки фирменного цвета для растяжки сайдбара. Сама растяжка задана
+ * в AppLayout полупрозрачными значениями (матовое стекло), эти константы
+ * оставлены как опорные точки палитры.
+ */
 export const BRAND_LIGHT = '#22576C';
 export const BRAND_DARK = '#0F2832';
+
+/** Шрифт интерфейса. */
+export const FONT_UI =
+  "'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif";
+
+/**
+ * Шрифт чисел: моноширинная пара к основному, поэтому цифры совпадают
+ * по рисунку и высоте. Разряды в колонке встают друг под друга.
+ */
+export const FONT_NUM =
+  "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace";
+
+/**
+ * Скругления. Крупное — плиты и модалы, базовое — кнопки и поля.
+ * Соотношение взято из пульта оформления: контролы примерно 0.6 от
+ * плиты, иначе кнопка внутри карточки выглядит круглее самой карточки.
+ */
+export const RADIUS_LG = 14;
+export const RADIUS = 8;
+export const RADIUS_SM = 6;

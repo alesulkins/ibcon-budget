@@ -1,6 +1,7 @@
 import { Typography } from 'antd';
 import { fmtNum } from '../utils/fmt';
 import MonthGrid, { monthGridCell, monthGridHeadCell } from './MonthGrid';
+import { FONT_NUM } from '../theme';
 
 const { Text } = Typography;
 
@@ -28,6 +29,7 @@ export const totalsValueCell: React.CSSProperties = {
   ...monthGridCell,
   fontSize: 12,
   fontWeight: 500,
+  fontFamily: FONT_NUM,
 };
 
 export const totalsGrandCell: React.CSSProperties = {
@@ -35,6 +37,7 @@ export const totalsGrandCell: React.CSSProperties = {
   textAlign: 'right',
   fontSize: 12,
   fontWeight: 700,
+  fontFamily: FONT_NUM,
 };
 
 interface Props {

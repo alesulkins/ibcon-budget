@@ -133,6 +133,7 @@ export default function ProjectsPage() {
     {
       title: '№',
       dataIndex: 'id',
+      className: 'ibcon-num',
       sorter: (a, b) => a.id - b.id,
     },
     {
@@ -169,6 +170,7 @@ export default function ProjectsPage() {
     {
       title: 'Стоимость без НДС',
       dataIndex: 'cost_no_vat',
+      className: 'ibcon-num',
       render: fmtMoney,
       align: 'right',
       sorter: (a, b) => (a.cost_no_vat ?? 0) - (b.cost_no_vat ?? 0),
@@ -176,6 +178,7 @@ export default function ProjectsPage() {
     {
       title: 'Рентабельность',
       dataIndex: 'profitability',
+      className: 'ibcon-num',
       render: (v: number | null | undefined) => <Profitability value={v} />,
       align: 'right',
       sorter: (a, b) => (a.profitability ?? 0) - (b.profitability ?? 0),
@@ -199,6 +202,7 @@ export default function ProjectsPage() {
     {
       title: 'Дата создания',
       dataIndex: 'created_at',
+      className: 'ibcon-num',
       render: fmtDate,
       sorter: (a, b) => a.created_at.localeCompare(b.created_at),
     },

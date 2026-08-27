@@ -1,6 +1,7 @@
 import { Tooltip } from 'antd';
 import { fmtPct } from '../utils/fmt';
 import { profitabilityGrade } from '../utils/profitability';
+import { FONT_NUM } from '../theme';
 
 interface Props {
   value: number | null | undefined;
@@ -25,6 +26,7 @@ export default function Profitability({ value, strong }: Props) {
         fontWeight: strong ? 700 : 600,
         fontSize: strong ? 16 : undefined,
         whiteSpace: 'nowrap',
+        fontFamily: FONT_NUM,
       }}>
         {fmtPct(value)}
       </span>

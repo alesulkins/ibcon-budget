@@ -168,18 +168,21 @@ export default function ProjectDetailPage() {
       // ТЗ, таблица 4: у проекта с ID 1 бюджеты нумеруются 1.1, 1.2 …
       title: 'ID бюджета',
       key: 'budget_code',
+      className: 'ibcon-num',
       width: 110,
       render: (_, r) => <Text strong>{pid}.{r.version_no}</Text>,
     },
     {
       title: 'Версия',
       dataIndex: 'version_no',
+      className: 'ibcon-num',
       width: 80,
       render: (n: number) => n,
     },
     {
       title: 'Дата создания',
       dataIndex: 'created_at',
+      className: 'ibcon-num',
       width: 130,
       render: fmtDate,
     },
@@ -217,6 +220,7 @@ export default function ProjectDetailPage() {
     {
       title: 'Стоимость без НДС',
       dataIndex: 'cost_no_vat',
+      className: 'ibcon-num',
       width: 160,
       render: fmtMoney,
       align: 'right',
@@ -224,6 +228,7 @@ export default function ProjectDetailPage() {
     {
       title: 'Рентабельность, %',
       dataIndex: 'profitability',
+      className: 'ibcon-num',
       width: 150,
       render: (v: number | null | undefined) => <Profitability value={v} />,
       align: 'right',

@@ -7,7 +7,9 @@ import ruRU from 'antd/locale/ru_RU';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ru';
 import App from './App';
-import { BRAND, BRAND_WHITE, PAGE_BG } from './theme';
+import {
+  BRAND, BRAND_WHITE, PAGE_BG, FONT_UI, RADIUS, RADIUS_LG, RADIUS_SM,
+} from './theme';
 import './index.css';
 
 dayjs.locale('ru');
@@ -35,13 +37,18 @@ createRoot(document.getElementById('root')!).render(
           hashed: false,
           token: {
             colorPrimary: BRAND,
-            // Карточки, таблицы, модалы и поля — фирменный белый.
+            // Поля ввода и всплывающие поверхности — фирменный белый.
+            // Плиты карточек и таблиц убраны в index.css: выбранное
+            // оформление ставит содержимое прямо на рабочую область.
             colorBgContainer: BRAND_WHITE,
             colorBgElevated: BRAND_WHITE,
             // Совпадает с --ibcon-bg в index.css: иначе на краях страницы
             // виден стык двух почти одинаковых фонов.
             colorBgLayout: PAGE_BG,
-            borderRadius: 8,
+            fontFamily: FONT_UI,
+            borderRadius: RADIUS,
+            borderRadiusLG: RADIUS_LG,
+            borderRadiusSM: RADIUS_SM,
             fontSize: 14,
           },
         }}

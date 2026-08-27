@@ -12,7 +12,7 @@ import { fmtMoney, monthLabel, fmtNum } from '../../utils/fmt';
 import { profitabilityGrade } from '../../utils/profitability';
 import Profitability from '../../components/Profitability';
 import { extractError } from '../../api/client';
-import { BRAND } from '../../theme';
+import { BRAND, FONT_NUM } from '../../theme';
 
 const { Title, Text } = Typography;
 
@@ -68,13 +68,13 @@ export default function CalcResults({ versionId, projectId, duration, startDate 
       render: (m: number) => monthLabel(startDate, m - 1),
       fixed: 'left',
     },
-    { title: 'ФОТ вкл. взносы', dataIndex: 'total_fot', render: fmtMoney, align: 'right' },
-    { title: 'Накладные', dataIndex: 'project_costs_ex_fot', render: fmtMoney, align: 'right' },
-    { title: 'Непредвиденные', dataIndex: 'unpredictables', render: fmtMoney, align: 'right' },
-    { title: 'АУП', dataIndex: 'aup', render: fmtMoney, align: 'right' },
-    { title: 'БГ всего', render: (_, r) => fmtMoney(r.bg_execution + r.bg_warranty + r.bg_advance), align: 'right' },
-    { title: 'Итого расходы', dataIndex: 'total_costs', render: fmtMoney, align: 'right' },
-    { title: 'Выручка', dataIndex: 'revenue', render: fmtMoney, align: 'right' },
+    { title: 'ФОТ вкл. взносы', dataIndex: 'total_fot', render: fmtMoney, align: 'right', className: 'ibcon-num' },
+    { title: 'Накладные', dataIndex: 'project_costs_ex_fot', render: fmtMoney, align: 'right', className: 'ibcon-num' },
+    { title: 'Непредвиденные', dataIndex: 'unpredictables', render: fmtMoney, align: 'right', className: 'ibcon-num' },
+    { title: 'АУП', dataIndex: 'aup', render: fmtMoney, align: 'right', className: 'ibcon-num' },
+    { title: 'БГ всего', render: (_, r) => fmtMoney(r.bg_execution + r.bg_warranty + r.bg_advance), align: 'right', className: 'ibcon-num' },
+    { title: 'Итого расходы', dataIndex: 'total_costs', render: fmtMoney, align: 'right', className: 'ibcon-num' },
+    { title: 'Выручка', dataIndex: 'revenue', render: fmtMoney, align: 'right', className: 'ibcon-num' },
   ];
 
   return (
@@ -163,7 +163,13 @@ export default function CalcResults({ versionId, projectId, duration, startDate 
                 {summaryRows.map((row, i) => (
                   <tr key={i} style={{ background: row.highlight ? '#f6ffed' : undefined, borderTop: '1px solid #f0f0f0' }}>
                     <td style={{ padding: '8px 12px', fontWeight: row.highlight ? 600 : 400 }}>{row.label}</td>
-                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: row.highlight ? 700 : 400, fontSize: row.highlight ? 15 : 13 }}>
+                    <td style={{
+                      padding: '8px 12px',
+                      textAlign: 'right',
+                      fontWeight: row.highlight ? 700 : 400,
+                      fontSize: row.highlight ? 15 : 13,
+                      fontFamily: FONT_NUM,
+                    }}>
                       {row.value}
                     </td>
                   </tr>

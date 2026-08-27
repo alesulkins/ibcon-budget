@@ -4,9 +4,9 @@ import { LockOutlined, MailOutlined } from '@ant-design/icons';
 import { authApi } from '../../api';
 import { setAuth, savedEmail } from '../../store/auth';
 import { extractError } from '../../api/client';
-import { BRAND } from '../../theme';
+import { BRAND, BRAND_LIGHT, PAGE_BG } from '../../theme';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 interface LoginFormValues {
   email: string;
@@ -73,18 +73,42 @@ export default function LoginPage() {
   return (
     <div style={{
       minHeight: '100vh',
-      background: '#f0f2f5',
+      background: PAGE_BG,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       padding: 16,
     }}>
-      <Card style={{ width: 400, boxShadow: '0 4px 24px rgba(0,0,0,0.08)' }}>
-        <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <Title level={3} style={{ color: BRAND, margin: 0 }}>IBCON Бюджет</Title>
-          <Text type="secondary">Система расчёта бюджетов проектов</Text>
+      {/* ibcon-panel возвращает карточке поверхность: в рабочей области
+          плиты сняты, но здесь форма стоит одна на пустом фоне, и без
+          собственной поверхности ей не на чем держаться. */}
+      <Card
+        className="ibcon-panel"
+        style={{ width: 400, overflow: 'hidden' }}
+        styles={{ body: { padding: 0 } }}
+      >
+        {/* Знак компании залит фирменным белым, поэтому стоит на
+            фирменной плашке, а не на светлой карточке. */}
+        <div style={{
+          background: `linear-gradient(170deg, ${BRAND_LIGHT} 0%, ${BRAND} 100%)`,
+          padding: '26px 24px 22px',
+          textAlign: 'center',
+        }}>
+          <img
+            src="/logo.svg"
+            alt="IBCON"
+            style={{ height: 30, width: 'auto', display: 'inline-block' }}
+          />
+          <div style={{
+            marginTop: 10,
+            color: 'rgba(253, 249, 248, 0.72)',
+            fontSize: 12,
+          }}>
+            Система расчёта бюджетов проектов
+          </div>
         </div>
 
+        <div style={{ padding: 24 }}>
         {notice && (
           <Alert message={notice} type="warning" showIcon style={{ marginBottom: 16 }} />
         )}
@@ -153,6 +177,7 @@ export default function LoginPage() {
           Требования к паролю: не менее 10 символов, минимум 1 заглавная буква
           и 1 цифра. После 5 неуспешных попыток вход блокируется на 15 минут.
         </Text>
+        </div>
       </Card>
     </div>
   );

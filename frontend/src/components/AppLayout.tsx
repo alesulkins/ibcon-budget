@@ -13,12 +13,10 @@ import { shortName, initials } from '../utils/names';
 import { useNavigate, useLocation, useMatch, Outlet } from 'react-router-dom';
 import { clearAuth, currentUser, hasRole } from '../store/auth';
 import { useScrollRestore } from '../hooks/useScrollRestore';
-import { BRAND, BRAND_LIGHT, BRAND_DARK } from '../theme';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
 
-const IBCON_COLOR = BRAND;
 
 /** Заголовок раздела в шапке — для экранов без своей цепочки крошек. */
 const SECTION_TITLES: Record<string, string> = {
@@ -247,16 +245,22 @@ export default function AppLayout() {
         // Липкий сайдбар на всю высоту экрана: длинная страница мастера
         // раньше уводила блок ЛК (он прижат к низу) в самый низ документа.
         //
-        // Вместо плоской заливки — вертикальная растяжка от светлого верха
-        // к тёмному низу, тонкая светлая грань справа и мягкая тень на
-        // контент. Панель перестаёт выглядеть наклейкой и получает объём.
+        // Матовое стекло (выбор владельца 2026-08-27): полупрозрачная
+        // растяжка фирменного цвета с размытием, светлая грань справа и
+        // внутренний блик. Панель читается как стеклянная пластина над
+        // страницей, а не как вырезанный из бумаги прямоугольник.
         style={{
-          background: `linear-gradient(170deg, ${BRAND_LIGHT} 0%, ${IBCON_COLOR} 42%, ${BRAND_DARK} 100%)`,
+          background: 'linear-gradient(170deg,'
+            + ' rgba(34, 87, 108, 0.92) 0%,'
+            + ' rgba(24, 62, 77, 0.95) 45%,'
+            + ' rgba(15, 40, 50, 0.97) 100%)',
+          backdropFilter: 'blur(14px)',
           position: 'sticky',
           top: 0,
           height: '100vh',
-          borderRight: '1px solid rgba(255,255,255,0.08)',
-          boxShadow: '3px 0 18px rgba(12, 26, 51, 0.16)',
+          borderRight: '1px solid rgba(253, 249, 248, 0.14)',
+          boxShadow: 'inset -1px 0 0 rgba(253, 249, 248, 0.06),'
+            + ' 3px 0 18px rgba(12, 26, 51, 0.14)',
           zIndex: 30,
         }}
         trigger={null}
