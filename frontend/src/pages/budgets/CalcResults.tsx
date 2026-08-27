@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Card, Button, Table, Typography, Space,
+  Card, Button, Table, Space,
   message, Spin,
 } from 'antd';
 import { CalculatorOutlined, FileExcelOutlined } from '@ant-design/icons';
@@ -14,22 +14,38 @@ import Profitability from '../../components/Profitability';
 import { extractError } from '../../api/client';
 import { BRAND, FONT_NUM, LINE, STATUS, TEXT_SOFT, RADIUS_LG } from '../../theme';
 
-const { Title, Text } = Typography;
-
 interface Props {
   versionId: number;
   projectId: number;
-  duration: number;
   startDate: string;
+  /**
+   * Версию уже считали — в budget_versions лежат стоимость и
+   * рентабельность. Тогда результаты показываем сразу при открытии шага.
+   */
+  calculated: boolean;
 }
 
-export default function CalcResults({ versionId, projectId, duration, startDate }: Props) {
+export default function CalcResults({
+  versionId, projectId, startDate, calculated,
+}: Props) {
   const qc = useQueryClient();
 
-  const { data: result, isLoading, refetch } = useQuery({
+  /**
+   * Уже посчитанная версия открывается сразу с результатами.
+   *
+   * Расчёт — чистая функция от сохранённых данных, поэтому «показать
+   * сохранённый» и «посчитать заново» здесь одно и то же: сервер
+   * пересчитает по тем же вводам и вернёт тот же результат.
+   *
+   * Запрос включаем ТОЛЬКО для посчитанной версии. У непосчитанной
+   * автозапуск был бы не безобиден: расчёт кэширует стоимость и
+   * рентабельность в budget_versions, и в реестре появились бы цифры
+   * у версии, которую никто не считал.
+   */
+  const { data: result, isFetching } = useQuery({
     queryKey: ['calc-result', versionId],
     queryFn: () => budgetsApi.calculate(versionId),
-    enabled: false, // запускаем вручную
+    enabled: calculated,
   });
 
   const calcMutation = useMutation({
@@ -80,6 +96,8 @@ export default function CalcResults({ versionId, projectId, duration, startDate 
   return (
     <div>
       <Space style={{ marginBottom: 16 }}>
+        {/* Кнопка остаётся и когда результат уже на экране: после правок
+            на предыдущих шагах ею запускают пересчёт явно. */}
         <Button
           type="primary"
           icon={<CalculatorOutlined />}
@@ -87,7 +105,7 @@ export default function CalcResults({ versionId, projectId, duration, startDate 
           onClick={() => calcMutation.mutate()}
           size="large"
         >
-          Рассчитать бюджет
+          {r ? 'Пересчитать бюджет' : 'Рассчитать бюджет'}
         </Button>
         {r && (
           <Button
@@ -99,9 +117,9 @@ export default function CalcResults({ versionId, projectId, duration, startDate 
         )}
       </Space>
 
-      {calcMutation.isPending && (
+      {(calcMutation.isPending || (isFetching && !r)) && (
         <div style={{ textAlign: 'center', padding: 48 }}>
-          <Spin size="large" tip="Выполняется расчёт..." />
+          <Spin size="large" />
         </div>
       )}
 

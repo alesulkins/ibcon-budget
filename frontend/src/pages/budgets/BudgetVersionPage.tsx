@@ -314,8 +314,12 @@ export default function BudgetVersionPage() {
           <CalcResults
             versionId={versionId}
             projectId={version!.project_id}
-            duration={duration}
             startDate={project!.start_date}
+            // Признак «версию уже считали»: расчёт кэширует эти два поля
+            // в budget_versions, из них же берёт цифры реестр.
+            calculated={
+              version!.cost_no_vat != null || version!.profitability != null
+            }
           />
         );
       default:

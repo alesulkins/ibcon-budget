@@ -302,11 +302,14 @@ func (h *Handler) saveInput(c *gin.Context) {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
 	}
-	h.audit.Log(auditlog.Entry{
-		UserID: &claims.UserID, UserRole: claims.Role,
-		Action: "save_budget_input", ObjectType: "budget_version", ObjectID: &vid,
-		Comment: inputType,
-	})
+	// В журнал изменений сохранение данных НЕ пишется (решение владельца
+	// 2026-08-27). На шагах мастера нет кнопки «Сохранить»: форма уходит
+	// на сервер сама — по дебаунсу в секунду после правки и раз в две
+	// минуты страховочно. Каждое такое обращение давало строку лога, и
+	// журнал состоял из них на 84 %, скрывая осмысленные действия.
+	//
+	// Кто и когда правил версию, по-прежнему видно: budget_inputs хранит
+	// updated_by и updated_at по каждому ключу ввода.
 	c.JSON(http.StatusOK, gin.H{"message": "данные сохранены"})
 }
 
