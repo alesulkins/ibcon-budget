@@ -10,6 +10,8 @@ import App from './App';
 import {
   BRAND, BRAND_WHITE, PAGE_BG, FONT_UI, RADIUS, RADIUS_LG, RADIUS_SM,
   TEXT, TEXT_SOFT, LINE,
+  CELL_PAD_X, CELL_PAD_Y, MENU_ICON_GAP, MENU_FONT_SIZE,
+  HOVER_LIGHT, HOVER_DARK, MENU_SELECTED,
 } from './theme';
 import './index.css';
 
@@ -62,6 +64,44 @@ createRoot(document.getElementById('root')!).render(
             borderRadiusLG: RADIUS_LG,
             borderRadiusSM: RADIUS_SM,
             fontSize: 14,
+          },
+          /**
+           * Токены компонентов. Всё, что здесь, задавалось бы правилами
+           * в index.css — но у antd v6 селекторы обёрнуты в :where(), у
+           * наших правил та же специфичность, а его стили попадают в
+           * <head> позже. При равенстве выигрывает последний, поэтому
+           * CSS-переопределения молча не работали. Токены в этот спор не
+           * вступают: antd генерирует стиль сразу с нашими значениями.
+           *
+           * Числа — из theme.ts, менять там.
+           */
+          components: {
+            Table: {
+              // Таблицы стоят с size="small", поэтому важны именно SM.
+              cellPaddingBlockSM: CELL_PAD_Y,
+              cellPaddingInlineSM: CELL_PAD_X,
+              cellPaddingBlock: CELL_PAD_Y,
+              cellPaddingInline: CELL_PAD_X,
+              cellPaddingBlockMD: CELL_PAD_Y,
+              cellPaddingInlineMD: CELL_PAD_X,
+              // Шапка того же цвета, что рабочая область.
+              headerBg: PAGE_BG,
+              headerColor: TEXT_SOFT,
+              headerSortActiveBg: PAGE_BG,
+              headerSortHoverBg: PAGE_BG,
+              rowHoverBg: HOVER_LIGHT,
+              borderColor: LINE,
+            },
+            Menu: {
+              // Скруглённая плашка под наведением и под выбранным пунктом.
+              itemBorderRadius: RADIUS,
+              darkItemHoverBg: HOVER_DARK,
+              darkItemSelectedBg: MENU_SELECTED,
+              darkItemBg: 'transparent',
+              darkSubMenuItemBg: 'transparent',
+              iconMarginInlineEnd: MENU_ICON_GAP,
+              fontSize: MENU_FONT_SIZE,
+            },
           },
         }}
       >

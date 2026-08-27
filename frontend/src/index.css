@@ -21,22 +21,9 @@
   --ibcon-hover: rgba(24, 62, 77, 0.055);
   --ibcon-hover-dark: rgba(253, 249, 248, 0.10);
 
-  /* ─── Ручки для подгонки таблиц ───────────────────────────────
-     Это единственное место, где задаются отступы в ячейках всех
-     таблиц antd (реестр, версии, справочники, пользователи, журнал).
-
-       --ibcon-cell-x — ШИРИНА колонок: больше значение — шире колонка
-       --ibcon-cell-y — ВЫСОТА строк:  больше значение — выше строка
-
-     Менять прямо здесь, пересборка не нужна — Vite подхватит сам. */
-  --ibcon-cell-x: 18px;
-  --ibcon-cell-y: 16px;
-
-  /* Отступ между иконкой и подписью в меню сайдбара.
-     Замерено в браузере: при подписи 13px самая длинная строка
-     «История изменений» занимает 123px, а под неё остаётся 148 минус
-     этот отступ. Предел — 24px, дальше подпись обрезается. */
-  --ibcon-menu-gap: 16px;
+  /* Размеры ячеек таблиц, отступ и подсветка в меню задаются токенами
+     компонентов в main.tsx, а не здесь: см. «РУЧКИ ПОДГОНКИ» в
+     theme.ts — там же объяснено, почему CSS тут бессилен. */
 }
 
 /**
@@ -225,10 +212,9 @@ html body {
   background: var(--ibcon-bg);
 }
 
-/* Шапка того же цвета, что и фон — отдельной плашкой не выделяется. */
+/* Цвет шапки и подсветка строк — токены Table в main.tsx. Здесь только
+   то, что токенами не задаётся. */
 .ant-table-thead > tr > th {
-  background: var(--ibcon-bg);
-  color: var(--ibcon-muted);
   font-weight: 500;
   border-bottom: 1px solid var(--ibcon-line);
 }
@@ -245,19 +231,6 @@ html body {
 
 .ant-table-tbody > tr:last-child > td {
   border-bottom: 0;
-}
-
-/* Размеры ячеек — из переменных наверху файла: --ibcon-cell-y задаёт
-   высоту строки, --ibcon-cell-x — ширину колонок. */
-.ant-table-tbody > tr > td,
-.ant-table-thead > tr > th {
-  padding-block: var(--ibcon-cell-y);
-  padding-inline: var(--ibcon-cell-x);
-}
-
-/* Подсветка строки под курсором — та же, что у пунктов меню. */
-.ant-table-tbody > tr:hover > td {
-  background: var(--ibcon-hover);
 }
 
 /**
@@ -310,29 +283,6 @@ html body {
 }
 
 /* ── Наведение ────────────────────────────────────────────────── */
-
-/**
- * Меню сайдбара: подсветка при наведении — такая же скруглённая
- * плашка, как у выбранного пункта, только полупрозрачная.
- */
-.ant-menu-dark .ant-menu-item {
-  border-radius: var(--ibcon-radius-sm, 6px);
-}
-
-.ant-menu-dark .ant-menu-item:not(.ant-menu-item-selected):hover {
-  background: var(--ibcon-hover-dark);
-}
-
-/* Отступ между иконкой и подписью — из переменной наверху файла. */
-.ant-menu-inline .ant-menu-item .ant-menu-item-icon + span,
-.ant-menu-inline .ant-menu-item .anticon + span {
-  margin-inline-start: var(--ibcon-menu-gap);
-}
-
-/* Подпись на 13px: на 14px «История изменений» не помещается в панель. */
-.ant-menu-inline .ant-menu-item {
-  font-size: 13px;
-}
 
 .ant-btn-text:hover,
 .ant-btn-default:hover {
