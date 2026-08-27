@@ -15,6 +15,7 @@ import { shortName, initials } from '../utils/names';
 import { useNavigate, useLocation, useMatch, Outlet } from 'react-router-dom';
 import { clearAuth, currentUser, hasRole } from '../store/auth';
 import { useScrollRestore, SCROLL_ROOT_ID } from '../hooks/useScrollRestore';
+import { BRAND } from '../theme';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
@@ -33,10 +34,12 @@ const SECTION_TITLES: Record<string, string> = {
  * Аватар пользователя: картинка, эмодзи-стикер или инициалы —
  * в таком порядке приоритета.
  */
-function ProfileAvatar({ profile, fullName, size }: {
+function ProfileAvatar({ profile, fullName, size, on }: {
   profile?: Profile;
   fullName?: string;
   size: 'small' | 'default';
+  /** Где стоит аватар: на панели или в светлой шапке. */
+  on: 'sider' | 'header';
 }) {
   const avatar = profile?.avatar ?? '';
   const isImage = avatar.startsWith('data:');
@@ -44,7 +47,15 @@ function ProfileAvatar({ profile, fullName, size }: {
     <Avatar
       size={size}
       src={isImage ? avatar : undefined}
-      style={{ background: isImage ? undefined : '#3a5f9e', flexShrink: 0 }}
+      style={{
+        // На панели кружок должен быть заодно с блоком ЛК, а не синим
+        // пятном: подсветка тем же полупрозрачным белым. В шапке фон
+        // светлый, там нужна фирменная заливка.
+        background: isImage
+          ? undefined
+          : on === 'sider' ? 'rgba(253, 249, 248, 0.16)' : BRAND,
+        flexShrink: 0,
+      }}
     >
       {!isImage && (avatar || initials(fullName ?? profile?.full_name))}
     </Avatar>
@@ -348,7 +359,12 @@ export default function AppLayout() {
               : 'transparent',
           }}
         >
-          <ProfileAvatar profile={profile} fullName={user?.full_name} size={collapsed ? 'small' : 'default'} />
+          <ProfileAvatar
+            profile={profile}
+            fullName={user?.full_name}
+            size={collapsed ? 'small' : 'default'}
+            on="sider"
+          />
           {!collapsed && (
             <>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -449,7 +465,12 @@ export default function AppLayout() {
               cursor: 'pointer', display: 'flex', alignItems: 'center',
               gap: 8, flexShrink: 0,
             }}>
-              <ProfileAvatar profile={profile} fullName={user?.full_name} size="small" />
+              <ProfileAvatar
+                profile={profile}
+                fullName={user?.full_name}
+                size="small"
+                on="header"
+              />
               {/* В шапке — сокращённое ФИО, полное живёт в ЛК */}
               <Text style={{ fontSize: 13 }}>{shortName(user?.full_name)}</Text>
             </div>

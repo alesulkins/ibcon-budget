@@ -140,8 +140,13 @@ export default function ProjectsPage() {
       title: 'Наименование проекта',
       dataIndex: 'name',
       sorter: (a, b) => a.name.localeCompare(b.name, 'ru'),
+      // Наименование набрано основным цветом текста, а не цветом ссылки:
+      // в колонке из полусотни строк синий столбец перетягивал внимание
+      // на себя. Что это ссылка, видно по подчёркиванию при наведении.
       render: (name, r) => (
-        <a onClick={() => navigate(`/projects/${r.id}`)}>{name}</a>
+        <a className="ibcon-link-plain" onClick={() => navigate(`/projects/${r.id}`)}>
+          {name}
+        </a>
       ),
     },
     {

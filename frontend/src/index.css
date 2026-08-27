@@ -14,11 +14,29 @@
      таблиц, шапки блоков, края шапки страницы. */
   --ibcon-line: rgba(24, 62, 77, 0.10);
   --ibcon-muted: #6a8089;
+  --ibcon-text: #16323d;
   --ibcon-num: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   /* Подсветка при наведении — тот же фирменный цвет, взятый почти
      прозрачным. Своего серого для ховера в оформлении нет. */
   --ibcon-hover: rgba(24, 62, 77, 0.055);
-  --ibcon-hover-dark: rgba(253, 249, 248, 0.08);
+  --ibcon-hover-dark: rgba(253, 249, 248, 0.10);
+
+  /* ─── Ручки для подгонки таблиц ───────────────────────────────
+     Это единственное место, где задаются отступы в ячейках всех
+     таблиц antd (реестр, версии, справочники, пользователи, журнал).
+
+       --ibcon-cell-x — ШИРИНА колонок: больше значение — шире колонка
+       --ibcon-cell-y — ВЫСОТА строк:  больше значение — выше строка
+
+     Менять прямо здесь, пересборка не нужна — Vite подхватит сам. */
+  --ibcon-cell-x: 18px;
+  --ibcon-cell-y: 16px;
+
+  /* Отступ между иконкой и подписью в меню сайдбара.
+     Замерено в браузере: при подписи 13px самая длинная строка
+     «История изменений» занимает 123px, а под неё остаётся 148 минус
+     этот отступ. Предел — 24px, дальше подпись обрезается. */
+  --ibcon-menu-gap: 16px;
 }
 
 /**
@@ -186,13 +204,30 @@ html body {
 
 /* ── Таблицы: тихая шапка и линейки ───────────────────────────── */
 
+/**
+ * Ссылка цветом обычного текста.
+ *
+ * Наименования проектов — целая колонка ссылок; набранные фирменным
+ * синим, они перетягивали внимание с цифр. Что это ссылка, показывает
+ * подчёркивание при наведении.
+ */
+.ibcon-link-plain,
+.ibcon-link-plain:hover {
+  color: var(--ibcon-text);
+}
+
+.ibcon-link-plain:hover {
+  text-decoration: underline;
+}
+
 /* Таблица лежит на цвете рабочей области, а не на своей белой плите. */
 .ant-table {
   background: var(--ibcon-bg);
 }
 
+/* Шапка того же цвета, что и фон — отдельной плашкой не выделяется. */
 .ant-table-thead > tr > th {
-  background: transparent;
+  background: var(--ibcon-bg);
   color: var(--ibcon-muted);
   font-weight: 500;
   border-bottom: 1px solid var(--ibcon-line);
@@ -212,16 +247,38 @@ html body {
   border-bottom: 0;
 }
 
-/* Строки таблиц дышат: у size="small" вертикальный отступ 8px, при
-   котором список сумм читается как сплошная стена. */
+/* Размеры ячеек — из переменных наверху файла: --ibcon-cell-y задаёт
+   высоту строки, --ibcon-cell-x — ширину колонок. */
 .ant-table-tbody > tr > td,
 .ant-table-thead > tr > th {
-  padding-block: 12px;
+  padding-block: var(--ibcon-cell-y);
+  padding-inline: var(--ibcon-cell-x);
 }
 
 /* Подсветка строки под курсором — та же, что у пунктов меню. */
 .ant-table-tbody > tr:hover > td {
   background: var(--ibcon-hover);
+}
+
+/**
+ * Таблица без собственных краёв.
+ *
+ * antd скругляет контейнер и подсвечивает край тенью, когда таблица
+ * прокручивается вбок, — получалась «стеклянная» кромка справа. Нам
+ * нужна таблица без границ вообще: содержимое просто лежит на фоне.
+ */
+.ant-table-container,
+.ant-table-content {
+  border-radius: 0;
+}
+
+.ant-table-container::before,
+.ant-table-container::after,
+.ant-table-cell-fix-left::after,
+.ant-table-cell-fix-right::after,
+.ant-table-cell-fix-right-first::after {
+  display: none !important;
+  box-shadow: none !important;
 }
 
 /* ── Сетки форм ввода ─────────────────────────────────────────── */
@@ -254,8 +311,27 @@ html body {
 
 /* ── Наведение ────────────────────────────────────────────────── */
 
+/**
+ * Меню сайдбара: подсветка при наведении — такая же скруглённая
+ * плашка, как у выбранного пункта, только полупрозрачная.
+ */
+.ant-menu-dark .ant-menu-item {
+  border-radius: var(--ibcon-radius-sm, 6px);
+}
+
 .ant-menu-dark .ant-menu-item:not(.ant-menu-item-selected):hover {
   background: var(--ibcon-hover-dark);
+}
+
+/* Отступ между иконкой и подписью — из переменной наверху файла. */
+.ant-menu-inline .ant-menu-item .ant-menu-item-icon + span,
+.ant-menu-inline .ant-menu-item .anticon + span {
+  margin-inline-start: var(--ibcon-menu-gap);
+}
+
+/* Подпись на 13px: на 14px «История изменений» не помещается в панель. */
+.ant-menu-inline .ant-menu-item {
+  font-size: 13px;
 }
 
 .ant-btn-text:hover,

@@ -107,8 +107,12 @@ export default function WizardSteps({ items, current, onChange }: Props) {
         const active = idx === current;
         const clickable = !!onChange;
 
-        const bg = active ? BRAND : done ? '#e6f0ff' : '#f5f5f5';
-        const fg = active ? '#fff' : done ? BRAND : '#8c8c8c';
+        // ЦВЕТА ШАГОВ МЕНЯЮТСЯ ЗДЕСЬ.
+        //   active — текущий шаг: фирменная заливка, белая цифра
+        //   done   — ПРОЙДЕННЫЙ шаг: фирменный цвет, взятый прозрачным
+        //   иначе  — ещё не открытый шаг
+        const bg = active ? BRAND : done ? 'rgba(24, 62, 77, 0.12)' : 'transparent';
+        const fg = active ? '#fff' : done ? BRAND : '#8c9aa0';
 
         return (
           <div
@@ -133,7 +137,9 @@ export default function WizardSteps({ items, current, onChange }: Props) {
                 borderRadius: '50%',
                 background: bg,
                 color: fg,
-                border: active ? 'none' : `1px solid ${done ? BRAND : '#d9d9d9'}`,
+                border: active
+                  ? 'none'
+                  : `1px solid ${done ? BRAND : 'rgba(24, 62, 77, 0.18)'}`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
