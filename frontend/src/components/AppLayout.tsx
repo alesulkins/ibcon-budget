@@ -14,7 +14,7 @@ import { ROLE_LABELS } from '../types';
 import { shortName, initials } from '../utils/names';
 import { useNavigate, useLocation, useMatch, Outlet } from 'react-router-dom';
 import { clearAuth, currentUser, hasRole } from '../store/auth';
-import { useScrollRestore } from '../hooks/useScrollRestore';
+import { useScrollRestore, SCROLL_ROOT_ID } from '../hooks/useScrollRestore';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
@@ -233,7 +233,7 @@ export default function AppLayout() {
   }
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
+    <Layout style={{ height: '100vh', overflow: 'hidden' }}>
       <Sider
         collapsible
         collapsed={collapsed}
@@ -244,8 +244,9 @@ export default function AppLayout() {
         breakpoint="lg"
         onBreakpoint={setCollapsed}
         theme="dark"
-        // Липкий сайдбар на всю высоту экрана: длинная страница мастера
-        // раньше уводила блок ЛК (он прижат к низу) в самый низ документа.
+        // Сайдбар стоит во всю высоту окна. Липким он был, пока
+        // прокручивался документ; теперь прокручивается только рабочая
+        // область, и двигать сайдбар нечему.
         //
         // Матовое стекло (выбор владельца 2026-08-27): полупрозрачная
         // растяжка фирменного цвета с размытием, светлая грань справа и
@@ -257,9 +258,7 @@ export default function AppLayout() {
             + ' rgba(24, 62, 77, 0.95) 45%,'
             + ' rgba(15, 40, 50, 0.97) 100%)',
           backdropFilter: 'blur(14px)',
-          position: 'sticky',
-          top: 0,
-          height: '100vh',
+          height: '100%',
           borderRight: '1px solid rgba(253, 249, 248, 0.14)',
           boxShadow: 'inset -1px 0 0 rgba(253, 249, 248, 0.06),'
             + ' 4px 0 24px rgba(12, 26, 51, 0.07)',
@@ -374,16 +373,20 @@ export default function AppLayout() {
 
       {/* minWidth: 0 — иначе широкая таблица растягивает колонку целиком
           и «выталкивает» сайдбар вместо того, чтобы прокручиваться. */}
-      <Layout style={{ minWidth: 0 }}>
-        {/* Шапка липкая: раньше при прокрутке она уезжала и на её месте
-            обнажался край рабочей области. */}
+      <Layout style={{
+        minWidth: 0,
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}>
+        {/* Шапка стоит вне прокручиваемой панели, поэтому не «липкая»:
+            уезжать ей не от чего. */}
         <Header style={{
           background: 'rgba(255,255,255,0.86)',
           backdropFilter: 'blur(12px)',
           padding: '0 24px',
-          position: 'sticky',
-          top: 0,
-          zIndex: 20,
+          flexShrink: 0,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -453,7 +456,11 @@ export default function AppLayout() {
           </Dropdown>
         </Header>
 
-        <Content style={{ margin: '24px 24px', minHeight: 280, minWidth: 0 }}>
+        <Content
+          id={SCROLL_ROOT_ID}
+          className="ibcon-scroll-root ibcon-scroll"
+          style={{ padding: 24, minWidth: 0 }}
+        >
           <Outlet />
         </Content>
       </Layout>

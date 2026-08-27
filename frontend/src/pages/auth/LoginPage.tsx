@@ -71,8 +71,12 @@ export default function LoginPage() {
   }
 
   return (
+    // Экран входа вне каркаса приложения, поэтому прокручивается сам —
+    // но только внутри себя: документ по-прежнему зафиксирован.
     <div style={{
-      minHeight: '100vh',
+      height: '100%',
+      overflowY: 'auto',
+      overscrollBehavior: 'none',
       background: PAGE_BG,
       display: 'flex',
       alignItems: 'center',

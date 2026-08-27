@@ -13,7 +13,7 @@
 export const BRAND = '#183E4D';
 
 /** Фирменный белый: карточки, таблицы, модалы, поля ввода. */
-export const BRAND_WHITE = '#FDF9F8';
+export const BRAND_WHITE = '#F2EDEB';
 
 /**
  * Фон рабочей области — фирменный белый, приглушённый на несколько
