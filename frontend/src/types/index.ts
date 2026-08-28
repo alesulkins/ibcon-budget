@@ -231,6 +231,32 @@ export interface Employee {
   monthly_schedule: string[];
   trip_days_rf: number[];
   trip_days_other: number[];
+  /**
+   * Множитель графика (4.6!BU16), заданный руками по месяцам.
+   * `null` в ячейке — значение считается автоматически (это и есть флаг
+   * «не трогали»); число — ручное значение, оно перекрывает формулу и
+   * идёт в расчёт ФОТ. Ноль — законное ручное значение, отличать его от
+   * `null` обязательно. Массив может быть короче графика.
+   */
+  multiplier_overrides?: (number | null)[];
+}
+
+/** Фиксированная выплата за межвахтовый отдых («МВ»), 4.6!BU16. */
+export const INTER_SHIFT_PAY = 30_000;
+
+/**
+ * Автоматический множитель графика — та же формула, что в
+ * scheduleMultiplier из internal/calc/fot.go:
+ *
+ *   =ЕСЛИ(график="МВ"; 30000/оклад; ЕСЛИ(график="не принят"; 0; 1))
+ *
+ * Здесь она нужна, чтобы показать значение в таблице до сохранения;
+ * в расчёт идёт значение, посчитанное бэкендом.
+ */
+export function scheduleMultiplier(schedule: string, salaryNet: number): number {
+  if (schedule === 'МВ') return salaryNet === 0 ? 0 : INTER_SHIFT_PAY / salaryNet;
+  if (schedule === 'не принят') return 0;
+  return 1;
 }
 
 /** Виды премий (лист 4.1). Значения совпадают с константами бэкенда. */

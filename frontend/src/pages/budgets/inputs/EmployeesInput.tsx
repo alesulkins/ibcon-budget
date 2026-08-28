@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
 import { budgetsApi, refsApi } from '../../../api';
 import type { Employee, InputEmployees } from '../../../types';
+import { scheduleMultiplier } from '../../../types';
 import { monthLabel, thousandFormatter, thousandParser, fmtNum } from '../../../utils/fmt';
 import MonthGrid, {
   monthGridCell, monthGridHeadCell, LABEL_COL_WIDTH,
@@ -235,6 +236,19 @@ export default function EmployeesInput({
     while (arr.length < duration) arr.push(0);
     arr[monthIdx] = val;
     setEditingEmp({ ...editingEmp, trip_days_other: arr });
+  }
+
+  /**
+   * Ручной множитель графика на месяц. `null` возвращает ячейку в
+   * автоматический режим — отдельного флага «изменено вручную» нет,
+   * им служит само значение: null = считается, число = задано руками.
+   */
+  function setMultiplier(monthIdx: number, val: number | null) {
+    if (!editingEmp) return;
+    const arr = [...(editingEmp.multiplier_overrides ?? [])];
+    while (arr.length < duration) arr.push(null);
+    arr[monthIdx] = val;
+    setEditingEmp({ ...editingEmp, multiplier_overrides: arr });
   }
 
   const columns: ColumnsType<Employee> = [
@@ -521,6 +535,73 @@ export default function EmployeesInput({
                         {tripRow('по РФ', editingEmp.trip_days_rf, setTripDaysRF)}
                         {tripRow('за рубеж', editingEmp.trip_days_other, setTripDaysOther)}
                       </>
+                    )}
+
+                    {/* Множитель графика — 4.6!BU16. Считается сам, но
+                        ячейку можно перебить руками; тогда в расчёт ФОТ
+                        идёт введённое число, а не формула. */}
+                    <tr>
+                      <td colSpan={duration + 1} style={{ paddingTop: 14 }}>
+                        <Text strong style={{ fontSize: 13 }}>
+                          Множитель графика:
+                        </Text>
+                        <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
+                          заполняется автоматически по графику и окладу; введённое
+                          вручную значение перекрывает формулу и идёт в расчёт ФОТ.
+                        </Text>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style={{ ...monthGridCell, textAlign: 'left', fontSize: 12, whiteSpace: 'nowrap' }}>
+                        Множитель
+                      </td>
+                      {months.map((_, i) => {
+                        const manual = editingEmp.multiplier_overrides?.[i] ?? null;
+                        const auto = scheduleMultiplier(
+                          editingEmp.monthly_schedule[i] ?? 'не принят',
+                          editingEmp.salary_net,
+                        );
+                        return (
+                          <td key={i} style={monthGridCell}>
+                            <InputNumber
+                              size="small"
+                              style={{
+                                width: '100%',
+                                // Ручное значение выделяем, иначе его не
+                                // отличить от посчитанного.
+                                fontWeight: manual === null ? undefined : 600,
+                              }}
+                              value={manual ?? Number(auto.toFixed(4))}
+                              min={0}
+                              step={0.1}
+                              disabled={readonly}
+                              // Очистили поле — ячейка возвращается к формуле.
+                              onChange={(v) => setMultiplier(i, v)}
+                              title={manual === null
+                                ? 'Считается автоматически'
+                                : `Задано вручную. Автоматически было бы ${auto.toFixed(4)}`}
+                            />
+                          </td>
+                        );
+                      })}
+                    </tr>
+                    {(editingEmp.multiplier_overrides ?? []).some(v => v !== null) && (
+                      <tr>
+                        <td colSpan={duration + 1} style={{ paddingTop: 6 }}>
+                          <Button
+                            size="small"
+                            type="link"
+                            style={{ padding: 0 }}
+                            disabled={readonly}
+                            onClick={() => setEditingEmp({
+                              ...editingEmp,
+                              multiplier_overrides: Array(duration).fill(null),
+                            })}
+                          >
+                            Вернуть все месяцы к автоматическому расчёту
+                          </Button>
+                        </td>
+                      </tr>
                     )}
                   </tbody>
                 </MonthGrid>

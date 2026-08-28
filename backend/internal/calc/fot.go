@@ -128,9 +128,28 @@ func employeeFOT(emp *Employee, monthIdx int, startDate time.Time) float64 {
 	if monthIdx < 1 || monthIdx > len(emp.MonthlySchedule) {
 		return 0
 	}
-	sched := emp.MonthlySchedule[monthIdx-1]
 	salary := emp.SalaryNet * aprilIndexation(emp, monthIdx, startDate)
-	return scheduleMultiplier(sched, salary) * salary
+	return EffectiveMultiplier(emp, monthIdx, salary) * salary
+}
+
+// EffectiveMultiplier — множитель графика, который реально идёт в расчёт
+// ФОТ за месяц monthIdx (1-based): ручное значение, если экономист его
+// задал, иначе вычисленное по формуле формы.
+//
+// salary — «План ФОТ на руки» ЭТОГО месяца, уже проиндексированный.
+// Множитель «МВ» от него зависит (30000/оклад), поэтому автоматическое
+// значение в апреле меняется вместе с индексацией. Ручное — не меняется:
+// экономист задал конкретное число, и подменять его нельзя.
+func EffectiveMultiplier(emp *Employee, monthIdx int, salary float64) float64 {
+	if monthIdx >= 1 && monthIdx <= len(emp.MultiplierOverrides) {
+		if v := emp.MultiplierOverrides[monthIdx-1]; v != nil {
+			return *v
+		}
+	}
+	if monthIdx < 1 || monthIdx > len(emp.MonthlySchedule) {
+		return 0
+	}
+	return scheduleMultiplier(emp.MonthlySchedule[monthIdx-1], salary)
 }
 
 // calcFOTMonthly рассчитывает общий ФОТ и налоги по всем сотрудникам за каждый месяц.
