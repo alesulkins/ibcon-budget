@@ -47,7 +47,7 @@ func TestCalcPurchasesSumsSameMonth(t *testing.T) {
 	}
 }
 
-// Ключевое отличие от вагончиков: последние два месяца проекта открыты.
+// Последние месяцы проекта открыты для покупки, как и все остальные.
 func TestCalcPurchasesAllowsLastTwoMonths(t *testing.T) {
 	in := &InputPurchases{Items: []ItemPurchase{
 		{Name: "предпоследний", Month: 5, Count: 1, Price: 100},

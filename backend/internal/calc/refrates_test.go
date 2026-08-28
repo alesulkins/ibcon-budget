@@ -52,8 +52,8 @@ func TestMarkupRate_UsesReferenceRate(t *testing.T) {
 	}
 }
 
-// Киргизский спецрежим: справочная ставка заменяет слагаемые «5% и 2%»,
-// база (ТКП, делённый на длительность) остаётся прежней.
+// Киргизский спецрежим: справочная ставка берётся от всего ТКП разом и
+// заменяет собой слагаемые «5% и 2%» от ТКП, делённого на длительность.
 func TestRun_KGTaxUsesReferenceRate(t *testing.T) {
 	const tkp = 120_000_000
 	const months = 6
@@ -75,8 +75,9 @@ func TestRun_KGTaxUsesReferenceRate(t *testing.T) {
 		t.Errorf("эталонная форма: налог want %.2f, got %.2f", wantExcel, res.Tax)
 	}
 
-	// Со справочным значением 4% — та же база, одна ставка.
-	wantRef := tkp / float64(months) * 0.04
+	// Со справочным значением 4% налог берётся от всего ТКП разом,
+	// без деления на длительность.
+	wantRef := tkp * 0.04
 	res = Run(mk(&InputBudgetParams{ContractValue: tkp, ProfitTaxPct: pct(4)}))
 	if math.Abs(res.Tax-wantRef) > 0.01 {
 		t.Errorf("справочная ставка: налог want %.2f, got %.2f", wantRef, res.Tax)

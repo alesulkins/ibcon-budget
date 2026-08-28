@@ -23,11 +23,6 @@ interface Props {
   onChange: (next: ItemPurchase[]) => void;
   /** Подписи месяцев проекта по порядку. */
   months: string[];
-  /**
-   * Сколько первых месяцев доступно для выбора. По умолчанию все месяцы
-   * проекта; лист 4.4 закрывает последние два.
-   */
-  allowedMonths?: number;
   readonly?: boolean;
   namePlaceholder?: string;
   addLabel: string;
@@ -55,16 +50,17 @@ export function emptyPurchase(): ItemPurchase {
  * потребовал, чтобы блоки были идентичны.
  */
 export default function PurchaseTable({
-  items, onChange, months, allowedMonths, readonly,
+  items, onChange, months, readonly,
   namePlaceholder, addLabel,
   nameLabel = 'Описание',
   monthColLabel = 'Месяц покупки',
   priceLabel = 'Цена за ед., ₽',
   countLabel = 'Кол-во',
 }: Props) {
-  const allowed = allowedMonths ?? months.length;
-  // Месяц выбирается только из доступных — вне диапазона не выбрать в принципе.
-  const monthOptions = months.slice(0, allowed).map((label, i) => ({ value: i + 1, label }));
+  // Месяц выбирается только из месяцев проекта — вне диапазона не выбрать
+  // в принципе. Изъятий нет: покупка допустима в любом месяце, включая
+  // последний (правило «не последние два месяца» отменено 2026-08-28).
+  const monthOptions = months.map((label, i) => ({ value: i + 1, label }));
   const withName = nameLabel !== null;
 
   function patch(idx: number, p: Partial<ItemPurchase>) {
@@ -156,9 +152,9 @@ export default function PurchaseTable({
                     size="small"
                     style={{ width: '100%' }}
                     options={monthOptions}
-                    value={p.month >= 1 && p.month <= allowed ? p.month : undefined}
+                    value={p.month >= 1 && p.month <= months.length ? p.month : undefined}
                     placeholder="выберите месяц"
-                    status={p.month >= 1 && p.month <= allowed ? undefined : 'error'}
+                    status={p.month >= 1 && p.month <= months.length ? undefined : 'error'}
                     onChange={v => patch(idx, { month: v ?? 0 })}
                   />
                 )}

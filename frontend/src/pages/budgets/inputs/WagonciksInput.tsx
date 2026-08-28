@@ -3,7 +3,6 @@ import { Card, InputNumber, Typography } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { budgetsApi } from '../../../api';
 import type { InputWagonciks, MonthlyQty, ItemPurchase } from '../../../types';
-import { purchaseAllowedMonths } from '../../../types';
 import { monthLabel, thousandFormatter, thousandParser, fmtNum } from '../../../utils/fmt';
 import MonthGrid, { monthGridCell, monthGridHeadCell } from '../../../components/MonthGrid';
 import MonthTotals from '../../../components/MonthTotals';
@@ -52,15 +51,10 @@ export default function WagonciksInput({ versionId, duration, startDate, readonl
     setHydrated(true);
   }, [saved, isSuccess, duration]);
 
-  // Покупка вагончиков невозможна в последние два месяца проекта — правило
-  // владельца 2026-08-26. Именно оно закодировано границей расщепления
-  // формулы в 4.4!строка 6 (SUMPRODUCT только в первых колонках).
-  const allowed = purchaseAllowedMonths(duration);
-
   // Строка покупки без месяца игнорируется и при расчёте, и при сохранении.
   const payload: InputWagonciks = {
     rental: { price: rental.price, counts: padCounts(rental.counts, duration) },
-    purchases: purchases.filter(p => p.month >= 1 && p.month <= allowed),
+    purchases: purchases.filter(p => p.month >= 1 && p.month <= duration),
   };
 
   const save = useCallback(
@@ -81,7 +75,7 @@ export default function WagonciksInput({ versionId, duration, startDate, readonl
 
   const counts = padCounts(rental.counts, duration);
   const rentalTotal = counts.reduce((s, c) => s + rental.price * c, 0);
-  const keptPurchases = purchases.filter(p => p.month >= 1 && p.month <= allowed);
+  const keptPurchases = purchases.filter(p => p.month >= 1 && p.month <= duration);
   const purchasesTotal = keptPurchases.reduce((s, p) => s + p.price * p.count, 0);
 
   // Помесячные расходы — то же, что считает calcWagonciks: покупка целиком
@@ -98,13 +92,8 @@ export default function WagonciksInput({ versionId, duration, startDate, readonl
           <>
             Разовая покупка учитывается целиком в месяц приобретения. Месяц —
             обязателен: строка без месяца в расчёт не попадёт и не сохранится.
-            Итог строки — цена × количество.
-            <br /><br />
-            {allowed > 0
-              ? `Покупка недоступна в последние 2 месяца проекта: выбрать `
-                + `можно месяцы с 1-го по ${allowed}-й.`
-              : 'При такой длительности проекта покупка недоступна ни в одном '
-                + 'месяце.'}
+            Итог строки — цена × количество. Выбрать можно любой месяц
+            проекта, включая последний.
           </>,
         )}
         size="small"
@@ -117,7 +106,6 @@ export default function WagonciksInput({ versionId, duration, startDate, readonl
           items={purchases}
           onChange={setPurchases}
           months={months}
-          allowedMonths={allowed}
           readonly={readonly}
           namePlaceholder="например, Бытовка 6×2,4"
           addLabel="Добавить покупку"

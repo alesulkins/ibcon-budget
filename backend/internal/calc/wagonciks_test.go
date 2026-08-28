@@ -59,9 +59,14 @@ func TestCalcWagonciks_Reference(t *testing.T) {
 //	                      мес.3: 4×10 000; мес.4: 5×30 000;
 //	                      мес.5: 6×40 000; мес.6: 7×50 000
 //
-// Покупки месяцев 5 и 6 в итог не идут: это последние два месяца проекта.
-// В форме их отсекает граница расщепления формулы (SUMPRODUCT только в
-// C:F), в платформе — правило purchaseAllowedMonths. Результат совпадает.
+// В форме покупки месяцев 5 и 6 теряются: там граница расщепления формулы
+// (SUMPRODUCT только в C:F), и хвостовые колонки считают вырожденную ветку.
+// В платформе они начисляются — расщепление признано пропущенной протяжкой,
+// а не правилом (docs/deviations.md, отклонение №3 п. 6). Поэтому ожидаемые
+// значения месяцев 5-6 отличаются от формы на сумму этих покупок:
+//
+//	мес.5: аренда 2×5 000 + покупка 6×40 000 = 250 000
+//	мес.6: аренда 2×5 000 + покупка 7×50 000 = 360 000
 func TestCalcWagonciks_ReferenceAP(t *testing.T) {
 	got := calcWagonciks(&InputWagonciks{
 		Rental: MonthlyQty{Price: 5_000, Counts: []int{0, 2, 1, 1, 2, 2}},
@@ -78,14 +83,14 @@ func TestCalcWagonciks_ReferenceAP(t *testing.T) {
 	}, 6)
 
 	// 4.4!C6:BJ6 = 2.Бюджет!H181:BO181
-	want := []float64{141_000, 70_000, 45_000, 155_000, 10_000, 10_000}
+	want := []float64{141_000, 70_000, 45_000, 155_000, 250_000, 360_000}
 	for i := range want {
 		if math.Abs(got[i]-want[i]) > 0.01 {
 			t.Errorf("месяц %d: want %.2f, got %.2f", i+1, want[i], got[i])
 		}
 	}
-	if s := sumFloats(got); math.Abs(s-431_000) > 0.01 {
-		t.Errorf("итого (4.4!BK5 = G181): want 431 000, got %.2f", s)
+	if s := sumFloats(got); math.Abs(s-1_021_000) > 0.01 {
+		t.Errorf("итого (4.4!BK5 = G181): want 1 021 000, got %.2f", s)
 	}
 }
 
@@ -114,9 +119,9 @@ func TestCalcWagonciks_InBudget(t *testing.T) {
 // Здесь формула одна на все месяцы: покупка считается в том месяце, в
 // котором указана.
 func TestCalcWagonciks_SplitFormulaFixed(t *testing.T) {
-	// Покупка в 4-м месяце проекта длиной 6 — допустимый месяц (D−2 = 4).
-	// По форме этот месяц лежит в колонке F, то есть в рабочей ветке, но
-	// проверяем именно «не только первый месяц».
+	// Покупка в 4-м месяце проекта длиной 6. По форме этот месяц лежит в
+	// колонке F, то есть в рабочей ветке, но проверяем именно «не только
+	// первый месяц».
 	got := calcWagonciks(&InputWagonciks{
 		Purchases: []ItemPurchase{{Month: 4, Count: 3, Price: 100_000}},
 	}, 6)
@@ -145,27 +150,35 @@ func TestCalcWagonciks_SplitFormulaFixed(t *testing.T) {
 	}
 }
 
-// TestPurchaseAllowedMonths — покупка недоступна в последние два месяца
-// проекта (правило владельца 2026-08-26) с оговорённым исключением D=1.
-func TestPurchaseAllowedMonths(t *testing.T) {
-	cases := map[int]int{
-		0:  0,
-		1:  1, // краевой случай: единственный месяц остаётся открытым
-		2:  0, // оба месяца — последние два, покупка недоступна вовсе
-		3:  1,
-		6:  4,
-		12: 10,
-	}
-	for duration, want := range cases {
-		if got := PurchaseAllowedMonths(duration); got != want {
-			t.Errorf("длительность %d: want %d открытых месяцев, got %d", duration, want, got)
+// TestCalcWagonciks_PurchaseAnyMonth — покупка разрешена в любом месяце
+// проекта, включая последние два. Ограничение «1…D−2» отменено владельцем
+// 2026-08-28; тест держит отмену, чтобы правило не вернулось молча.
+func TestCalcWagonciks_PurchaseAnyMonth(t *testing.T) {
+	for _, month := range []int{1, 5, 6} {
+		got := calcWagonciks(&InputWagonciks{
+			Purchases: []ItemPurchase{{Month: month, Count: 2, Price: 1_000}},
+		}, 6)
+		if got[month-1] != 2_000 {
+			t.Errorf("покупка в месяце %d: want 2 000, got %.0f", month, got[month-1])
 		}
+		if s := sumFloats(got); s != 2_000 {
+			t.Errorf("покупка в месяце %d: больше нигде начисляться не должно, got %.0f", month, s)
+		}
+	}
+
+	// Проект в один месяц — покупка в нём доступна.
+	got := calcWagonciks(&InputWagonciks{
+		Purchases: []ItemPurchase{{Month: 1, Count: 1, Price: 500}},
+	}, 1)
+	if got[0] != 500 {
+		t.Errorf("проект в 1 месяц: want 500, got %.0f", got[0])
 	}
 }
 
-// TestCalcWagonciks_PurchaseBlockedTail — количество покупки в закрытых
-// месяцах обнуляется, аренда в них считается как обычно.
-func TestCalcWagonciks_PurchaseBlockedTail(t *testing.T) {
+// TestCalcWagonciks_RentalAndPurchaseTogether — аренда и покупка в одном
+// месяце складываются в одну строку бюджета (4.4!строка 6), и так во всех
+// месяцах проекта без изъятий.
+func TestCalcWagonciks_RentalAndPurchaseTogether(t *testing.T) {
 	got := calcWagonciks(&InputWagonciks{
 		Rental: MonthlyQty{Price: 1_000, Counts: []int{1, 1, 1, 1, 1, 1}},
 		Purchases: []ItemPurchase{
@@ -178,11 +191,9 @@ func TestCalcWagonciks_PurchaseBlockedTail(t *testing.T) {
 		},
 	}, 6)
 
-	// месяцы 1-4 — аренда + покупка, месяцы 5-6 — только аренда
-	want := []float64{101_000, 101_000, 101_000, 101_000, 1_000, 1_000}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Errorf("месяц %d: want %.0f, got %.0f", i+1, want[i], got[i])
+	for i := 0; i < 6; i++ {
+		if got[i] != 101_000 {
+			t.Errorf("месяц %d: want 101 000, got %.0f", i+1, got[i])
 		}
 	}
 
@@ -274,16 +285,15 @@ func TestValidateWagonciks(t *testing.T) {
 			in:   &InputWagonciks{Purchases: []ItemPurchase{{Count: 1, Price: 100}}},
 		},
 		{
-			name: "покупка в последние два месяца проекта",
+			name: "покупка в последнем месяце проекта — разрешена",
 			in: &InputWagonciks{Purchases: []ItemPurchase{
-				{Name: "Бытовка", Month: 5, Count: 1, Price: 100},
+				{Name: "Бытовка", Month: 6, Count: 1, Price: 100},
 			}},
-			want: "не покупают в последние два месяца проекта",
 		},
 		{
 			name: "покупка за пределами проекта",
 			in:   &InputWagonciks{Purchases: []ItemPurchase{{Month: 9, Count: 1, Price: 100}}},
-			want: "допустимо от 1 до 4",
+			want: "допустимо от 1 до 6",
 		},
 		{
 			name: "отрицательная цена аренды",
@@ -328,10 +338,16 @@ func TestValidateInput_Wagonciks(t *testing.T) {
 		t.Error("отрицательная цена должна отклоняться")
 	}
 
-	// Месяц 5 при длительности 6 — последние два месяца, покупка закрыта.
-	tail := []byte(`{"purchases":[{"month":5,"count":1,"price":100}]}`)
-	if err := ValidateInput(TypeWagonciks, tail, ExecutorAibicon, 6); err == nil {
-		t.Error("покупка в предпоследнем месяце должна отклоняться")
+	// Месяц 6 при длительности 6 — последний месяц, покупка разрешена.
+	tail := []byte(`{"purchases":[{"month":6,"count":1,"price":100}]}`)
+	if err := ValidateInput(TypeWagonciks, tail, ExecutorAibicon, 6); err != nil {
+		t.Errorf("покупка в последнем месяце должна проходить: %v", err)
+	}
+
+	// Месяц 7 при длительности 6 — за пределами проекта.
+	out := []byte(`{"purchases":[{"month":7,"count":1,"price":100}]}`)
+	if err := ValidateInput(TypeWagonciks, out, ExecutorAibicon, 6); err == nil {
+		t.Error("покупка вне проекта должна отклоняться")
 	}
 
 	if err := ValidateInput(TypeWagonciks, []byte(`{"rental":`), ExecutorAibicon, 6); err == nil {
