@@ -81,6 +81,57 @@ func hireMonth(emp *Employee) int {
 	return 0
 }
 
+// firstAprilMonth — номер месяца проекта (1-based), на который приходится
+// первый апрель внутри проекта. 0 — апреля в проекте нет вовсе.
+func firstAprilMonth(startDate time.Time, duration int) int {
+	for m := 1; m <= duration; m++ {
+		if monthDate(startDate, m).Month() == time.April {
+			return m
+		}
+	}
+	return 0
+}
+
+// projectWideIndexation — действует ли на проекте общая для всех
+// индексация вместо индивидуальной «от своего приёма».
+//
+// Правило владельца (2026-08-28), дополнение к отклонению №1. Включается,
+// когда оба условия выполнены разом:
+//
+//  1. проект стартовал ДО апреля — то есть первый месяц проекта попадает
+//     на январь, февраль или март, и первый апрель проекта наступает в
+//     том же календарном году, что и старт;
+//  2. больше половины сотрудников приняты СТРОГО ДО этого апреля.
+//
+// Смысл: если проект к своему первому апрелю уже укомплектован, апрельскую
+// прибавку получает вся команда сразу, а не только «старожилы». Иначе
+// принятый в апреле ждал бы своей индексации ещё год, работая рядом с
+// коллегой на проиндексированном окладе.
+//
+// Ровно 50% не хватает: условие строгое, «больше половины».
+func projectWideIndexation(emps []Employee, startDate time.Time, duration int) bool {
+	if startDate.Month() >= time.April {
+		return false // условие 1: старт не раньше апреля
+	}
+	april := firstAprilMonth(startDate, duration)
+	if april == 0 {
+		return false // апреля в проекте нет — индексировать нечего
+	}
+
+	var hired, before int
+	for i := range emps {
+		h := hireMonth(&emps[i])
+		if h == 0 {
+			continue // сотрудник не принят ни в одном месяце — не в счёт
+		}
+		hired++
+		if h < april {
+			before++
+		}
+	}
+	return hired > 0 && before*2 > hired
+}
+
 // aprilIndexation возвращает накопительный коэффициент индексации ФОТ
 // сотрудника на месяц monthIdx (1-based).
 //
@@ -99,14 +150,24 @@ func hireMonth(emp *Employee) int {
 //   - принят в мае (6-й месяц): апрель того же года пропущен,
 //     первая индексация — в апреле следующего года;
 //   - проект стартует в апреле: этот апрель ×1.0, следующий ×1.1.
-func aprilIndexation(emp *Employee, monthIdx int, startDate time.Time) float64 {
-	hire := hireMonth(emp)
-	if hire == 0 || monthIdx <= hire {
-		return 1
+//
+// projectWide — включено ли общее для всех правило
+// (см. projectWideIndexation). Тогда отсчёт идёт не от приёма
+// сотрудника, а от начала проекта, и коэффициент в каждом месяце
+// одинаков у всей команды: принятый в апреле или позже получает ту же
+// прибавку, а не ждёт своего апреля через год.
+func aprilIndexation(emp *Employee, monthIdx int, startDate time.Time, projectWide bool) float64 {
+	from := 1
+	if !projectWide {
+		hire := hireMonth(emp)
+		if hire == 0 || monthIdx <= hire {
+			return 1
+		}
+		from = hire + 1
 	}
 
 	mult := 1.0
-	for m := hire + 1; m <= monthIdx; m++ {
+	for m := from; m <= monthIdx; m++ {
 		if monthDate(startDate, m).Month() == time.April {
 			mult *= indexationRate
 		}
@@ -124,11 +185,11 @@ func aprilIndexation(emp *Employee, monthIdx int, startDate time.Time) float64 {
 //   - выплата за «МВ» остаётся фиксированной 30 000, потому что в формуле
 //     множитель = 30000/оклад, и оклад сокращается: (30000/S)*S = 30000
 //     при любом S.
-func employeeFOT(emp *Employee, monthIdx int, startDate time.Time) float64 {
+func employeeFOT(emp *Employee, monthIdx int, startDate time.Time, projectWide bool) float64 {
 	if monthIdx < 1 || monthIdx > len(emp.MonthlySchedule) {
 		return 0
 	}
-	salary := emp.SalaryNet * aprilIndexation(emp, monthIdx, startDate)
+	salary := emp.SalaryNet * aprilIndexation(emp, monthIdx, startDate, projectWide)
 	return EffectiveMultiplier(emp, monthIdx, salary) * salary
 }
 
@@ -178,10 +239,14 @@ func calcFOTMonthly(
 	insRFArr = make([]float64, duration)
 	insKGArr = make([]float64, duration)
 
+	// Общая для всех индексация — свойство проекта, а не сотрудника:
+	// считается один раз по всей команде (см. projectWideIndexation).
+	projectWide := projectWideIndexation(emps, startDate, duration)
+
 	for m := 1; m <= duration; m++ {
 		var totalFOT, rfNet, kgNet float64
 		for i := range emps {
-			fot := employeeFOT(&emps[i], m, startDate)
+			fot := employeeFOT(&emps[i], m, startDate, projectWide)
 			totalFOT += fot
 			// Excel сравнивает страну через SUMIF, то есть регистронезависимо
 			// (2.Бюджет!H172, H173, H174). Самозанятый не попадает ни в одну

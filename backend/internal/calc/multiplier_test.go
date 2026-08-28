@@ -88,16 +88,16 @@ func TestEmployeeFOT_UsesManualMultiplier(t *testing.T) {
 	start := mustDate(2026, 12, 1)
 
 	emp := mkEmp([]string{ScheduleOF, ScheduleOF}, salary)
-	if got := employeeFOT(emp, 2, start); got != salary {
+	if got := employeeFOT(emp, 2, start, false); got != salary {
 		t.Errorf("без ручного значения: want %.0f, got %.2f", float64(salary), got)
 	}
 
 	emp.MultiplierOverrides = []*float64{nil, pct(0.5)}
-	if got := employeeFOT(emp, 2, start); got != salary*0.5 {
+	if got := employeeFOT(emp, 2, start, false); got != salary*0.5 {
 		t.Errorf("с ручным значением: want %.0f, got %.2f", salary*0.5, got)
 	}
 	// Первый месяц не тронут.
-	if got := employeeFOT(emp, 1, start); got != salary {
+	if got := employeeFOT(emp, 1, start, false); got != salary {
 		t.Errorf("месяц 1 остаётся авто: want %.0f, got %.2f", float64(salary), got)
 	}
 }
@@ -112,14 +112,14 @@ func TestMultiplier_WithIndexation(t *testing.T) {
 	sched := []string{ScheduleMV, ScheduleMV, ScheduleMV, ScheduleMV, ScheduleMV}
 
 	auto := mkEmp(sched, salary)
-	if got := employeeFOT(auto, 5, start); math.Abs(got-interShiftPay) > 0.01 {
+	if got := employeeFOT(auto, 5, start, false); math.Abs(got-interShiftPay) > 0.01 {
 		t.Errorf("МВ после индексации остаётся 30 000: got %.2f", got)
 	}
 
 	manual := mkEmp(sched, salary)
 	manual.MultiplierOverrides = []*float64{nil, nil, nil, nil, pct(0.5)}
 	want := salary * indexationRate * 0.5
-	if got := employeeFOT(manual, 5, start); math.Abs(got-want) > 0.01 {
+	if got := employeeFOT(manual, 5, start, false); math.Abs(got-want) > 0.01 {
 		t.Errorf("ручной множитель к проиндексированному окладу: want %.2f, got %.2f", want, got)
 	}
 }

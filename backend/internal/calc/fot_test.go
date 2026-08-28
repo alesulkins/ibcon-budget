@@ -57,7 +57,7 @@ func TestEmployeeFOT_BasicSchedules(t *testing.T) {
 		{5, 110_000},
 	}
 	for _, tt := range tests {
-		got := employeeFOT(emp, tt.month, start)
+		got := employeeFOT(emp, tt.month, start, false)
 		if math.Abs(got-tt.want) > 0.01 {
 			t.Errorf("employeeFOT month=%d: got %.2f, want %.2f", tt.month, got, tt.want)
 		}
