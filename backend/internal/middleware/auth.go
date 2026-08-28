@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	ClaimsKey    = "claims"
+	ClaimsKey      = "claims"
 	sessionTimeout = 60 * time.Minute
 )
 
@@ -70,18 +70,8 @@ func GetClaims(c *gin.Context) *auth.Claims {
 	return claims
 }
 
-// RequireRole возвращает 403 если у пользователя нет одной из указанных ролей
-func RequireRole(roles ...string) gin.HandlerFunc {
-	allowed := make(map[string]bool, len(roles))
-	for _, r := range roles {
-		allowed[r] = true
-	}
-	return func(c *gin.Context) {
-		claims := GetClaims(c)
-		if claims == nil || !allowed[claims.Role] {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "недостаточно прав"})
-			return
-		}
-		c.Next()
-	}
-}
+// Проверки прав здесь больше нет. Раньше маршруты закрывались списком
+// ролей (RequireRole), но список ролей не отвечает на вопрос «а в этом
+// ли проекте»: экономист одного проекта проходил проверку и попадал в
+// чужой бюджет. Теперь право проверяется по матрице доступа вместе с
+// проектом — см. пакет internal/access.

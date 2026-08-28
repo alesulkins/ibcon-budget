@@ -7,7 +7,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import { budgetsApi, projectsApi } from '../../api';
 import { BUDGET_STATUS_LABELS, BUDGET_STATUS_COLORS } from '../../types';
-import { hasRole, currentUser } from '../../store/auth';
+import { currentUser } from '../../store/auth';
+import { PERM, canIn } from '../../store/permissions';
 import { resetSaveState } from '../../store/autosave';
 import { fmtMoney, fmtDate } from '../../utils/fmt';
 import Profitability from '../../components/Profitability';
@@ -112,8 +113,15 @@ export default function BudgetVersionPage() {
     onError: (e) => message.error(extractError(e)),
   });
 
-  // АП видит только строки 178-214 (шаг overhead)
-  const isAP = hasRole('AP');
+  // Права на бюджеты ЭТОГО проекта считает сервер и присылает вместе
+  // с версией — роль, назначение на проект и индивидуальные права уже
+  // сведены воедино.
+  const perms = version?.permissions;
+  const canEditBudget = canIn(perms, PERM.budgetEdit);
+
+  // АП видит только строки 178-214 (шаг overhead) — таким же урезанным
+  // приходит и его выгрузка в xlsx.
+  const isAP = (currentUser()?.role ?? '') === 'AP';
   const apOnlyStepIdx = WIZARD_STEPS.findIndex(s => s.key === 'overhead');
 
   /**
@@ -123,8 +131,9 @@ export default function BudgetVersionPage() {
    */
   const me = currentUser();
   const isFrozen = ['approved', 'archive'].includes(version?.status ?? '');
-  const mayEditFrozen = hasRole('GE') || (!!me && me.id === version?.created_by);
-  const canChangeStatus = hasRole('GE', 'EP');
+  const isGE = (me?.role ?? '') === 'GE';
+  const mayEditFrozen = isGE || (!!me && me.id === version?.created_by);
+  const canChangeStatus = canIn(perms, PERM.budgetStatus);
 
   const validNextStatuses: Record<string, string[]> = {
     draft: ['under_review'],
@@ -135,7 +144,9 @@ export default function BudgetVersionPage() {
 
   if (isLoading || !version || !project) return <Spin size="large" />;
 
-  const isReadonly = isFrozen && !mayEditFrozen;
+  // Форма только для чтения, если версия заморожена и правка не открыта
+  // ИЛИ права на изменение бюджета нет вовсе (руководство, РП, АП).
+  const isReadonly = !canEditBudget || (isFrozen && !mayEditFrozen);
 
   function renderStepContent() {
     const duration = project!.duration_months;
@@ -403,9 +414,12 @@ export default function BudgetVersionPage() {
             type="info"
             showIcon
             message="Версия доступна только для просмотра"
-            description={'Согласованную и архивную версию правит только её автор '
-              + 'или главный экономист. Чтобы внести изменения, создайте новую '
-              + 'версию копированием — данные перенесутся.'}
+            description={!canEditBudget
+              ? 'У вас нет права изменять бюджеты этого проекта. Право выдаёт '
+                + 'главный экономист на экране управления пользователями.'
+              : 'Согласованную и архивную версию правит только её автор '
+                + 'или главный экономист. Чтобы внести изменения, создайте новую '
+                + 'версию копированием — данные перенесутся.'}
           />
         )}
         {isFrozen && mayEditFrozen && (
@@ -415,7 +429,7 @@ export default function BudgetVersionPage() {
             showIcon
             message="Правка согласованной версии"
             description={'Обычно такие версии не меняют. Вам правка открыта как '
-              + (hasRole('GE') ? 'главному экономисту' : 'автору версии')
+              + (isGE ? 'главному экономисту' : 'автору версии')
               + ' — изменения попадут в уже согласованный бюджет.'}
           />
         )}

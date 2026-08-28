@@ -1,31 +1,43 @@
-import React, { useState } from 'react';
-import {
-  Table, Button, Space, Modal, Form, Input, Select,
-  message,
-} from 'antd';
-import {
-  PlusOutlined, EditOutlined, KeyOutlined, UnlockOutlined, UserAddOutlined,
-} from '@ant-design/icons';
+import { useMemo, useState } from 'react';
+import { Table, Button, Space, Modal, Form, Input, Select, message } from 'antd';
+import { PlusOutlined, UserOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
 import { usersApi, projectsApi } from '../../api';
 import type { User } from '../../types';
 import { ROLES, ROLE_LABELS } from '../../types';
 import { extractError } from '../../api/client';
+import { PERMISSION_LABELS, PERM_ALL, hasFullAccessByRole } from '../../store/permissions';
+import { shortName } from '../../utils/names';
 import StatusTag from '../../components/StatusTag';
+import UserPanel from './UserPanel';
+import { useFillToSiderFooter } from '../../hooks/useFillHeight';
 
+/** Высота подвала пагинации antd (small) — в высоту таблицы не входит:
+ *  `scroll.y` ограничивает только тело таблицы, подвал рисуется под ним. */
+const PAGINATION_RESERVE = 64;
+
+/**
+ * Порядок ролей в списке — от самой полной к самой узкой, не по алфавиту:
+ * так сортировка по роли читается как «сверху те, кто может больше».
+ * Роль «не назначена» уходит в конец, как и отключённые учётки.
+ */
+const ROLE_ORDER = ['GE', 'EP', 'RP', 'AP', 'IP', 'MANAGEMENT', ''];
+
+function roleRank(role: string): number {
+  const i = ROLE_ORDER.indexOf(role);
+  return i === -1 ? ROLE_ORDER.length : i;
+}
 
 export default function UsersPage() {
   const qc = useQueryClient();
+  const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState<string | undefined>();
   const [showCreate, setShowCreate] = useState(false);
-  const [showEdit, setShowEdit] = useState(false);
-  const [showPwd, setShowPwd] = useState(false);
-  const [showAccess, setShowAccess] = useState(false);
-  const [selected, setSelected] = useState<User | null>(null);
+  const [panelUser, setPanelUser] = useState<User | null>(null);
   const [createForm] = Form.useForm();
-  const [editForm] = Form.useForm();
-  const [pwdForm] = Form.useForm();
-  const [accessForm] = Form.useForm();
+  const [fillRef, fillHeight] = useFillToSiderFooter<HTMLDivElement>(PAGINATION_RESERVE);
 
   const { data: users, isLoading } = useQuery({
     queryKey: ['users'],
@@ -36,6 +48,34 @@ export default function UsersPage() {
     queryKey: ['projects-all'],
     queryFn: () => projectsApi.list({ limit: 200 }),
   });
+
+  /**
+   * Поиск идёт и по ФИО, и по названию роли: «экономист» в строке поиска
+   * должен находить и Ярулину, и всех главных экономистов сразу.
+   * Отключённые учётки уходят в конец списка при любой сортировке —
+   * работают всегда с активными.
+   */
+  const rows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return (users ?? [])
+      .filter(u => {
+        if (roleFilter !== undefined && u.role !== roleFilter) return false;
+        if (!q) return true;
+        const role = ROLE_LABELS[u.role] ?? u.role;
+        return `${u.full_name} ${role} ${u.email}`.toLowerCase().includes(q);
+      })
+      .sort((a, b) => {
+        if (a.active !== b.active) return a.active ? -1 : 1;
+        return a.full_name.localeCompare(b.full_name, 'ru');
+      });
+  }, [users, search, roleFilter]);
+
+  // Панель держит пользователя по id, а не копию объекта: после
+  // сохранения список перезапрашивается, и копия устарела бы —
+  // выданное право не появилось бы в панели до её переоткрытия.
+  const openUser = panelUser
+    ? (users ?? []).find(u => u.id === panelUser.id) ?? panelUser
+    : null;
 
   const createMutation = useMutation({
     mutationFn: (vals: { email: string; full_name: string; role: string; password: string }) =>
@@ -49,66 +89,47 @@ export default function UsersPage() {
     onError: (e) => message.error(extractError(e)),
   });
 
-  const updateMutation = useMutation({
-    mutationFn: (vals: { full_name?: string; role?: string; active?: boolean }) =>
-      usersApi.update(selected!.id, vals),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['users'] });
-      message.success('Сохранено');
-      setShowEdit(false);
-      editForm.resetFields();
-      setSelected(null);
-    },
-    onError: (e) => message.error(extractError(e)),
-  });
+  const roleOptions = [
+    { value: '', label: ROLE_LABELS[''] },
+    ...Object.values(ROLES).map((r) => ({ value: r, label: ROLE_LABELS[r] })),
+  ];
 
-  const pwdMutation = useMutation({
-    mutationFn: (vals: { password: string }) => usersApi.setPassword(selected!.id, vals.password),
-    onSuccess: () => {
-      message.success('Пароль изменён');
-      setShowPwd(false);
-      pwdForm.resetFields();
-      setSelected(null);
-    },
-    onError: (e) => message.error(extractError(e)),
-  });
-
-  const unlockMutation = useMutation({
-    mutationFn: (id: number) => usersApi.unlock(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['users'] }); message.success('Разблокировано'); },
-    onError: (e) => message.error(extractError(e)),
-  });
-
-  const grantMutation = useMutation({
-    mutationFn: (vals: { project_id: number }) =>
-      usersApi.grantAccess(selected!.id, vals.project_id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['users'] });
-      message.success('Доступ выдан');
-      setShowAccess(false);
-      accessForm.resetFields();
-    },
-    onError: (e) => message.error(extractError(e)),
-  });
-
-  const roleOptions = Object.values(ROLES).map((r) => ({ value: r, label: ROLE_LABELS[r] }));
+  /**
+   * Любая сортировка сначала разводит активных и отключённых, и только
+   * потом сравнивает по самой колонке: отключённая учётка не должна
+   * всплывать наверх из-за фамилии или роли.
+   */
+  const byActiveThen = (cmp: (a: User, b: User) => number) =>
+    (a: User, b: User) => (a.active !== b.active ? (a.active ? -1 : 1) : cmp(a, b));
 
   const columns: ColumnsType<User> = [
-    // В управлении пользователями ФИО показывается ПОЛНОСТЬЮ
-    { title: 'ФИО', dataIndex: 'full_name', sorter: (a, b) => a.full_name.localeCompare(b.full_name, 'ru') },
+    {
+      title: 'ФИО',
+      dataIndex: 'full_name',
+      // В таблице — сокращённо «Фамилия И.О.»; полное ФИО живёт в панели.
+      render: (v: string) => shortName(v),
+      sorter: byActiveThen((a, b) => a.full_name.localeCompare(b.full_name, 'ru')),
+    },
     { title: 'Email', dataIndex: 'email' },
     {
       title: 'Роль',
       dataIndex: 'role',
-      render: (r) => <StatusTag>{ROLE_LABELS[r as keyof typeof ROLE_LABELS] ?? r}</StatusTag>,
+      // Сортировка по «весу» роли, а не по алфавиту, — см. ROLE_ORDER.
+      sorter: byActiveThen((a, b) => roleRank(a.role) - roleRank(b.role)),
+      render: (r: string) => (
+        <StatusTag color={r ? undefined : 'grey'}>
+          {ROLE_LABELS[r] ?? r}
+        </StatusTag>
+      ),
     },
     {
       title: 'Статус',
       dataIndex: 'active',
+      sorter: byActiveThen((a, b) => b.failed_attempts - a.failed_attempts),
       render: (active: boolean, row: User) => (
         <Space>
-          <StatusTag color={active ? 'green' : 'red'}>
-            {active ? 'Активен' : 'Заблокирован'}
+          <StatusTag color={active ? 'green' : 'grey'}>
+            {active ? 'Активен' : 'Неактивен'}
           </StatusTag>
           {row.failed_attempts >= 5 && (
             <StatusTag color="amber">Много попыток входа</StatusTag>
@@ -117,137 +138,175 @@ export default function UsersPage() {
       ),
     },
     {
+      title: 'Доступ к проектам',
+      key: 'projects',
+      render: (_, row) => {
+        // У главного экономиста доступ ко всем проектам идёт от роли, а
+        // не от списка назначений: показываем факт, а не пустой прочерк.
+        if (hasFullAccessByRole(row.role)) {
+          return <StatusTag color="teal">Все проекты</StatusTag>;
+        }
+        const list = row.projects ?? [];
+        if (list.length === 0) {
+          return <span style={{ opacity: 0.45 }}>—</span>;
+        }
+        // Каждый проект с новой строки и ссылкой на его карточку.
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {list.map(p => (
+              <Link
+                key={p.project_id}
+                to={`/projects/${p.project_id}`}
+                className="ibcon-link-plain"
+                title={p.can_edit ? 'С правом редактирования' : 'Только просмотр'}
+              >
+                {p.name}
+                {!p.can_edit && <span style={{ opacity: 0.5 }}> · просмотр</span>}
+              </Link>
+            ))}
+          </div>
+        );
+      },
+    },
+    {
+      title: 'Доп. права',
+      key: 'grants',
+      render: (_, row) => {
+        // Все 14 прав у главного экономиста есть от роли — выдавать
+        // сверх неё нечего.
+        if (hasFullAccessByRole(row.role)) {
+          return <StatusTag color="teal">Все права</StatusTag>;
+        }
+        const list = row.grants ?? [];
+        if (list.length === 0) {
+          return <span style={{ opacity: 0.45 }}>—</span>;
+        }
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {list.map(g => (
+              <span key={`${g.permission}:${g.project_id ?? 'all'}`} style={{ fontSize: 12 }}>
+                {g.permission === PERM_ALL
+                  ? 'Все права'
+                  : PERMISSION_LABELS[g.permission] ?? g.permission}
+                <span style={{ opacity: 0.55 }}>
+                  {' · '}
+                  {g.project_id === null
+                    ? 'все проекты'
+                    : (g.project_name ?? `проект №${g.project_id}`)}
+                </span>
+              </span>
+            ))}
+          </div>
+        );
+      },
+    },
+    {
       title: '',
       key: 'actions',
-      width: 180,
+      width: 56,
+      align: 'right',
+      // Колонки «доступ к проектам» и «доп. права» разгоняют таблицу
+      // шире экрана, поэтому кнопку закрепляем справа — иначе до неё
+      // пришлось бы доскроллить.
+      fixed: 'right',
       render: (_, row) => (
-        <Space size="small">
-          <Button
-            size="small" icon={<EditOutlined />} title="Редактировать"
-            onClick={() => { setSelected(row); editForm.setFieldsValue({ full_name: row.full_name, email: row.email, role: row.role }); setShowEdit(true); }}
-          />
-          <Button
-            size="small" icon={<KeyOutlined />} title="Сменить пароль"
-            onClick={() => { setSelected(row); setShowPwd(true); }}
-          />
-          <Button
-            size="small" icon={<UserAddOutlined />} title="Выдать доступ к проекту"
-            onClick={() => { setSelected(row); setShowAccess(true); }}
-          />
-          {row.failed_attempts >= 5 && (
-            <Button
-              size="small" icon={<UnlockOutlined />} title="Разблокировать"
-              onClick={() => unlockMutation.mutate(row.id)}
-              loading={unlockMutation.isPending}
-            />
-          )}
-        </Space>
+        <Button
+          size="small"
+          icon={<UserOutlined />}
+          title="Действия с пользователем"
+          onClick={() => setPanelUser(row)}
+        />
       ),
     },
   ];
 
-  const projectOptions = (projectsData?.items ?? []).map((p) => ({
-    value: p.id,
-    label: `#${p.id} ${p.name}`,
-  }));
-
   return (
     <div>
-      {/* Название раздела живёт в шапке (AppLayout). */}
-      <Button
-        type="primary" icon={<PlusOutlined />} style={{ marginBottom: 12 }}
-        onClick={() => { setShowCreate(true); createForm.resetFields(); }}
-      >
-        Создать пользователя
-      </Button>
+      {/* Название раздела живёт в шапке (AppLayout).
+          Поиск и фильтр слева, кнопка создания — справа, как в реестре
+          проектов: одинаковая раскладка у всех списков. */}
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+        <Input.Search
+          allowClear
+          placeholder="Поиск по ФИО или роли"
+          style={{ width: 300 }}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <Select
+          allowClear
+          placeholder="Все роли"
+          style={{ width: 220 }}
+          value={roleFilter}
+          onChange={(v) => setRoleFilter(v)}
+          options={roleOptions}
+        />
+        <Button
+          type="primary" icon={<PlusOutlined />}
+          style={{ marginLeft: 'auto' }}
+          onClick={() => { setShowCreate(true); createForm.resetFields(); }}
+        >
+          Создать пользователя
+        </Button>
+      </div>
 
-      <Table
-        rowKey="id"
-        className="nowrap-table"
-        columns={columns}
-        dataSource={users ?? []}
-        loading={isLoading}
-        size="small"
-        pagination={{ pageSize: 20 }}
-        scroll={{ x: 'max-content' }}
+      {/* scroll.y ограничивает тело таблицы высотой до линии ЛК в
+          сайдбаре (useFillToSiderFooter) — страница не растёт вниз,
+          прокручиваются только строки. */}
+      <div ref={fillRef}>
+        <Table
+          rowKey="id"
+          columns={columns}
+          dataSource={rows}
+          loading={isLoading}
+          size="small"
+          pagination={{ pageSize: 20 }}
+          scroll={{ x: 'max-content', y: fillHeight }}
+        />
+      </div>
+
+      <UserPanel
+        user={openUser}
+        projects={projectsData?.items ?? []}
+        onClose={() => setPanelUser(null)}
       />
 
-      {/* Создать */}
       <Modal
         title="Новый пользователь" open={showCreate}
         onCancel={() => { setShowCreate(false); createForm.resetFields(); }}
         onOk={() => createForm.submit()} okText="Создать" cancelText="Отмена"
         confirmLoading={createMutation.isPending}
       >
-        <Form form={createForm} layout="vertical" onFinish={createMutation.mutate}>
+        <Form
+          form={createForm}
+          layout="vertical"
+          onFinish={createMutation.mutate}
+          initialValues={{ role: '' }}
+        >
           <Form.Item
             name="full_name"
             label="ФИО полностью"
             rules={[{ required: true, message: 'Не заполнено обязательное поле: ФИО' }]}
-            extra="Фамилия Имя Отчество. В таблицах и шапке показывается сокращённо: Фамилия И.О."
+            extra="Фамилия Имя Отчество. В таблицах показывается сокращённо: Фамилия И.О."
           >
             <Input placeholder="Иванов Иван Иванович" />
           </Form.Item>
-          <Form.Item name="email" label="Email" rules={[{ required: true }, { type: 'email' }]}><Input /></Form.Item>
-          <Form.Item name="role" label="Роль" rules={[{ required: true }]}>
-            <Select options={roleOptions} />
+          <Form.Item name="email" label="Email" rules={[{ required: true }, { type: 'email' }]}>
+            <Input />
           </Form.Item>
-          <Form.Item name="password" label="Пароль" rules={[{ required: true, min: 10, message: 'Минимум 10 символов' }]}>
-            <Input.Password />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* Редактировать */}
-      <Modal
-        title="Редактирование" open={showEdit}
-        onCancel={() => { setShowEdit(false); setSelected(null); }}
-        onOk={() => editForm.submit()} okText="Сохранить" cancelText="Отмена"
-        confirmLoading={updateMutation.isPending}
-      >
-        <Form form={editForm} layout="vertical" onFinish={updateMutation.mutate}>
           <Form.Item
-            name="full_name"
-            label="ФИО полностью"
-            rules={[{ required: true, message: 'Не заполнено обязательное поле: ФИО' }]}
-            extra="Фамилия Имя Отчество. В таблицах и шапке показывается сокращённо: Фамилия И.О."
+            name="role"
+            label="Роль"
+            extra="Можно создать без роли — тогда пользователь войдёт, но разделов не увидит."
           >
-            <Input placeholder="Иванов Иван Иванович" />
-          </Form.Item>
-          <Form.Item name="role" label="Роль" rules={[{ required: true }]}>
             <Select options={roleOptions} />
           </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* Смена пароля */}
-      <Modal
-        title={`Смена пароля — ${selected?.full_name ?? ''}`} open={showPwd}
-        onCancel={() => { setShowPwd(false); setSelected(null); pwdForm.resetFields(); }}
-        onOk={() => pwdForm.submit()} okText="Сменить" cancelText="Отмена"
-        confirmLoading={pwdMutation.isPending}
-      >
-        <Form form={pwdForm} layout="vertical" onFinish={pwdMutation.mutate}>
-          <Form.Item name="password" label="Новый пароль" rules={[{ required: true, min: 10, message: 'Минимум 10 символов' }]}>
+          <Form.Item
+            name="password"
+            label="Пароль"
+            rules={[{ required: true, min: 10, message: 'Минимум 10 символов' }]}
+          >
             <Input.Password />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* Доступ к проекту */}
-      <Modal
-        title={`Доступ к проекту — ${selected?.full_name ?? ''}`} open={showAccess}
-        onCancel={() => { setShowAccess(false); setSelected(null); accessForm.resetFields(); }}
-        onOk={() => accessForm.submit()} okText="Выдать" cancelText="Отмена"
-        confirmLoading={grantMutation.isPending}
-      >
-        <Form form={accessForm} layout="vertical" onFinish={grantMutation.mutate}>
-          <Form.Item name="project_id" label="Проект" rules={[{ required: true }]}>
-            <Select
-              options={projectOptions}
-              showSearch
-              filterOption={(inp, opt) => String(opt?.label).toLowerCase().includes(inp.toLowerCase())}
-            />
           </Form.Item>
         </Form>
       </Modal>

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   Table, Button, Input, Select,
-  Modal, Form, DatePicker, InputNumber, message, Tooltip,
+  Modal, Form, DatePicker, InputNumber, message,
 } from 'antd';
 import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -16,26 +16,37 @@ import {
 import { fmtDate, fmtMoney } from '../../utils/fmt';
 import Profitability from '../../components/Profitability';
 import { capitalizeFirst, normalizeFullName, shortName } from '../../utils/names';
-import { hasRole } from '../../store/auth';
+import { PERM, usePermissions } from '../../store/permissions';
 import { extractError } from '../../api/client';
 import { useStickyState } from '../../hooks/useStickyState';
 import { currentUser } from '../../store/auth';
 import Fireworks, { shouldShowFireworks, markFireworksShown } from '../../components/Fireworks';
 import StatusTag from '../../components/StatusTag';
+import { useFillToSiderFooter } from '../../hooks/useFillHeight';
 
+/**
+ * Реестр листается не страницами, а прокруткой — вся видимая (по правам)
+ * выборка запрашивается одним куском. Проектов в системе на порядки
+ * меньше, чем такой лимит: он просто гарантия, что реестр не обрежется
+ * молча, если их станет много.
+ */
+const REGISTRY_LIMIT = 1000;
 
 export default function ProjectsPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const [fillRef, fillHeight] = useFillToSiderFooter<HTMLDivElement>();
   // Фильтры реестра переживают переход в справочники и обратно
   const [search, setSearch] = useStickyState('projects:search', '');
   const [statusFilter, setStatusFilter] = useStickyState<string | undefined>('projects:status', undefined);
-  const [page, setPage] = useStickyState('projects:page', 1);
   const [budgetStatusFilter, setBudgetStatusFilter] = useStickyState<string | undefined>('projects:budgetStatus', undefined);
   const [executorFilter, setExecutorFilter] = useStickyState<string | undefined>('projects:executor', undefined);
   const [showCreate, setShowCreate] = useState(false);
   const [form] = Form.useForm();
-  const canCreate = hasRole('GE', 'IP');
+  // Кнопку прячем по праву, а не по роли: главный экономист может
+  // выдать создание проектов кому угодно.
+  const { can } = usePermissions();
+  const canCreate = can(PERM.projectCreate);
 
   // Салют — раз в день, только для одного пользователя (см. Fireworks)
   const [fireworks, setFireworks] = useState(() => shouldShowFireworks(currentUser()?.full_name));
@@ -48,13 +59,13 @@ export default function ProjectsPage() {
   const hideFireworks = useCallback(() => setFireworks(false), []);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['projects', search, statusFilter, page],
-    queryFn: () => projectsApi.list({ search, status: statusFilter, page, limit: 50 }),
+    queryKey: ['projects', search, statusFilter],
+    queryFn: () => projectsApi.list({ search, status: statusFilter, limit: REGISTRY_LIMIT }),
   });
 
   const { data: executors } = useQuery({
     queryKey: ['executors'],
-    queryFn: refsApi.executors,
+    queryFn: () => refsApi.executors(),
   });
 
   const createMutation = useMutation({
@@ -112,7 +123,6 @@ export default function ProjectsPage() {
     setStatusFilter(undefined);
     setBudgetStatusFilter(undefined);
     setExecutorFilter(undefined);
-    setPage(1);
   }
 
   // Статус бюджета и исполнителя API не фильтрует — отбираем на клиенте
@@ -240,7 +250,7 @@ export default function ProjectsPage() {
           prefix={<SearchOutlined />}
           placeholder="Поиск по проекту, заказчику..."
           value={search}
-          onChange={e => { setSearch(e.target.value); setPage(1); }}
+          onChange={e => setSearch(e.target.value)}
           style={{ width: 280 }}
           allowClear
         />
@@ -249,7 +259,7 @@ export default function ProjectsPage() {
           allowClear
           style={{ width: 180 }}
           value={statusFilter}
-          onChange={v => { setStatusFilter(v); setPage(1); }}
+          onChange={setStatusFilter}
           options={Object.entries(PROJECT_STATUS_LABELS).map(([value, label]) => ({ value, label }))}
         />
         <Select
@@ -257,7 +267,7 @@ export default function ProjectsPage() {
           allowClear
           style={{ width: 180 }}
           value={budgetStatusFilter}
-          onChange={v => { setBudgetStatusFilter(v); setPage(1); }}
+          onChange={setBudgetStatusFilter}
           options={Object.entries(BUDGET_STATUS_LABELS).map(([value, label]) => ({ value, label }))}
         />
         <Select
@@ -265,7 +275,7 @@ export default function ProjectsPage() {
           allowClear
           style={{ width: 200 }}
           value={executorFilter}
-          onChange={v => { setExecutorFilter(v); setPage(1); }}
+          onChange={setExecutorFilter}
           options={(executors ?? []).map(e => ({ value: e.name, label: e.name }))}
         />
         <Button
@@ -289,25 +299,25 @@ export default function ProjectsPage() {
         )}
       </div>
 
-      <Table
-        rowKey="id"
-        className="nowrap-table"
-        columns={columns}
-        dataSource={rows}
-        loading={isLoading}
-        // max-content, а не фиксированная ширина: таблица становится ровно
-        // такой, чтобы ни одно значение не переносилось, независимо от
-        // масштаба окна.
-        scroll={{ x: 'max-content' }}
-        size="small"
-        pagination={{
-          current: page,
-          pageSize: 50,
-          total: data?.total ?? 0,
-          onChange: setPage,
-          showTotal: (total) => `Всего: ${total}`,
-        }}
-      />
+      {/* Страниц нет: вся выборка (в пределах прав и фильтров) грузится
+          одним запросом, а прокручивается сама таблица — scroll.y
+          ограничивает её высотой до линии ЛК в сайдбаре
+          (useFillToSiderFooter), страница вниз не растёт. */}
+      <div ref={fillRef}>
+        <Table
+          rowKey="id"
+          className="nowrap-table"
+          columns={columns}
+          dataSource={rows}
+          loading={isLoading}
+          // max-content, а не фиксированная ширина: таблица становится ровно
+          // такой, чтобы ни одно значение не переносилось, независимо от
+          // масштаба окна.
+          scroll={{ x: 'max-content', y: fillHeight }}
+          size="small"
+          pagination={false}
+        />
+      </div>
 
       <Modal
         title="Создание проекта"

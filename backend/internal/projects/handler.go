@@ -6,8 +6,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"ibcon-budget/internal/auth"
+	"ibcon-budget/internal/access"
 	"ibcon-budget/internal/auditlog"
+	"ibcon-budget/internal/auth"
 	"ibcon-budget/internal/middleware"
 	"ibcon-budget/internal/users"
 )
@@ -15,30 +16,24 @@ import (
 type Handler struct {
 	svc      *Service
 	usersSvc *users.Service
+	acl      *access.Service
 	audit    *auditlog.Service
 }
 
-func NewHandler(svc *Service, usersSvc *users.Service, audit *auditlog.Service) *Handler {
-	return &Handler{svc: svc, usersSvc: usersSvc, audit: audit}
+func NewHandler(svc *Service, usersSvc *users.Service, acl *access.Service, audit *auditlog.Service) *Handler {
+	return &Handler{svc: svc, usersSvc: usersSvc, acl: acl, audit: audit}
 }
 
 func (h *Handler) Register(r gin.IRouter) {
 	g := r.Group("/projects")
 	g.GET("", h.list)
-	g.POST("", middleware.RequireRole(auth.RoleGE, auth.RoleIP), h.create)
+	// Создание проекта не привязано к проекту, поэтому проверяется
+	// посредником. Остальные маршруты проверяют право внутри: им нужен
+	// id проекта, без него ответ был бы «можно вообще», а не «можно тут».
+	g.POST("", h.acl.Require(auth.PermProjectCreate), h.create)
 	g.GET("/:id", h.get)
-	g.PUT("/:id", middleware.RequireRole(auth.RoleGE, auth.RoleEP, auth.RoleIP), h.update)
-	g.PATCH("/:id/status", middleware.RequireRole(auth.RoleGE, auth.RoleEP, auth.RoleIP), h.changeStatus)
-}
-
-// canAccessProject проверяет, имеет ли пользователь доступ к проекту.
-// GE — всегда. Остальные — только если проект назначен им или есть индивидуальный доступ.
-func (h *Handler) canAccessProject(claims *auth.Claims, projectID int) bool {
-	if claims.Role == auth.RoleGE {
-		return true
-	}
-	exists, _, _ := h.usersSvc.HasProjectAccess(claims.UserID, projectID)
-	return exists
+	g.PUT("/:id", h.update)
+	g.PATCH("/:id/status", h.changeStatus)
 }
 
 func (h *Handler) list(c *gin.Context) {
@@ -50,10 +45,12 @@ func (h *Handler) list(c *gin.Context) {
 	params.Limit, _ = strconv.Atoi(c.DefaultQuery("limit", "50"))
 	params.Offset, _ = strconv.Atoi(c.DefaultQuery("offset", "0"))
 
-	// Не-GE видят только свои проекты
-	if claims.Role != auth.RoleGE {
-		ids, err := h.usersSvc.ProjectsForUser(claims.UserID)
-		if err != nil || len(ids) == 0 {
+	// Реестр показывает ровно те проекты, которые пользователю видны.
+	// Руководство и главный экономист видят все, остальные — назначенные
+	// и созданные ими самими.
+	if !h.acl.SeesAllProjects(claims, auth.PermProjectView) {
+		ids := h.acl.VisibleProjectIDs(claims, auth.PermProjectView)
+		if len(ids) == 0 {
 			c.JSON(http.StatusOK, gin.H{"total": 0, "items": []any{}})
 			return
 		}
@@ -90,16 +87,17 @@ func (h *Handler) create(c *gin.Context) {
 		return
 	}
 
-	// Выдаём IP доступ к своему проекту
-	if claims.Role == auth.RoleIP {
-		_ = h.usersSvc.GrantProjectAccess(claims.UserID, p.ID, claims.UserID, true)
-	}
+	// Создатель получает доступ к своему проекту. Для инициатора это
+	// вдобавок к авторству: без записи о назначении проект не попал бы
+	// в чужие списки при передаче работы.
+	_ = h.usersSvc.GrantProjectAccess(claims.UserID, p.ID, claims.UserID, true)
 
 	h.audit.Log(auditlog.Entry{
 		UserID: &claims.UserID, UserRole: claims.Role,
 		Action: "create_project", ObjectType: "project", ObjectID: &p.ID,
 		Comment: p.Name,
 	})
+	p.Permissions = h.acl.Permissions(claims, p.ID)
 	c.JSON(http.StatusCreated, p)
 }
 
@@ -107,8 +105,8 @@ func (h *Handler) get(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
 	claims := middleware.GetClaims(c)
 
-	if !h.canAccessProject(claims, id) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "нет доступа к проекту"})
+	if !h.acl.Can(claims, auth.PermProjectView, id) {
+		access.Deny(c, auth.PermProjectView)
 		return
 	}
 
@@ -117,6 +115,9 @@ func (h *Handler) get(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "проект не найден"})
 		return
 	}
+	// Что этот пользователь может делать с этим проектом. Фронт прячет
+	// по этому списку кнопки; отказ всё равно выносит сервер.
+	p.Permissions = h.acl.Permissions(claims, id)
 	c.JSON(http.StatusOK, p)
 }
 
@@ -124,18 +125,9 @@ func (h *Handler) update(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
 	claims := middleware.GetClaims(c)
 
-	if !h.canAccessProject(claims, id) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "нет доступа к проекту"})
+	if !h.acl.Can(claims, auth.PermProjectEdit, id) {
+		access.Deny(c, auth.PermProjectEdit)
 		return
-	}
-
-	// IP может редактировать только свои проекты
-	if claims.Role == auth.RoleIP {
-		owner, _ := h.svc.CreatedByUser(id)
-		if owner != claims.UserID {
-			c.JSON(http.StatusForbidden, gin.H{"error": "инициатор проекта может редактировать только созданные им проекты"})
-			return
-		}
 	}
 
 	var req UpdateRequest
@@ -153,6 +145,7 @@ func (h *Handler) update(c *gin.Context) {
 		Action: "update_project", ObjectType: "project", ObjectID: &id,
 		Comment: p.Name,
 	})
+	p.Permissions = h.acl.Permissions(claims, id)
 	c.JSON(http.StatusOK, p)
 }
 
@@ -160,8 +153,8 @@ func (h *Handler) changeStatus(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
 	claims := middleware.GetClaims(c)
 
-	if !h.canAccessProject(claims, id) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "нет доступа к проекту"})
+	if !h.acl.Can(claims, auth.PermProjectStatus, id) {
+		access.Deny(c, auth.PermProjectStatus)
 		return
 	}
 
@@ -180,5 +173,6 @@ func (h *Handler) changeStatus(c *gin.Context) {
 		Action: "change_project_status", ObjectType: "project", ObjectID: &id,
 		Comment: req.Status + ": " + req.Comment,
 	})
+	p.Permissions = h.acl.Permissions(claims, id)
 	c.JSON(http.StatusOK, p)
 }

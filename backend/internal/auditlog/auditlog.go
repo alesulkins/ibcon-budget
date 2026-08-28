@@ -1,7 +1,9 @@
 package auditlog
 
 import (
+	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -37,6 +39,16 @@ func (s *Service) Log(e Entry) {
 type ListParams struct {
 	Limit  int
 	Offset int
+
+	// ProjectIDs — ограничение выборки проектами, которые пользователю
+	// видны. nil означает «все» и ставится только тем, кто видит весь
+	// журнал. Пустой непустой-по-смыслу список (len == 0, но
+	// ScopeAll == false) обработчик до сюда не доводит: он сразу
+	// отдаёт пустой ответ.
+	//
+	// Записи без проекта (создание пользователя, правка справочника)
+	// при ограничении не показываются: они относятся к системе целиком.
+	ProjectIDs []int
 }
 
 type LogRow struct {
@@ -62,12 +74,39 @@ func (s *Service) List(p ListParams) ([]LogRow, int, error) {
 	if p.Limit <= 0 {
 		p.Limit = 50
 	}
+
+	// Проект определяем двумя путями: напрямую (object_type='project') и
+	// через версию бюджета (object_type='budget_version'). Один и тот же
+	// FROM используется и для подсчёта, и для выборки, иначе при
+	// ограничении по проектам «всего» и страница разошлись бы.
+	from := `
+		 FROM audit_log a
+		 LEFT JOIN users u ON u.id = a.user_id
+		 -- проект напрямую
+		 LEFT JOIN projects pd
+		        ON a.object_type = 'project' AND pd.id = a.object_id
+		 -- проект через версию бюджета
+		 LEFT JOIN budget_versions bv
+		        ON a.object_type = 'budget_version' AND bv.id = a.object_id
+		 LEFT JOIN budgets b  ON b.id = bv.budget_id
+		 LEFT JOIN projects pv ON pv.id = b.project_id`
+
+	args := []any{}
+	where := ""
+	if p.ProjectIDs != nil {
+		ph := make([]string, len(p.ProjectIDs))
+		for i, id := range p.ProjectIDs {
+			ph[i] = fmt.Sprintf("$%d", i+1)
+			args = append(args, id)
+		}
+		where = " WHERE COALESCE(pv.id, pd.id) IN (" + strings.Join(ph, ",") + ")"
+	}
+
 	var total int
-	if err := s.db.Get(&total, `SELECT COUNT(*) FROM audit_log`); err != nil {
+	if err := s.db.Get(&total, "SELECT COUNT(*)"+from+where, args...); err != nil {
 		return nil, 0, err
 	}
-	// Проект определяем двумя путями: напрямую (object_type='project') и
-	// через версию бюджета (object_type='budget_version').
+
 	var rows []LogRow
 	err := s.db.Select(&rows,
 		`SELECT a.id,
@@ -80,20 +119,11 @@ func (s *Service) List(p ListParams) ([]LogRow, int, error) {
 		        a.object_id,
 		        COALESCE(a.comment,'')         AS comment,
 		        COALESCE(pv.id, pd.id)         AS project_id,
-		        COALESCE(pv.name, pd.name, '') AS project_name
-		 FROM audit_log a
-		 LEFT JOIN users u ON u.id = a.user_id
-		 -- проект напрямую
-		 LEFT JOIN projects pd
-		        ON a.object_type = 'project' AND pd.id = a.object_id
-		 -- проект через версию бюджета
-		 LEFT JOIN budget_versions bv
-		        ON a.object_type = 'budget_version' AND bv.id = a.object_id
-		 LEFT JOIN budgets b  ON b.id = bv.budget_id
-		 LEFT JOIN projects pv ON pv.id = b.project_id
-		 ORDER BY a.occurred_at DESC
-		 LIMIT $1 OFFSET $2`,
-		p.Limit, p.Offset,
+		        COALESCE(pv.name, pd.name, '') AS project_name`+
+			from+where+
+			fmt.Sprintf(` ORDER BY a.occurred_at DESC LIMIT $%d OFFSET $%d`,
+				len(args)+1, len(args)+2),
+		append(args, p.Limit, p.Offset)...,
 	)
 	return rows, total, err
 }

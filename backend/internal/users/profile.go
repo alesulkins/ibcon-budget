@@ -26,6 +26,11 @@ type Profile struct {
 	Role     string `db:"role"      json:"role"`
 	Avatar   string `db:"avatar"    json:"avatar"`
 	Notes    string `db:"notes"     json:"notes"`
+
+	// Permissions — что пользователь может хотя бы где-нибудь.
+	// По этому списку фронт решает, показывать ли пункты меню и кнопки
+	// создания. Заполняется обработчиком, в таблице такой колонки нет.
+	Permissions []string `db:"-" json:"permissions"`
 }
 
 type UpdateProfileRequest struct {

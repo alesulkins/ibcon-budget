@@ -429,9 +429,9 @@ func TestProfitTaxRate(t *testing.T) {
 	}{
 		{ExecutorAibicon, 0.25},
 		{ExecutorAibiconProject, 0},
-		{ExecutorAibiconKG, 0.06}, // в форме есть, но для КГ не применяется
+		{ExecutorAibiconKG, 0.04}, // актуальная ставка вместо 6% формы (отклонение №4)
 		{"айбикон-проект", 0},     // регистронезависимо
-		{"АЙБИКОН КИРГИЗИЯ", 0.06},
+		{"АЙБИКОН КИРГИЗИЯ", 0.04},
 	}
 	for _, tt := range tests {
 		if got := profitTaxRate(tt.executor); math.Abs(got-tt.want) > 1e-9 {
@@ -456,8 +456,8 @@ func TestMarkupRate(t *testing.T) {
 		{"Проект 70%", 70, ExecutorAibiconProject, 2.3333333333333335},
 		// Айбикон-Проект, налог 0: 0.20/(1-0-0.20) = 0.20/0.80
 		{"Проект 20%", 20, ExecutorAibiconProject, 0.25},
-		// Киргизия, налог 6%: 0.27/(1-0.06-0.27) = 0.27/0.67
-		{"Киргизия 27%", 27, ExecutorAibiconKG, 0.40298507462686567},
+		// Киргизия, налог 4%: 0.27/(1-0.04-0.27) = 0.27/0.69
+		{"Киргизия 27%", 27, ExecutorAibiconKG, 0.391304347826087},
 		// значения из обновлённых файлов
 		{"Айбикон 27% (файл)", 27, ExecutorAibicon, 0.5625},
 		{"Проект 27% (файл)", 27, ExecutorAibiconProject, 0.3698630136986301},
@@ -567,7 +567,8 @@ func TestValidateBudgetParams_TargetRent(t *testing.T) {
 		{"80% при налоге 25%", 80, ExecutorAibicon, true},
 		{"80% при налоге 0 (Проект)", 80, ExecutorAibiconProject, false},
 		{"100% при налоге 0", 100, ExecutorAibiconProject, true},
-		{"94% при налоге 6% (Киргизия)", 94, ExecutorAibiconKG, true},
+		{"94% при налоге 4% (Киргизия)", 94, ExecutorAibiconKG, false},
+		{"96% при налоге 4% (Киргизия)", 96, ExecutorAibiconKG, true},
 		{"не задана", 0, ExecutorAibicon, false},
 		{"отрицательная", -5, ExecutorAibicon, true},
 	}

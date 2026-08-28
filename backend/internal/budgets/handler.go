@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"ibcon-budget/internal/access"
 	"ibcon-budget/internal/auditlog"
 	"ibcon-budget/internal/auth"
 	"ibcon-budget/internal/calc"
@@ -21,26 +22,32 @@ type Handler struct {
 	svc         *Service
 	projectsSvc *projects.Service
 	usersSvc    *users.Service
+	acl         *access.Service
 	audit       *auditlog.Service
 }
 
-func NewHandler(svc *Service, projectsSvc *projects.Service, usersSvc *users.Service, audit *auditlog.Service) *Handler {
-	return &Handler{svc: svc, projectsSvc: projectsSvc, usersSvc: usersSvc, audit: audit}
+func NewHandler(svc *Service, projectsSvc *projects.Service, usersSvc *users.Service,
+	acl *access.Service, audit *auditlog.Service) *Handler {
+	return &Handler{svc: svc, projectsSvc: projectsSvc, usersSvc: usersSvc, acl: acl, audit: audit}
 }
 
+// Права проверяются внутри обработчиков, а не посредником по ролям:
+// каждому нужен id проекта, чтобы отличить «может вообще» от «может
+// в этом проекте». Посредник по ролям такого различия не делал и
+// пропускал, например, экономиста в чужой бюджет.
 func (h *Handler) Register(r gin.IRouter) {
 	// Маршруты на уровне проекта (параметр :id = project_id)
 	proj := r.Group("/projects/:id/budgets")
 	proj.GET("/versions", h.listVersions)
-	proj.POST("/versions", middleware.RequireRole(auth.RoleGE, auth.RoleEP, auth.RoleIP), h.createVersion)
-	proj.POST("/new-version", middleware.RequireRole(auth.RoleGE, auth.RoleEP), h.newVersion)
+	proj.POST("/versions", h.createVersion)
+	proj.POST("/new-version", h.newVersion)
 
 	// Маршруты на уровне версии бюджета (параметр :vid = version_id)
 	ver := r.Group("/budget-versions/:vid")
 	ver.GET("", h.getVersion)
-	ver.PATCH("/status", middleware.RequireRole(auth.RoleGE, auth.RoleEP), h.changeStatus)
-	ver.PUT("/cost-override", middleware.RequireRole(auth.RoleGE, auth.RoleEP), h.updateCostOverride)
-	ver.PUT("/inputs/:type", middleware.RequireRole(auth.RoleGE, auth.RoleEP), h.saveInput)
+	ver.PATCH("/status", h.changeStatus)
+	ver.PUT("/cost-override", h.updateCostOverride)
+	ver.PUT("/inputs/:type", h.saveInput)
 	ver.GET("/inputs/:type", h.getInput)
 	ver.GET("/inputs", h.getAllInputs)
 	ver.GET("/calculate", h.calculate)
@@ -57,32 +64,15 @@ func (h *Handler) versionID(c *gin.Context) int {
 	return id
 }
 
-// canAccess проверяет доступ к проекту
-func (h *Handler) canAccess(claims *auth.Claims, projectID int) bool {
-	if claims.Role == auth.RoleGE {
-		return true
-	}
-	exists, _, _ := h.usersSvc.HasProjectAccess(claims.UserID, projectID)
-	return exists
-}
-
-// canEdit проверяет право на редактирование
-func (h *Handler) canEdit(claims *auth.Claims, projectID int) bool {
-	if claims.Role == auth.RoleGE {
-		return true
-	}
-	_, canEdit, _ := h.usersSvc.HasProjectAccess(claims.UserID, projectID)
-	return canEdit
-}
-
 // canEditVersion — можно ли править данные конкретной версии.
 //
-// Общее право на проект даёт canEdit. Сверх него действует правило
-// владельца 2026-08-27: согласованную и архивную версию нельзя менять
-// напрямую — исключение сделано для АВТОРА версии и главного экономиста.
-// Остальным остаётся создать новую версию копированием.
+// Право «изменение версии бюджета» в этом проекте даёт матрица доступа.
+// Сверх него действует правило владельца 2026-08-27: согласованную и
+// архивную версию нельзя менять напрямую — исключение сделано для
+// АВТОРА версии и главного экономиста. Остальным остаётся создать новую
+// версию копированием.
 func (h *Handler) canEditVersion(claims *auth.Claims, v *BudgetVersion) (bool, string) {
-	if !h.canEdit(claims, v.ProjectID) {
+	if !h.acl.Can(claims, auth.PermBudgetEdit, v.ProjectID) {
 		return false, "нет права на редактирование"
 	}
 	if !IsFrozen(v.Status) {
@@ -93,6 +83,17 @@ func (h *Handler) canEditVersion(claims *auth.Claims, v *BudgetVersion) (bool, s
 	}
 	return false, "согласованную и архивную версию может править только её автор " +
 		"или главный экономист — создайте новую версию копированием"
+}
+
+// createPerm — какое право нужно для создания версии в этом проекте.
+// Первая версия и последующие разведены таблицей 1 ТЗ: экономист
+// проекта создаёт новые версии, но не первую.
+func (h *Handler) createPerm(projectID int) string {
+	existing, err := h.svc.ListVersions(projectID)
+	if err != nil || len(existing) == 0 {
+		return auth.PermBudgetCreate
+	}
+	return auth.PermBudgetVersion
 }
 
 // checkProjectNotFrozen проверяет, что бюджет можно создавать/редактировать
@@ -110,8 +111,8 @@ func (h *Handler) checkProjectNotFrozen(projectID int) error {
 func (h *Handler) listVersions(c *gin.Context) {
 	pid := h.projectID(c)
 	claims := middleware.GetClaims(c)
-	if !h.canAccess(claims, pid) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "нет доступа"})
+	if !h.acl.Can(claims, auth.PermBudgetView, pid) {
+		access.Deny(c, auth.PermBudgetView)
 		return
 	}
 	versions, err := h.svc.ListVersions(pid)
@@ -119,10 +120,12 @@ func (h *Handler) listVersions(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	// AP видит только ограниченные данные (без финансовых показателей)
-	if claims.Role == auth.RoleAP || claims.Role == auth.RoleRP || claims.Role == auth.RoleManagement {
-		c.JSON(http.StatusOK, versions)
-		return
+	// Что этот пользователь может делать с бюджетами проекта — фронт
+	// прячет по этому списку кнопки создания версии, смены статуса и
+	// выгрузки.
+	perms := h.acl.Permissions(claims, pid)
+	for i := range versions {
+		versions[i].Permissions = perms
 	}
 	c.JSON(http.StatusOK, versions)
 }
@@ -131,8 +134,12 @@ func (h *Handler) createVersion(c *gin.Context) {
 	pid := h.projectID(c)
 	claims := middleware.GetClaims(c)
 
-	if !h.canAccess(claims, pid) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "нет доступа"})
+	// Первая версия и новая версия — разные права (таблица 1 ТЗ).
+	// Какое из них требуется, решает наличие версий, а не то, какой
+	// маршрут выбрал фронт: иначе прямой запрос на /versions обошёл бы
+	// запрет создавать первую версию.
+	if perm := h.createPerm(pid); !h.acl.Can(claims, perm, pid) {
+		access.Deny(c, perm)
 		return
 	}
 
@@ -167,8 +174,8 @@ func (h *Handler) newVersion(c *gin.Context) {
 	pid := h.projectID(c)
 	claims := middleware.GetClaims(c)
 
-	if !h.canEdit(claims, pid) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "нет права на редактирование"})
+	if perm := h.createPerm(pid); !h.acl.Can(claims, perm, pid) {
+		access.Deny(c, perm)
 		return
 	}
 
@@ -206,10 +213,11 @@ func (h *Handler) getVersion(c *gin.Context) {
 		return
 	}
 	claims := middleware.GetClaims(c)
-	if !h.canAccess(claims, v.ProjectID) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "нет доступа"})
+	if !h.acl.Can(claims, auth.PermBudgetView, v.ProjectID) {
+		access.Deny(c, auth.PermBudgetView)
 		return
 	}
+	v.Permissions = h.acl.Permissions(claims, v.ProjectID)
 	c.JSON(http.StatusOK, v)
 }
 
@@ -222,29 +230,34 @@ func (h *Handler) changeStatus(c *gin.Context) {
 	}
 	claims := middleware.GetClaims(c)
 
-	if !h.canEdit(claims, v.ProjectID) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "нет права на редактирование"})
+	if !h.acl.Can(claims, auth.PermBudgetStatus, v.ProjectID) {
+		access.Deny(c, auth.PermBudgetStatus)
 		return
 	}
 
-	// Только GE может согласовывать
+	// Согласование — отдельное право
 	var req ChangeStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if req.Status == StatusApproved && claims.Role != auth.RoleGE {
-		c.JSON(http.StatusForbidden, gin.H{"error": "только главный экономист может согласовывать бюджет"})
+	if req.Status == StatusApproved && !h.acl.Can(claims, auth.PermBudgetApprove, v.ProjectID) {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "статус «Согласован» ставит главный экономист",
+			"code":  "forbidden",
+		})
 		return
 	}
 
-	// EP может менять только свою версию
-	if claims.Role == auth.RoleEP {
-		owner, _ := h.svc.VersionOwner(vid)
-		if owner != claims.UserID {
-			c.JSON(http.StatusForbidden, gin.H{"error": "экономист проекта может менять статус только своих версий"})
-			return
-		}
+	// Чужую версию не трогаем: менять статус может её автор, главный
+	// экономист и тот, кому право выдано индивидуально.
+	if !CanEditFrozenVersion(claims.Role, claims.UserID, v.CreatedBy) &&
+		!h.acl.Can(claims, auth.PermBudgetApprove, v.ProjectID) {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "менять статус версии может её автор или главный экономист",
+			"code":  "forbidden",
+		})
+		return
 	}
 
 	updated, err := h.svc.ChangeStatus(vid, claims.UserID, req)
@@ -346,8 +359,8 @@ func (h *Handler) getInput(c *gin.Context) {
 		return
 	}
 	claims := middleware.GetClaims(c)
-	if !h.canAccess(claims, v.ProjectID) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "нет доступа"})
+	if !h.acl.Can(claims, auth.PermBudgetView, v.ProjectID) {
+		access.Deny(c, auth.PermBudgetView)
 		return
 	}
 	inputType := c.Param("type")
@@ -367,8 +380,8 @@ func (h *Handler) calculate(c *gin.Context) {
 		return
 	}
 	claims := middleware.GetClaims(c)
-	if !h.canAccess(claims, v.ProjectID) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "нет доступа"})
+	if !h.acl.Can(claims, auth.PermBudgetView, v.ProjectID) {
+		access.Deny(c, auth.PermBudgetView)
 		return
 	}
 
@@ -408,8 +421,8 @@ func (h *Handler) getAllInputs(c *gin.Context) {
 		return
 	}
 	claims := middleware.GetClaims(c)
-	if !h.canAccess(claims, v.ProjectID) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "нет доступа"})
+	if !h.acl.Can(claims, auth.PermBudgetView, v.ProjectID) {
+		access.Deny(c, auth.PermBudgetView)
 		return
 	}
 	data, err := h.svc.GetAllInputs(vid)
@@ -437,8 +450,8 @@ func (h *Handler) export(c *gin.Context) {
 		return
 	}
 	claims := middleware.GetClaims(c)
-	if !h.canAccess(claims, v.ProjectID) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "нет доступа"})
+	if !h.acl.Can(claims, auth.PermBudgetExport, v.ProjectID) {
+		access.Deny(c, auth.PermBudgetExport)
 		return
 	}
 
@@ -473,6 +486,9 @@ func (h *Handler) export(c *gin.Context) {
 	if v.VersionLabel != nil {
 		meta.VersionLabel = *v.VersionLabel
 	}
+	// Администратору проекта книга собирается урезанной — строки
+	// 178-214 листа «2.Бюджет», без ФОТ, выручки и прибыли.
+	meta.Limited = auth.LimitedExport(claims.Role)
 
 	data, err := BuildExport(meta, result)
 	if err != nil {
@@ -483,7 +499,7 @@ func (h *Handler) export(c *gin.Context) {
 	h.audit.Log(auditlog.Entry{
 		UserID: &claims.UserID, UserRole: claims.Role,
 		Action: "export_budget", ObjectType: "budget_version", ObjectID: &vid,
-		Comment: fmt.Sprintf("Бюджет %d.%d — %s", proj.ID, v.VersionNo, proj.Name),
+		Comment: exportComment(proj.ID, v.VersionNo, proj.Name, meta.Limited),
 	})
 
 	name := ExportFileName(meta)
@@ -507,4 +523,15 @@ func (h *Handler) versionTitle(projectID int, v *BudgetVersion, copyFrom *int) s
 		return title
 	}
 	return fmt.Sprintf("%s — копия бюджета %d.%d", title, projectID, src.VersionNo)
+}
+
+// exportComment — что записать в журнал о выгрузке. Урезанную выгрузку
+// администратора проекта помечаем: иначе по журналу не отличить её от
+// полной книги.
+func exportComment(projectID, versionNo int, name string, limited bool) string {
+	s := fmt.Sprintf("Бюджет %d.%d — %s", projectID, versionNo, name)
+	if limited {
+		s += " (выгрузка администратора проекта: строки 178-214)"
+	}
+	return s
 }

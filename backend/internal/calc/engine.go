@@ -139,7 +139,8 @@ func Run(inp *BudgetInputs) *CalcResult {
 		bgAdv = inp.Params.BGAdvance
 		// Коэффициент наценки на расходы (2.Бюджет!F234) считается из
 		// целевой рентабельности и ставки налога, а не вводится напрямую.
-		markup = markupRate(inp.Params.TargetRentPct, inp.ExecutorName)
+		markup = markupRateAt(inp.Params.TargetRentPct,
+			effectiveTaxRate(inp.Params, inp.ExecutorName))
 		contractValue = inp.Params.ContractValue
 		contractTKP = inp.Params.ContractValue
 		// Ручная стоимость работ (2.Бюджет!F236) — не самостоятельный ввод,
@@ -371,18 +372,24 @@ func Run(inp *BudgetInputs) *CalcResult {
 		tax = 0
 
 	case sameExecutor(inp.ExecutorName, ExecutorAibiconKG):
-		// Спецрежим: (5% + 2%) от стоимости договора, делённые на
-		// длительность проекта. Деления на $D$8 в формуле два — по одному
-		// в каждом слагаемом, и умножения на длительность обратно НЕТ.
 		// База — строго ТКП (2.Бюджет!$G$251), как в формуле. Подстановка
 		// расчётной выручки сюда не распространяется: у киргизского филиала
 		// ТКП задаётся всегда, а без договора налог считать не от чего.
+		// n - длительность проекта в месяцах (2.Бюджет!$D$8).
+		// Слагаемых «5% и 2%» больше нет, если в форме стоит справочная
+		// ставка исполнителя: она пришла из справочника (сейчас 4%) и
+		// заменяет их сумму. База — та же, ТКП, делённый на длительность.
+		// См. docs/deviations.md, отклонение №4.
 		if n > 0 {
-			tax = contractTKP/float64(n)/100*5 + contractTKP*2/float64(n)/100
+			if rate, ok := inp.Params.TaxRate(); ok {
+				tax = contractTKP * rate
+			} else {
+				tax = contractTKP/float64(n)/100*5 + contractTKP*2/float64(n)/100
+			}
 		}
 
 	default: // Айбикон
-		rate := profitTaxRate(inp.ExecutorName)
+		rate := effectiveTaxRate(inp.Params, inp.ExecutorName)
 		if opMarginTotal != 0 {
 			tax = opMarginTotal * rate
 		} else {
@@ -419,6 +426,10 @@ func Run(inp *BudgetInputs) *CalcResult {
 		}
 	}
 
+	// ── 13а. Стоимость + ставка рефинансирования (строка 249) ────────────────
+	refRatePct := inp.Params.RefRate()
+	refRateArr := calcRefRate(revWithVATArr, refRatePct)
+
 	// ── 14. Заполняем месячные результаты ────────────────────────────────────
 	var totalFOTSum float64
 	for m := 0; m < n; m++ {
@@ -452,6 +463,7 @@ func Run(inp *BudgetInputs) *CalcResult {
 		mr.Revenue = revArr[m]
 		mr.OperatingProfit = opProfitArr[m]
 		mr.RevenueWithVAT = revWithVATArr[m]
+		mr.RefRateAmount = refRateArr[m]
 
 		totalFOTSum += md[m].totalFOT
 	}
@@ -467,8 +479,35 @@ func Run(inp *BudgetInputs) *CalcResult {
 	for _, v := range revWithVATArr {
 		res.TotalRevenueWithVAT += v
 	}
+	res.RefRatePct = refRatePct
+	for _, v := range refRateArr {
+		res.RefRateAmount += v
+	}
 
 	return res
+}
+
+// calcRefRate — «Стоимость + ставка рефинансирования на 1–4 месяцы»
+// (2.Бюджет!249).
+//
+// Формула строки: `выручка с НДС × ОКРУГЛ(ставка/12; 2)`. В форме это
+// H249 = `H247*(ROUND(14.5/12;2))`, где 14.5 — ставка в ПРОЦЕНТАХ за год,
+// а не долей единицы: 14.5/12 = 1.2083…, округление до сотых даёт
+// множитель 1.21. Округляется именно частное, до умножения, — порядок
+// важен, иначе результат разойдётся с формой.
+//
+// Считается только за первые четыре месяца проекта (refRateMonths):
+// ограничение владельца, в форме его нет.
+//
+// Строка справочная: её результат никуда дальше не идёт — ни в расходы,
+// ни в прибыль, ни в налог, — его только показывают в итогах.
+func calcRefRate(revenueWithVAT []float64, ratePct float64) []float64 {
+	arr := make([]float64, len(revenueWithVAT))
+	mult := math.Round(ratePct/12*100) / 100
+	for m := 0; m < len(arr) && m < refRateMonths; m++ {
+		arr[m] = revenueWithVAT[m] * mult
+	}
+	return arr
 }
 
 // calcBGMonthly — банковская гарантия равномерно по месяцам проекта.
@@ -566,32 +605,55 @@ func contractNetOfVAT(tkp float64, executor string) float64 {
 }
 
 func markupRate(targetRentPct float64, executor string) float64 {
+	return markupRateAt(targetRentPct, profitTaxRate(executor))
+}
+
+// markupRateAt — та же наценка, но по явно заданной ставке налога:
+// справочное значение исполнителя, подставленное в форму, может
+// отличаться от ставки эталонной формы.
+func markupRateAt(targetRentPct, taxRate float64) float64 {
 	r := targetRentPct / 100
 	if r <= 0 {
 		return 0
 	}
-	denom := 1 - profitTaxRate(executor) - r
+	denom := 1 - taxRate - r
 	if denom <= 0 {
 		return 0
 	}
 	return r / denom
 }
 
-// profitTaxRate — ставка налога на прибыль по исполнителю.
+// effectiveTaxRate — ставка налога на прибыль, которая реально идёт в
+// расчёт: справочное значение из формы, если оно там есть, иначе ставка
+// эталонной формы.
+func effectiveTaxRate(p *InputBudgetParams, executor string) float64 {
+	if rate, ok := p.TaxRate(); ok {
+		return rate
+	}
+	return profitTaxRate(executor)
+}
+
+// profitTaxRate — ставка налога на прибыль по исполнителю, когда в форме
+// бюджета своей ставки нет (версия сохранена до появления справочных
+// значений). Обычный путь — справочник исполнителей, см. effectiveTaxRate.
+//
 // Формула Excel 2.Бюджет!F240:
 //
 //	=IF($D$10="Айбикон-Проект"; 0; IF(D10="Айбикон Киргизия"; 6%; 25%))
 //
-// Внимание: для «Айбикон Киргизия» эта ставка в форме НЕ применяется —
-// налог там считается по спецрежиму от стоимости договора (G240, вторая
-// ветка), а значение 6% в ячейке остаётся неиспользованным. Возвращаем
-// его для полноты воспроизведения формулы.
+// Расходится с формой в одном месте: у «Айбикон Киргизия» здесь 4%, а не
+// 6% — актуальное значение, решение владельца (docs/deviations.md,
+// отклонение №4). На эталонной сверке это не сказывается: в самой форме
+// F240 для Киргизии не применяется — налог там считается по спецрежиму от
+// стоимости договора (G240, вторая ветка), а 6% в ячейке остаются
+// неиспользованными. Ставка отсюда идёт только в наценку (F234) и в
+// проверку целевой рентабельности.
 func profitTaxRate(executor string) float64 {
 	switch {
 	case sameExecutor(executor, ExecutorAibiconProject):
 		return 0
 	case sameExecutor(executor, ExecutorAibiconKG):
-		return 0.06
+		return 0.04
 	default: // Айбикон
 		return 0.25
 	}

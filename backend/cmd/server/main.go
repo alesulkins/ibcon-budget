@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"ibcon-budget/internal/access"
 	"ibcon-budget/internal/auditlog"
 	"ibcon-budget/internal/auth"
 	"ibcon-budget/internal/budgets"
@@ -53,19 +54,25 @@ func main() {
 	protected := api.Group("", middleware.Auth(cfg.JWTSecret, database))
 
 	auditSvc := auditlog.NewService(database)
-	auditlog.NewHandler(auditSvc).Register(protected)
+
+	// Проверка прав. Один сервис на все модули: матрица ролей и
+	// индивидуальные права должны трактоваться одинаково везде.
+	acl := access.NewService(database)
+	access.NewHandler(acl).Register(protected)
+
+	auditlog.NewHandler(auditSvc, acl).Register(protected)
 
 	usersSvc := users.NewService(database)
-	users.NewHandler(usersSvc, auditSvc).Register(protected)
+	users.NewHandler(usersSvc, acl, auditSvc).Register(protected)
 
 	refSvc := references.NewService(database)
-	references.NewHandler(refSvc, auditSvc).Register(protected)
+	references.NewHandler(refSvc, acl, auditSvc).Register(protected)
 
 	projectsSvc := projects.NewService(database)
-	projects.NewHandler(projectsSvc, usersSvc, auditSvc).Register(protected)
+	projects.NewHandler(projectsSvc, usersSvc, acl, auditSvc).Register(protected)
 
 	budgetsSvc := budgets.NewService(database)
-	budgets.NewHandler(budgetsSvc, projectsSvc, usersSvc, auditSvc).Register(protected)
+	budgets.NewHandler(budgetsSvc, projectsSvc, usersSvc, acl, auditSvc).Register(protected)
 
 	// Health check
 	r.GET("/health", func(c *gin.Context) {

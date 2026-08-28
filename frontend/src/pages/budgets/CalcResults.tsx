@@ -12,7 +12,7 @@ import { fmtMoney, monthLabel, fmtNum } from '../../utils/fmt';
 import { profitabilityGrade } from '../../utils/profitability';
 import Profitability from '../../components/Profitability';
 import { extractError } from '../../api/client';
-import { BRAND, FONT_NUM, LINE, STATUS, TEXT_SOFT, RADIUS_LG } from '../../theme';
+import { BRAND, FONT_NUM, LINE, TEXT_SOFT, RADIUS_LG } from '../../theme';
 
 interface Props {
   versionId: number;
@@ -73,6 +73,12 @@ export default function CalcResults({
       label: 'Рентабельность',
       value: <Profitability value={r.profitability} />,
       highlight: true,
+    },
+    {
+      // Строка 249. Справочная: ни во что не входит и ни на что не
+      // влияет — экономисту нужно просто видеть эту величину.
+      label: `Стоимость + ставка рефинансирования на 1–4 месяцы (${fmtNum(r.ref_rate_pct)} %/год)`,
+      value: fmtMoney(r.ref_rate_amount),
     },
   ] : [];
 
@@ -155,7 +161,11 @@ export default function CalcResults({
               {
                 title: 'Чистая прибыль',
                 value: `${fmtNum(r.net_profit)} ₽`,
-                color: r.net_profit >= 0 ? STATUS.green : STATUS.red,
+                // Тот же цвет, что у рентабельности: это одна и та же
+                // оценка бюджета, и разные цвета рядом читались как
+                // разные оценки — «прибыль зелёная, рентабельность
+                // красная». Своя шкала «плюс/минус» тут лишняя.
+                color: profitabilityGrade(r.profitability).color,
                 bold: false,
               },
               {

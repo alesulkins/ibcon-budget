@@ -71,6 +71,11 @@ type BudgetVersion struct {
 	UpdatedAt     time.Time  `db:"updated_at"    json:"updated_at"`
 	ApprovedAt    *time.Time `db:"approved_at"   json:"approved_at,omitempty"`
 	CopiedFrom    *int       `db:"copied_from"   json:"copied_from,omitempty"`
+
+	// Permissions — что запрашивающий пользователь может делать с
+	// бюджетами этого проекта (коды из auth/permissions.go). Не колонка
+	// таблицы: заполняется обработчиком для фронта.
+	Permissions []string `db:"-" json:"permissions,omitempty"`
 }
 
 type CreateVersionRequest struct {

@@ -6,7 +6,7 @@ import {
 import { PlusOutlined, EditOutlined, ScheduleOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
-import { budgetsApi } from '../../../api';
+import { budgetsApi, refsApi } from '../../../api';
 import type { Employee, InputEmployees } from '../../../types';
 import { monthLabel, thousandFormatter, thousandParser, fmtNum } from '../../../utils/fmt';
 import MonthGrid, {
@@ -99,6 +99,18 @@ export default function EmployeesInput({
   const [schedEmpIdx, setSchedEmpIdx] = useState<number | null>(null);
   const [empForm] = Form.useForm();
 
+  /**
+   * Должности из справочника — только активные: деактивированную выбрать
+   * заново нельзя. У уже сохранённых сотрудников должность лежит в версии
+   * строкой (snapshot), поэтому она показывается независимо от того, что
+   * сейчас в справочнике; такое значение добавляется в список отдельно,
+   * иначе поле выглядело бы пустым при открытии на редактирование.
+   */
+  const { data: positions } = useQuery({
+    queryKey: ['positions'],
+    queryFn: () => refsApi.positions(),
+  });
+
   const { data: savedData, isLoading, isSuccess } = useQuery({
     queryKey: ['budget-input', versionId, 'employees'],
     queryFn: () => budgetsApi.getInput<InputEmployees>(versionId, 'employees'),
@@ -125,6 +137,31 @@ export default function EmployeesInput({
   );
 
   useAutosave({ data, ready: hydrated, save, enabled: !readonly });
+
+  /**
+   * Выбор должности при выключенном справочнике был бы тупиком, поэтому
+   * список дополняется должностью, которая уже стоит у редактируемого
+   * сотрудника, даже если её деактивировали.
+   */
+  const positionOptions = (() => {
+    const opts = (positions ?? []).map(p => ({ value: p.name, label: p.name }));
+    const current = editingIdx !== null ? data.employees[editingIdx]?.position : undefined;
+    if (current && !opts.some(o => o.value === current)) {
+      opts.unshift({ value: current, label: `${current} (нет в справочнике)` });
+    }
+    return opts;
+  })();
+
+  /**
+   * Оклад из справочника подставляется в поле как значение по умолчанию.
+   * Экономист правит его вручную прямо в форме, подтверждения не нужно;
+   * в версию бюджета уходит то, что осталось в поле, — правка справочника
+   * потом на неё не влияет.
+   */
+  function onPositionChange(name: string) {
+    const salary = (positions ?? []).find(p => p.name === name)?.salary;
+    if (salary !== undefined) empForm.setFieldValue('salary_net', salary);
+  }
 
   function addEmployee(vals: Record<string, unknown>) {
     const cond = vals.base_schedule as string;
@@ -330,8 +367,19 @@ export default function EmployeesInput({
         width={480}
       >
         <Form form={empForm} layout="vertical" onFinish={addEmployee}>
-          <Form.Item name="position" label="Должность (Специалист)" rules={[{ required: true, message: 'Укажите должность' }]}>
-            <Input placeholder="Инженер ПТО, Руководитель проекта…" />
+          <Form.Item
+            name="position"
+            label="Должность (Специалист)"
+            rules={[{ required: true, message: 'Укажите должность' }]}
+            extra="Из справочника должностей. Оклад подставится автоматически — его можно изменить ниже."
+          >
+            <Select
+              showSearch
+              optionFilterProp="label"
+              placeholder="Начните вводить: Инженер ПТО, Руководитель проекта…"
+              options={positionOptions}
+              onChange={onPositionChange}
+            />
           </Form.Item>
           <Form.Item name="full_name" label="ФИО">
             <Input placeholder="Иванов И.И." />

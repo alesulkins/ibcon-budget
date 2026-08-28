@@ -58,6 +58,11 @@ type Project struct {
 	CreatedBy      int       `db:"created_by"       json:"created_by"`
 	CreatedByName  string    `db:"created_by_name"  json:"created_by_name,omitempty"`
 	UpdatedAt      time.Time `db:"updated_at"       json:"updated_at"`
+
+	// Permissions — что запрашивающий пользователь может делать с этим
+	// проектом (коды из auth/permissions.go). Не колонка таблицы:
+	// заполняется обработчиком, чтобы фронт прятал недоступные кнопки.
+	Permissions []string `db:"-" json:"permissions,omitempty"`
 }
 
 // ProjectListItem — облегчённая запись для реестра проектов

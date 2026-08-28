@@ -6,18 +6,20 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"ibcon-budget/internal/auth"
+	"ibcon-budget/internal/access"
 	"ibcon-budget/internal/auditlog"
+	"ibcon-budget/internal/auth"
 	"ibcon-budget/internal/middleware"
 )
 
 type Handler struct {
 	svc   *Service
+	acl   *access.Service
 	audit *auditlog.Service
 }
 
-func NewHandler(svc *Service, audit *auditlog.Service) *Handler {
-	return &Handler{svc: svc, audit: audit}
+func NewHandler(svc *Service, acl *access.Service, audit *auditlog.Service) *Handler {
+	return &Handler{svc: svc, acl: acl, audit: audit}
 }
 
 func (h *Handler) Register(r gin.IRouter) {
@@ -27,8 +29,9 @@ func (h *Handler) Register(r gin.IRouter) {
 	refs.GET("/positions", h.listPositions)
 	refs.GET("/work-modes", h.listWorkModes)
 	refs.GET("/cost-items", h.listCostItems)
-	// Редактирование — только GE
-	ge := refs.Group("", middleware.RequireRole(auth.RoleGE))
+	// Редактирование — по праву, а не по роли: главный экономист имеет
+	// его от роли, остальным его может выдать он сам.
+	ge := refs.Group("", h.acl.Require(auth.PermReferencesEdit))
 	ge.POST("/executors", h.createExecutor)
 	ge.PUT("/executors/:id", h.updateExecutor)
 	ge.POST("/positions", h.createPosition)
@@ -39,8 +42,11 @@ func (h *Handler) Register(r gin.IRouter) {
 	ge.PUT("/cost-items/:id", h.updateCostItem)
 }
 
+// activeOnly — по умолчанию отдаём только активные записи: списки
+// справочников читают формы мастера, а там неактивная запись выбираться
+// не должна. Экран управления справочниками просит всё явно (?all=true).
 func activeOnly(c *gin.Context) bool {
-	return c.Query("active") != "false"
+	return c.Query("all") != "true" && c.Query("active") != "false"
 }
 
 // ---- Executors ----
@@ -56,15 +62,17 @@ func (h *Handler) listExecutors(c *gin.Context) {
 
 func (h *Handler) createExecutor(c *gin.Context) {
 	var body struct {
-		Name     string `json:"name"      binding:"required"`
-		FullName string `json:"full_name" binding:"required"`
+		Name            string  `json:"name"      binding:"required"`
+		FullName        string  `json:"full_name" binding:"required"`
+		ProfitTaxRate   float64 `json:"profit_tax_rate"`
+		RefinancingRate float64 `json:"refinancing_rate"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	cl := middleware.GetClaims(c)
-	e, err := h.svc.CreateExecutor(body.Name, body.FullName, cl.UserID)
+	e, err := h.svc.CreateExecutor(body.Name, body.FullName, body.ProfitTaxRate, body.RefinancingRate, cl.UserID)
 	if err != nil {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
@@ -76,16 +84,18 @@ func (h *Handler) createExecutor(c *gin.Context) {
 func (h *Handler) updateExecutor(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
 	var body struct {
-		Name     *string `json:"name"`
-		FullName *string `json:"full_name"`
-		Active   *bool   `json:"active"`
+		Name            *string  `json:"name"`
+		FullName        *string  `json:"full_name"`
+		ProfitTaxRate   *float64 `json:"profit_tax_rate"`
+		RefinancingRate *float64 `json:"refinancing_rate"`
+		Active          *bool    `json:"active"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	cl := middleware.GetClaims(c)
-	e, err := h.svc.UpdateExecutor(id, body.Name, body.FullName, body.Active, cl.UserID)
+	e, err := h.svc.UpdateExecutor(id, body.Name, body.FullName, body.ProfitTaxRate, body.RefinancingRate, body.Active, cl.UserID)
 	if err != nil {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
@@ -107,14 +117,15 @@ func (h *Handler) listPositions(c *gin.Context) {
 
 func (h *Handler) createPosition(c *gin.Context) {
 	var body struct {
-		Name string `json:"name" binding:"required"`
+		Name   string  `json:"name" binding:"required"`
+		Salary float64 `json:"salary"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	cl := middleware.GetClaims(c)
-	p, err := h.svc.CreatePosition(body.Name, cl.UserID)
+	p, err := h.svc.CreatePosition(body.Name, body.Salary, cl.UserID)
 	if err != nil {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
@@ -126,15 +137,16 @@ func (h *Handler) createPosition(c *gin.Context) {
 func (h *Handler) updatePosition(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
 	var body struct {
-		Name   *string `json:"name"`
-		Active *bool   `json:"active"`
+		Name   *string  `json:"name"`
+		Salary *float64 `json:"salary"`
+		Active *bool    `json:"active"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	cl := middleware.GetClaims(c)
-	p, err := h.svc.UpdatePosition(id, body.Name, body.Active, cl.UserID)
+	p, err := h.svc.UpdatePosition(id, body.Name, body.Salary, body.Active, cl.UserID)
 	if err != nil {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
@@ -214,7 +226,7 @@ func (h *Handler) createCostItem(c *gin.Context) {
 		return
 	}
 	cl := middleware.GetClaims(c)
-	ci, err := h.svc.CreateCostItem(body.Name, false, cl.UserID)
+	ci, err := h.svc.CreateCostItem(body.Name, cl.UserID)
 	if err != nil {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return

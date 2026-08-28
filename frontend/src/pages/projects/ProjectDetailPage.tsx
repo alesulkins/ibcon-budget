@@ -17,7 +17,7 @@ import {
 } from '../../types';
 import { fmtDate, fmtMoney } from '../../utils/fmt';
 import Profitability from '../../components/Profitability';
-import { hasRole } from '../../store/auth';
+import { PERM, canIn } from '../../store/permissions';
 import { shortName } from '../../utils/names';
 import { extractError } from '../../api/client';
 import StatusTag from '../../components/StatusTag';
@@ -61,7 +61,7 @@ export default function ProjectDetailPage() {
 
   const { data: executors } = useQuery({
     queryKey: ['executors'],
-    queryFn: refsApi.executors,
+    queryFn: () => refsApi.executors(),
   });
 
   const updateMutation = useMutation({
@@ -145,9 +145,17 @@ export default function ProjectDetailPage() {
     onSettled: () => setExportingId(null),
   });
 
-  const canEdit = hasRole('GE', 'EP', 'IP');
-  const isGE = hasRole('GE');
-  const canChangeBudgetStatus = hasRole('GE', 'EP');
+  // Права приходят вместе с карточкой проекта: сервер посчитал их для
+  // ЭТОГО проекта с учётом роли, назначения и индивидуальных прав.
+  const perms = project?.permissions;
+  const canEdit = canIn(perms, PERM.projectEdit);
+  const canChangeProjectStatus = canIn(perms, PERM.projectStatus);
+  const canChangeBudgetStatus = canIn(perms, PERM.budgetStatus);
+  // Первая версия и следующие — разные права (таблица 1 ТЗ).
+  const canCreateBudget = (versions ?? []).length > 0
+    ? canIn(perms, PERM.budgetVersion)
+    : canIn(perms, PERM.budgetCreate);
+  const canExport = canIn(perms, PERM.budgetExport);
 
   /**
    * Смена статуса версии прямо из таблицы. Причина обязательна, а при
@@ -278,7 +286,7 @@ export default function ProjectDetailPage() {
       title: '',
       key: 'download',
       width: 120,
-      render: (_, r) => (
+      render: (_, r) => canExport && (
         <Button
           size="small"
           icon={<DownloadOutlined />}
@@ -323,7 +331,7 @@ export default function ProjectDetailPage() {
         }
         extra={
           <Space>
-            {isGE && (
+            {canChangeProjectStatus && (
               <Button
                 onClick={() => setShowStatusModal(true)}
               >
@@ -367,7 +375,7 @@ export default function ProjectDetailPage() {
       <Card
         title="Версии бюджета"
         extra={
-          canEdit && (
+          canCreateBudget && (
             <Button
               type="primary"
               icon={<PlusOutlined />}

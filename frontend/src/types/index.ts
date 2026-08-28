@@ -2,13 +2,36 @@
 export interface User {
   id: number;
   email: string;
+  /** Полное ФИО. В таблицах показывается как «Фамилия И.О.». */
   full_name: string;
+  /** Пусто — роль не назначена: вход есть, функциональности нет. */
   role: string;
   active: boolean;
   failed_attempts: number;
   locked_until?: string;
   created_at: string;
   created_by?: number;
+  /** Проекты, к которым выдан доступ (приходит в списке пользователей). */
+  projects?: ProjectAccess[];
+  /** Индивидуальные права сверх роли. */
+  grants?: Grant[];
+}
+
+/** Назначение пользователя на проект. */
+export interface ProjectAccess {
+  user_id: number;
+  project_id: number;
+  name: string;
+  status: string;
+  /** false — только просмотр. */
+  can_edit: boolean;
+}
+
+/** Индивидуальное право сверх роли. project_id null — на все проекты. */
+export interface Grant {
+  permission: string;
+  project_id: number | null;
+  project_name: string | null;
 }
 
 export interface AuthResponse {
@@ -36,6 +59,7 @@ export const ROLES = {
 } as const;
 
 export const ROLE_LABELS: Record<string, string> = {
+  '': 'Роль не назначена',
   GE: 'Главный экономист',
   EP: 'Экономист проекта',
   IP: 'Инициатор проекта',
@@ -45,31 +69,42 @@ export const ROLE_LABELS: Record<string, string> = {
 };
 
 // ─── References ────────────────────────────────────────────────────────────
-export interface Executor {
+/**
+ * Общее для всех справочников: записи не удаляются, только
+ * деактивируются; кто и когда менял запись — updated_at/updated_by_name.
+ * Уже сохранённые бюджеты правку справочника не замечают: они хранят
+ * подставленное значение, а не ссылку.
+ */
+interface ReferenceRow {
   id: number;
+  active: boolean;
+  updated_at: string;
+  updated_by_name?: string;
+}
+
+export interface Executor extends ReferenceRow {
   name: string;
   full_name: string;
-  active: boolean;
+  /** Справочные значения в процентах: 25 = 25%. */
+  profit_tax_rate: number;
+  refinancing_rate: number;
 }
 
-export interface Position {
-  id: number;
+export interface Position extends ReferenceRow {
   name: string;
-  active: boolean;
+  /** Оклад по умолчанию для шага «Сотрудники» мастера. */
+  salary: number;
 }
 
-export interface WorkMode {
-  id: number;
+export interface WorkMode extends ReferenceRow {
   code: string;
   full_name: string;
-  active: boolean;
 }
 
-export interface CostItem {
-  id: number;
+export interface CostItem extends ReferenceRow {
   name: string;
+  /** Расчётную статью нельзя ни добавить, ни изменить, ни деактивировать. */
   is_calculated: boolean;
-  active: boolean;
 }
 
 // ─── Projects ──────────────────────────────────────────────────────────────
@@ -117,6 +152,11 @@ export interface Project {
   created_by: number;
   created_by_name: string;
   updated_at: string;
+  /**
+   * Что текущий пользователь может делать с ЭТИМ проектом. Считает
+   * сервер; фронт по списку прячет кнопки, запрет обеспечивает бэкенд.
+   */
+  permissions?: string[];
 }
 
 export interface ProjectListItem {
@@ -177,6 +217,8 @@ export interface BudgetVersion {
   updated_at: string;
   approved_at?: string;
   copied_from?: number;
+  /** Права текущего пользователя на бюджеты этого проекта. */
+  permissions?: string[];
 }
 
 // ─── Calc types ──────────────────────────────────────────────────────────────
@@ -389,6 +431,14 @@ export interface InputBudgetParams {
    * в форме это формула F236 = G252 = ТКП без НДС, бэкенд выводит её сам.
    */
   contract_value: number;
+  /**
+   * Справочные значения исполнителя, подставленные в форму (проценты).
+   * Хранятся в версии бюджета как snapshot: правка справочника не меняет
+   * уже сохранённые версии. Пусто — версия сохранена до появления
+   * справочных значений, расчёт идёт по ставкам эталонной формы.
+   */
+  profit_tax_pct?: number;
+  refinancing_pct?: number;
 }
 
 export interface MonthlyResult {
@@ -430,6 +480,14 @@ export interface CalcResult {
   net_profit: number;
   profitability: number;
   total_revenue_with_vat: number;
+  /**
+   * «Стоимость + ставка рефинансирования на 1–4 месяцы» (2.Бюджет!249),
+   * сумма за первые четыре месяца. Показатель справочный: ни в расходы,
+   * ни в прибыль, ни в налог не входит, его только показывают.
+   */
+  ref_rate_amount: number;
+  /** Ставка, по которой посчитан ref_rate_amount, % годовых. */
+  ref_rate_pct: number;
 }
 
 // ─── Audit ──────────────────────────────────────────────────────────────────
@@ -466,4 +524,6 @@ export interface Profile {
   /** Эмодзи или data:-URL загруженной картинки. Пусто — показываем инициалы. */
   avatar: string;
   notes: string;
+  /** Что пользователь может хотя бы где-нибудь. Коды — store/permissions.ts. */
+  permissions: string[];
 }

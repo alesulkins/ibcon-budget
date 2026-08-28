@@ -201,7 +201,7 @@ func ValidateBudgetParams(p *InputBudgetParams, executor string) error {
 		return nil // наценка не применяется (например, задан ТКП)
 	}
 
-	t := profitTaxRate(executor)
+	t := effectiveTaxRate(p, executor)
 	if r+t >= 1 {
 		return fmt.Errorf(
 			"целевая рентабельность слишком высока для этой ставки налога: "+

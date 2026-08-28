@@ -54,29 +54,66 @@ export const usersApi = {
 
   revokeAccess: (userId: number, projectId: number) =>
     client.delete(`/users/${userId}/projects/${projectId}/access`),
+
+  /**
+   * Приводит доступ пользователя к переданному списку проектов:
+   * чего в списке нет — отзывается. Вместе с отозванным проектом
+   * снимаются и выданные на него индивидуальные права.
+   */
+  setProjects: (userId: number, projects: { project_id: number; can_edit: boolean }[]) =>
+    client.put(`/users/${userId}/projects`, { projects }),
+
+  /** Выдать индивидуальное право. project_id === null — на все проекты. */
+  grantPermission: (userId: number, permission: string, projectId: number | null) =>
+    client.post(`/users/${userId}/permissions`, { permission, project_id: projectId }),
+
+  revokePermission: (userId: number, permission: string, projectId: number | null) =>
+    client.delete(`/users/${userId}/permissions`, {
+      data: { permission, project_id: projectId },
+    }),
 };
 
 // ─── References ────────────────────────────────────────────────────────────
+/**
+ * Списки отдают только активные записи — их читают формы мастера, и
+ * выбрать деактивированную запись там нельзя. Экран управления
+ * справочниками показывает всё и просит это явно: all = true.
+ */
+const allParams = (all?: boolean) => (all ? { params: { all: true } } : undefined);
+
 export const refsApi = {
-  executors: () => client.get<Executor[]>('/references/executors').then(r => r.data),
-  positions: () => client.get<Position[]>('/references/positions').then(r => r.data),
-  workModes: () => client.get<WorkMode[]>('/references/work-modes').then(r => r.data),
-  costItems: () => client.get<CostItem[]>('/references/cost-items').then(r => r.data),
+  executors: (all?: boolean) =>
+    client.get<Executor[]>('/references/executors', allParams(all)).then(r => r.data),
+  positions: (all?: boolean) =>
+    client.get<Position[]>('/references/positions', allParams(all)).then(r => r.data),
+  workModes: (all?: boolean) =>
+    client.get<WorkMode[]>('/references/work-modes', allParams(all)).then(r => r.data),
+  costItems: (all?: boolean) =>
+    client.get<CostItem[]>('/references/cost-items', allParams(all)).then(r => r.data),
 
-  createExecutor: (data: { name: string; full_name: string }) =>
-    client.post<Executor>('/references/executors', data).then(r => r.data),
-  updateExecutor: (id: number, data: { name?: string; full_name?: string; active?: boolean }) =>
-    client.put<Executor>(`/references/executors/${id}`, data).then(r => r.data),
+  createExecutor: (data: {
+    name: string; full_name: string;
+    profit_tax_rate?: number; refinancing_rate?: number;
+  }) => client.post<Executor>('/references/executors', data).then(r => r.data),
+  updateExecutor: (id: number, data: {
+    name?: string; full_name?: string;
+    profit_tax_rate?: number; refinancing_rate?: number; active?: boolean;
+  }) => client.put<Executor>(`/references/executors/${id}`, data).then(r => r.data),
 
-  createPosition: (name: string) =>
-    client.post<Position>('/references/positions', { name }).then(r => r.data),
-  updatePosition: (id: number, data: { name?: string; active?: boolean }) =>
+  createPosition: (data: { name: string; salary?: number }) =>
+    client.post<Position>('/references/positions', data).then(r => r.data),
+  updatePosition: (id: number, data: { name?: string; salary?: number; active?: boolean }) =>
     client.put<Position>(`/references/positions/${id}`, data).then(r => r.data),
 
   createWorkMode: (data: { code: string; full_name: string }) =>
     client.post<WorkMode>('/references/work-modes', data).then(r => r.data),
   updateWorkMode: (id: number, data: { full_name?: string; active?: boolean }) =>
     client.put<WorkMode>(`/references/work-modes/${id}`, data).then(r => r.data),
+
+  createCostItem: (data: { name: string }) =>
+    client.post<CostItem>('/references/cost-items', data).then(r => r.data),
+  updateCostItem: (id: number, data: { name?: string; active?: boolean }) =>
+    client.put<CostItem>(`/references/cost-items/${id}`, data).then(r => r.data),
 };
 
 // ─── Projects ──────────────────────────────────────────────────────────────

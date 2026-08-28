@@ -35,6 +35,53 @@ type ExportMeta struct {
 	Status         string
 	StartDate      time.Time
 	DurationMonths int
+
+	// Limited — урезанная выгрузка администратора проекта.
+	// ТЗ: он «видит информацию только по строкам 178-214 листа
+	// "2.Бюджет" Формы» — это накладные расходы по статьям, их итог
+	// и непредвиденные. Ни ФОТ, ни выручки, ни прибыли, ни
+	// рентабельности в такой книге быть не должно.
+	Limited bool
+}
+
+// overheadTitles — названия строк 178-211 листа «2.Бюджет» в том же
+// порядке, в каком движок раскладывает MonthlyResult.Overhead.
+// Индекс массива + 178 = номер строки формы.
+var overheadTitles = [34]string{
+	"178 Аренда квартир (вкл. уборку)",
+	"179 Услуги риелтора",
+	"180 Аренда транспорта и покупка авто",
+	"181 Обустройство строительной площадки",
+	"182 Аренда офиса",
+	"183 Уборка офиса",
+	"184 Билеты",
+	"185 Командировочные расходы",
+	"186 Интернет",
+	"187 Мобильная связь",
+	"188 Лабораторные исследования",
+	"189 Приборы строительного контроля",
+	"190 Обучение персонала",
+	"191 Медицинский осмотр",
+	"192 Спецодежда",
+	"193 Приобретение ПО",
+	"194 Приобретение ПК и оргтехники",
+	"195 Приобретение мебели",
+	"196 Содержание офиса",
+	"197 Почтовые расходы",
+	"198 ГСМ",
+	"199 Транспортные услуги",
+	"200 Субподряд, ГПХ внешний",
+	"201 Субподряд, ГПХ сотрудников",
+	"202 Субподрядные работы",
+	"203 Субподряд (организационные улучшения)",
+	"204 Представительские расходы",
+	"205 Корпоративные мероприятия",
+	"206 Услуги банков",
+	"207 Страхование ответственности",
+	"208 Коммунальные расходы",
+	"209 Охрана объекта",
+	"210 Аренда гаража",
+	"211 Страхование КАСКО и ОСАГО",
 }
 
 // statusTitles — подписи статусов, те же, что в интерфейсе.
@@ -129,6 +176,58 @@ func BuildExport(m ExportMeta, r *calc.CalcResult) ([]byte, error) {
 	put("Продолжительность, мес.", m.DurationMonths)
 	put("Выгружено", time.Now().Format("02.01.2006 15:04"))
 	row++
+
+	// ── Урезанная выгрузка администратора проекта ────────────────────
+	// Только карточка проекта и строки 178-214: накладные расходы по
+	// статьям, их итог и непредвиденные.
+	if m.Limited {
+		set(fmt.Sprintf("A%d", row), "НАКЛАДНЫЕ РАСХОДЫ (строки 178-214 листа «2.Бюджет»)")
+		_ = f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("A%d", row), head)
+		row++
+
+		headerRow := row
+		set(fmt.Sprintf("A%d", row), "Статья")
+		for i := range r.Monthly {
+			col, _ := excelize.ColumnNumberToName(i + 2)
+			set(fmt.Sprintf("%s%d", col, row), m.StartDate.AddDate(0, i, 0).Format("01.2006"))
+		}
+		totalCol, _ := excelize.ColumnNumberToName(len(r.Monthly) + 2)
+		set(fmt.Sprintf("%s%d", totalCol, row), "Итого")
+		_ = f.SetCellStyle(sheet, fmt.Sprintf("A%d", headerRow),
+			fmt.Sprintf("%s%d", totalCol, headerRow), head)
+		row++
+
+		putLine := func(label string, value func(calc.MonthlyResult) float64) {
+			set(fmt.Sprintf("A%d", row), label)
+			sum := 0.0
+			for i, mr := range r.Monthly {
+				col, _ := excelize.ColumnNumberToName(i + 2)
+				cell := fmt.Sprintf("%s%d", col, row)
+				v := value(mr)
+				sum += v
+				set(cell, v)
+				_ = f.SetCellStyle(sheet, cell, cell, money)
+			}
+			cell := fmt.Sprintf("%s%d", totalCol, row)
+			set(cell, sum)
+			_ = f.SetCellStyle(sheet, cell, cell, money)
+			row++
+		}
+
+		for i, label := range overheadTitles {
+			putLine(label, func(mr calc.MonthlyResult) float64 { return mr.Overhead[i] })
+		}
+		putLine("212 Итого накладные расходы",
+			func(mr calc.MonthlyResult) float64 { return mr.ProjectCostsExFOT })
+		putLine("214 Непредвиденные расходы",
+			func(mr calc.MonthlyResult) float64 { return mr.Unpredictables })
+
+		var buf bytes.Buffer
+		if err := f.Write(&buf); err != nil {
+			return nil, err
+		}
+		return buf.Bytes(), nil
+	}
 
 	// ── Итоговые показатели ──────────────────────────────────────────
 	set(fmt.Sprintf("A%d", row), "ИТОГОВЫЕ ПОКАЗАТЕЛИ")

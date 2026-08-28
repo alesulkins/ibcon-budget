@@ -3,7 +3,6 @@ package users
 import (
 	"errors"
 	"fmt"
-	"slices"
 
 	"github.com/jmoiron/sqlx"
 
@@ -19,7 +18,9 @@ func NewService(db *sqlx.DB) *Service {
 }
 
 func (s *Service) Create(req CreateRequest, createdBy int) (*User, error) {
-	if !slices.Contains(auth.AllRoles, req.Role) {
+	// Пустая роль допустима: учётку заводят до назначения роли, доступа
+	// к функциональности у неё при этом нет.
+	if !auth.IsKnownRole(req.Role) {
 		return nil, fmt.Errorf("неизвестная роль: %s", req.Role)
 	}
 	if err := auth.ValidatePassword(req.Password); err != nil {
@@ -64,9 +65,12 @@ func (s *Service) Get(id int) (*User, error) {
 }
 
 func (s *Service) Update(id int, req UpdateRequest) (*User, error) {
-	if req.Role != nil && !slices.Contains(auth.AllRoles, *req.Role) {
+	if req.Role != nil && !auth.IsKnownRole(*req.Role) {
 		return nil, fmt.Errorf("неизвестная роль: %s", *req.Role)
 	}
+	// role передаём указателем: NULL означает «не меняем», пустая
+	// строка — «снять роль». COALESCE различает их правильно, потому
+	// что пустая строка не NULL.
 	_, err := s.db.Exec(
 		`UPDATE users SET
 		   full_name = COALESCE($1, full_name),
@@ -150,4 +154,95 @@ func (s *Service) UnlockUser(id int) error {
 		return errors.New("пользователь не найден")
 	}
 	return nil
+}
+
+// ─── Доступ к проектам ──────────────────────────────────────────────────
+
+// ProjectAccessFor возвращает проекты пользователя с признаком «может
+// редактировать» и названием проекта.
+func (s *Service) ProjectAccessFor(userID int) ([]ProjectAccess, error) {
+	var rows []ProjectAccess
+	err := s.db.Select(&rows,
+		`SELECT upp.user_id, upp.project_id, p.name, p.status, upp.can_edit
+		   FROM user_project_permissions upp
+		   JOIN projects p ON p.id = upp.project_id
+		  WHERE upp.user_id = $1
+		  ORDER BY p.name`, userID)
+	return rows, err
+}
+
+// ProjectAccessAll — доступы всех пользователей одним запросом.
+// Экран управления показывает их в таблице; без этого на каждую строку
+// приходился бы отдельный поход в базу.
+func (s *Service) ProjectAccessAll() (map[int][]ProjectAccess, error) {
+	var rows []ProjectAccess
+	err := s.db.Select(&rows,
+		`SELECT upp.user_id, upp.project_id, p.name, p.status, upp.can_edit
+		   FROM user_project_permissions upp
+		   JOIN projects p ON p.id = upp.project_id
+		  ORDER BY upp.user_id, p.name`)
+	if err != nil {
+		return nil, err
+	}
+	out := map[int][]ProjectAccess{}
+	for _, r := range rows {
+		out[r.UserID] = append(out[r.UserID], r)
+	}
+	return out, nil
+}
+
+// SetProjectAccess приводит список проектов пользователя к переданному:
+// чего нет в списке — отзывается, что есть — выдаётся или обновляется.
+//
+// Возвращает id проектов, доступ к которым отозван: вызывающая сторона
+// снимает по ним индивидуальные права, иначе доступ «отозван», а право
+// на правку бюджета этого проекта осталось бы висеть.
+func (s *Service) SetProjectAccess(userID int, req SetProjectsRequest, grantedBy int) ([]int, error) {
+	tx, err := s.db.Beginx()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var before []int
+	if err = tx.Select(&before,
+		`SELECT project_id FROM user_project_permissions WHERE user_id=$1`, userID); err != nil {
+		return nil, err
+	}
+
+	keep := map[int]bool{}
+	for _, it := range req.Projects {
+		keep[it.ProjectID] = true
+		if _, err = tx.Exec(
+			`INSERT INTO user_project_permissions (user_id, project_id, can_edit, granted_by)
+			 VALUES ($1,$2,$3,$4)
+			 ON CONFLICT (user_id, project_id)
+			 DO UPDATE SET can_edit=$3, granted_by=$4, granted_at=NOW()`,
+			userID, it.ProjectID, it.CanEdit, grantedBy); err != nil {
+			return nil, err
+		}
+	}
+
+	var revoked []int
+	for _, id := range before {
+		if !keep[id] {
+			revoked = append(revoked, id)
+		}
+	}
+	if len(revoked) > 0 {
+		q, args, qerr := sqlx.In(
+			`DELETE FROM user_project_permissions WHERE user_id=? AND project_id IN (?)`,
+			userID, revoked)
+		if qerr != nil {
+			return nil, qerr
+		}
+		if _, err = tx.Exec(tx.Rebind(q), args...); err != nil {
+			return nil, err
+		}
+	}
+
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
+	return revoked, nil
 }

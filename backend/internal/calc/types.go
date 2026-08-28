@@ -56,6 +56,17 @@ const (
 //   - 4.6!D9  — суточные РФ:     700+300/0.87*1.3
 const npflGrossUpDivisor = 0.87
 
+// defaultRefinancingPct — ставка рефинансирования, % годовых. В форме
+// зашита прямо в формулу (`2.Бюджет!H249 = H247*(ROUND(14.5/12;2))`),
+// поэтому здесь она только значение по умолчанию: фактическую ставку
+// задаёт справочник исполнителей и подставляет в форму бюджета
+// (InputBudgetParams.RefinancingPct). Совпадает с константой формы.
+const defaultRefinancingPct = 14.5
+
+// refRateMonths — строка 249 считается только за первые четыре месяца
+// проекта. Правило владельца, в форме ограничения по месяцам нет.
+const refRateMonths = 4
+
 // ---------------------- Входные данные ----------------------
 
 // Employee — один сотрудник (лист 4.6)
@@ -272,6 +283,45 @@ type InputBudgetParams struct {
 	// значение дважды, а деление на 1.22 для «Айбикон» не выполнялось
 	// вовсе, из-за чего выручка завышалась на 22%. См. contractNetOfVAT.
 	ContractValue float64 `json:"contract_value"`
+
+	// ── Справочные значения исполнителя (snapshot) ───────────────────────
+	//
+	// Приходят из справочника «Исполнители» как значение по умолчанию для
+	// ячейки формы и правятся вручную. В версии бюджета лежит уже
+	// подставленное число, поэтому правка справочника не меняет ни одной
+	// сохранённой версии.
+	//
+	// Указатели, а не float64: ноль здесь — законное значение («Айбикон-
+	// Проект», налога нет), и его надо отличать от «поля в JSON не было».
+	// Если поля нет (версии, сохранённые до появления справочных значений),
+	// расчёт идёт по ставкам эталонной формы — profitTaxRate.
+	//
+	// В процентах: 25 = 25%.
+	ProfitTaxPct *float64 `json:"profit_tax_pct"`
+
+	// RefinancingPct — ставка рефинансирования, % годовых
+	// (2.Бюджет!249). Ни на что в расчёте не влияет: строка 249
+	// справочная, её результат только показывают. См. RefRate().
+	RefinancingPct *float64 `json:"refinancing_pct"`
+}
+
+// RefRate — ставка рефинансирования долей процента в год. Если в форме
+// её нет (версия сохранена раньше), берётся ставка эталонной формы.
+func (p *InputBudgetParams) RefRate() float64 {
+	if p == nil || p.RefinancingPct == nil {
+		return defaultRefinancingPct
+	}
+	return *p.RefinancingPct
+}
+
+// TaxRate — ставка налога на прибыль долей единицы и признак того, что
+// она задана явно. Явная ставка (справочное значение исполнителя,
+// подставленное в форму) имеет приоритет над ставкой эталонной формы.
+func (p *InputBudgetParams) TaxRate() (float64, bool) {
+	if p == nil || p.ProfitTaxPct == nil {
+		return 0, false
+	}
+	return *p.ProfitTaxPct / 100, true
 }
 
 // OverrideMonthly — явное задание статьи накладных по месяцам (строки 186-211 без расчётных)
@@ -404,6 +454,9 @@ type MonthlyResult struct {
 	Revenue           float64 `json:"revenue"`              // 236 (без НДС)
 	OperatingProfit   float64 `json:"operating_profit"`     // 238
 	RevenueWithVAT    float64 `json:"revenue_with_vat"`     // 247
+	// RefRateAmount — строка 249 за этот месяц; ноль везде, кроме
+	// первых четырёх месяцев проекта.
+	RefRateAmount float64 `json:"ref_rate_amount"` // 249
 }
 
 // CalcResult — полные результаты расчёта бюджета
@@ -420,4 +473,14 @@ type CalcResult struct {
 	NetProfit           float64 `json:"net_profit"`
 	Profitability       float64 `json:"profitability"`          // % G244
 	TotalRevenueWithVAT float64 `json:"total_revenue_with_vat"` // G247
+
+	// RefRateAmount — «Стоимость + ставка рефинансирования на 1–4 месяцы»
+	// (2.Бюджет!249), сумма за первые четыре месяца. Справочный
+	// показатель: в расчёт расходов, прибыли и налога не входит и ни на
+	// что не влияет — его только показывают в итогах. См. calcRefRate.
+	RefRateAmount float64 `json:"ref_rate_amount"`
+
+	// RefRatePct — ставка, по которой посчитан RefRateAmount, % годовых.
+	// Нужна интерфейсу для подписи показателя.
+	RefRatePct float64 `json:"ref_rate_pct"`
 }

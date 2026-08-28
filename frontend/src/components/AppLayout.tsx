@@ -13,8 +13,10 @@ import type { Profile, ProjectListItem, PaginatedResponse } from '../types';
 import { ROLE_LABELS } from '../types';
 import { shortName, initials } from '../utils/names';
 import { useNavigate, useLocation, useMatch, Outlet } from 'react-router-dom';
-import { clearAuth, currentUser, hasRole } from '../store/auth';
+import { clearAuth, currentUser } from '../store/auth';
+import { PERM, usePermissions } from '../store/permissions';
 import { useScrollRestore, SCROLL_ROOT_ID } from '../hooks/useScrollRestore';
+import { SIDER_FOOTER_ID } from '../hooks/useFillHeight';
 import { BRAND } from '../theme';
 
 const { Header, Sider, Content } = Layout;
@@ -101,6 +103,11 @@ export default function AppLayout() {
     navigate('/login');
   }
 
+  // Разделы меню — по правам, а не по ролям: главный экономист может
+  // выдать историю изменений или справочники индивидуально, и пункт
+  // должен появиться сам.
+  const { can } = usePermissions();
+
   const menuItems = [
     {
       key: '/projects',
@@ -112,12 +119,12 @@ export default function AppLayout() {
       icon: <IconReferences />,
       label: 'Справочники',
     },
-    ...(hasRole('GE') ? [{
+    ...(can(PERM.usersManage) ? [{
       key: '/users',
       icon: <IconUsers />,
       label: 'Пользователи',
     }] : []),
-    ...(hasRole('GE', 'EP', 'IP') ? [{
+    ...(can(PERM.auditView) ? [{
       key: '/audit',
       icon: <IconHistory />,
       label: 'История изменений',
@@ -332,8 +339,12 @@ export default function AppLayout() {
           onClick={({ key }) => onMenuClick(key)}
         />
 
-        {/* Блок пользователя внизу сайдбара — вход в личный кабинет */}
+        {/* Блок пользователя внизу сайдбара — вход в личный кабинет.
+            id читает useFillHeight: верхняя грань этого блока — линия,
+            ниже которой большим таблицам (реестр, пользователи, история)
+            расти нельзя, дальше у них своя прокрутка. */}
         <div
+          id={SIDER_FOOTER_ID}
           onClick={() => navigate('/profile')}
           title="Личный кабинет"
           style={{

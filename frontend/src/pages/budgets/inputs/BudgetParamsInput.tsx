@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Card, Form, InputNumber, Select, Typography, Row, Col, Divider } from 'antd';
 import { useQuery } from '@tanstack/react-query';
-import { budgetsApi } from '../../../api';
+import { budgetsApi, refsApi } from '../../../api';
 import type { InputBudgetParams } from '../../../types';
 import { useAutosave } from '../../../hooks/useAutosave';
 import { fmtNum } from '../../../utils/fmt';
@@ -42,17 +42,37 @@ export default function BudgetParamsInput({ versionId, executor, readonly }: Pro
     queryFn: () => budgetsApi.getInput<InputBudgetParams>(versionId, 'budget_params'),
   });
 
+  /**
+   * Справочные значения исполнителя. Нужны только как значение по
+   * умолчанию для пустых ячеек: то, что уже сохранено в версии, они не
+   * перебивают — иначе правка справочника молча меняла бы посчитанный
+   * бюджет, чего справочники делать не должны.
+   */
+  const { data: executors } = useQuery({
+    queryKey: ['executors'],
+    queryFn: () => refsApi.executors(),
+  });
+  const execRow = (executors ?? []).find(
+    e => e.name.trim().toLowerCase() === (executor ?? '').trim().toLowerCase(),
+  );
+
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    if (!isSuccess) return;
-    const init = saved && Object.keys(saved).length > 0
+    // Ждём и сохранённые данные, и справочник: без второго ячейки ставок
+    // на мгновение показали бы пустоту, а автосейв записал бы её в версию.
+    if (!isSuccess || !executors) return;
+    const init: InputBudgetParams = saved && Object.keys(saved).length > 0
       ? { ...DEFAULTS, ...saved }
-      : DEFAULTS;
+      : { ...DEFAULTS };
+    if (init.profit_tax_pct === undefined) init.profit_tax_pct = execRow?.profit_tax_rate ?? 0;
+    if (init.refinancing_pct === undefined) init.refinancing_pct = execRow?.refinancing_rate ?? 0;
     form.setFieldsValue(init);
     setValues(init);
     setHydrated(true);
-  }, [saved, form, isSuccess]);
+    // execRow выводится из executors — отдельной зависимостью не нужен.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saved, form, isSuccess, executors]);
 
   const save = useCallback(
     (vals: InputBudgetParams) => budgetsApi.saveInput(versionId, 'budget_params', vals),
@@ -107,6 +127,41 @@ export default function BudgetParamsInput({ versionId, executor, readonly }: Pro
             </Form.Item>
           </Col>
         </Row>
+      </Card>
+
+      <Card
+        title={`Ставки исполнителя${executor ? ` — ${executor}` : ''}`}
+        size="small"
+        style={{ marginBottom: 16 }}
+      >
+        <Row gutter={24}>
+          <Col span={8}>
+            <Form.Item
+              name="profit_tax_pct"
+              label="Налог на прибыль, %"
+              tooltip={
+                'Подставлено из справочника исполнителей. От этой ставки ' +
+                'считается налог на прибыль и коэффициент наценки на расходы. ' +
+                'Значение можно изменить — в бюджете сохранится то, что стоит здесь.'
+              }
+            >
+              <InputNumber min={0} max={100} step={0.5} style={{ width: '100%' }} addonAfter="%" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item
+              name="refinancing_pct"
+              label="Ставка рефинансирования, %"
+              tooltip="Подставлено из справочника исполнителей."
+            >
+              <InputNumber min={0} max={100} step={0.5} style={{ width: '100%' }} addonAfter="%" />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          Значения по умолчанию берутся из справочника исполнителей. Изменение
+          справочника не пересчитывает уже сохранённые версии бюджета.
+        </Text>
       </Card>
 
       <Card title="Прочие расходы (строка 218)" size="small" style={{ marginBottom: 16 }}>
