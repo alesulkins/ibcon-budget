@@ -12,6 +12,7 @@ import { fmtNum, thousandFormatter, thousandParser } from '../../utils/fmt';
 import { LINE, TEXT_SOFT } from '../../theme';
 import { canIn, PERM } from '../../store/permissions';
 import { useAutosave } from '../../hooks/useAutosave';
+import { useFillToSiderFooter } from '../../hooks/useFillHeight';
 
 interface Props {
   versionId: number;
@@ -48,6 +49,13 @@ export default function BudgetReports({ versionId, permissions, readonly }: Prop
   const [kind, setKind] = useState<Kind>('bdr');
   const [showEmpty, setShowEmpty] = useState(false);
   const [manual, setManual] = useState<ManualValues>(EMPTY_MANUAL);
+  /**
+   * Таблица занимает место до линии ЛК и прокручивается сама.
+   * Фиксированная высота давала две прокрутки сразу — страницы и
+   * таблицы: шапка с кодификатором уезжала вверх вместе со страницей, и
+   * в длинном отчёте становилось непонятно, какой месяц перед глазами.
+   */
+  const [fillRef, fillHeight] = useFillToSiderFooter<HTMLDivElement>();
   const [hydrated, setHydrated] = useState(false);
 
   const { data, isLoading, error } = useQuery({
@@ -234,17 +242,19 @@ export default function BudgetReports({ versionId, permissions, readonly }: Prop
           + 'после ввода нажмите «Пересчитать отчёты», чтобы обновились групповые суммы.'}
       </Typography.Paragraph>
 
-      <Table
-        rowKey="code"
-        columns={columns}
-        dataSource={rows}
-        size="small"
-        pagination={false}
-        tableLayout="fixed"
-        scroll={{ x: 'max-content', y: 560 }}
-        rowClassName={(r) => (r.group ? 'ibcon-report-group' : '')}
-        locale={{ emptyText: 'Нет заполненных статей — версию ещё не считали.' }}
-      />
+      <div ref={fillRef}>
+        <Table
+          rowKey="code"
+          columns={columns}
+          dataSource={rows}
+          size="small"
+          pagination={false}
+          tableLayout="fixed"
+          scroll={{ x: 'max-content', y: fillHeight }}
+          rowClassName={(r) => (r.group ? 'ibcon-report-group' : '')}
+          locale={{ emptyText: 'Нет заполненных статей — версию ещё не считали.' }}
+        />
+      </div>
     </div>
   );
 }

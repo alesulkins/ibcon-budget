@@ -36,6 +36,7 @@
      ThemedApp из выбранного пользователем цвета и темы; здесь —
      умолчания на случай, если он ещё не отработал. */
   --ibcon-brand-light: #22576c;
+  --ibcon-brand-hover: #2a6580;
   --ibcon-brand-dark: #0f2832;
   --ibcon-sider-gradient: linear-gradient(170deg,
     rgba(34, 87, 108, 0.92) 0%,
@@ -45,6 +46,8 @@
   --ibcon-step-border: rgba(24, 62, 77, 0.18);
   --ibcon-step-todo: #8c9aa0;
   --ibcon-step-label: #595959;
+  --ibcon-scrollbar: rgba(24, 62, 77, 0.28);
+  --ibcon-step-active-label: #183e4d;
 
   /* Размеры ячеек таблиц, отступ и подсветка в меню задаются токенами
      компонентов в ThemedApp, а не здесь: см. «РУЧКИ ПОДГОНКИ» в
@@ -205,7 +208,9 @@ html body {
 .ant-table-content,
 .ibcon-scroll {
   scrollbar-width: thin;
-  scrollbar-color: rgba(24, 62, 77, 0.28) transparent;
+  /* Ползунок — от фирменного цвета: на тёмной теме и на другом
+     цвете сине-зелёный литерал сливался с фоном. */
+  scrollbar-color: var(--ibcon-scrollbar) transparent;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -359,18 +364,23 @@ html body {
  * та же светлая грань сверху. Плоская заливка рядом с матовым
  * сайдбаром выглядела деталью из другого набора.
  */
+/* Растяжка собирается из выбранного цвета: литералами кнопка оставалась
+   сине-зелёной, даже когда весь остальной интерфейс перекрашивался. */
 .ant-btn-primary:not(:disabled) {
-  background: linear-gradient(170deg, #22576c 0%, #183e4d 100%);
+  background: linear-gradient(170deg,
+    var(--ibcon-brand-light) 0%, var(--ibcon-brand) 100%);
   border-color: transparent;
   box-shadow: inset 0 1px 0 rgba(253, 249, 248, 0.10);
 }
 
 .ant-btn-primary:not(:disabled):hover {
-  background: linear-gradient(170deg, #2a6580 0%, #1c4859 100%);
+  background: linear-gradient(170deg,
+    var(--ibcon-brand-hover) 0%, var(--ibcon-brand-light) 100%);
 }
 
 .ant-btn-primary:not(:disabled):active {
-  background: linear-gradient(170deg, #1c4859 0%, #143441 100%);
+  background: linear-gradient(170deg,
+    var(--ibcon-brand) 0%, var(--ibcon-brand-dark) 100%);
 }
 
 /* Опасное действие (удаление) остаётся красным — фирменная растяжка
@@ -417,7 +427,8 @@ html body {
 }
 
 /* Групповые строки БДР и БДДС — та же мягкая подложка, что у итогов
-   помесячной разбивки: иерархия кодификатора читается без рамок. */
+   помесячной разбивки: иерархия кодификатора читается без рамок.
+   Подложка от фирменного цвета, поэтому меняется вместе с ним. */
 .ibcon-report-group > td {
-  background: rgba(24, 62, 77, 0.04);
+  background: var(--ibcon-hover);
 }

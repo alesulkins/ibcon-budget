@@ -28,11 +28,6 @@ type Profile struct {
 	Avatar   string `db:"avatar"    json:"avatar"`
 	Notes    string `db:"notes"     json:"notes"`
 
-	// EmailReminders — слать ли напоминания письмом. Тумблер общий на
-	// все напоминания: это настройка доставки, а не свойство записи.
-	// Выключен — напоминание только всплывает на экране.
-	EmailReminders bool `db:"email_reminders" json:"email_reminders"`
-
 	// UISettings — размер шрифта, тема и цвета интерфейса. Хранятся в
 	// учётке, а не в браузере, чтобы человек видел свой интерфейс на
 	// любом устройстве. Формат свободный: набор настроек будет расти, и
@@ -48,10 +43,9 @@ type Profile struct {
 type UpdateProfileRequest struct {
 	// Поля указательные: nil означает «не менять».
 	// ФИО через профиль не меняется — им управляет главный экономист.
-	Avatar         *string          `json:"avatar"`
-	Notes          *string          `json:"notes"`
-	EmailReminders *bool            `json:"email_reminders"`
-	UISettings     *json.RawMessage `json:"ui_settings"`
+	Avatar     *string          `json:"avatar"`
+	Notes      *string          `json:"notes"`
+	UISettings *json.RawMessage `json:"ui_settings"`
 }
 
 // maxUISettingsLen — настройки интерфейса это горстка полей, а не
@@ -67,8 +61,7 @@ type ChangePasswordRequest struct {
 func (s *Service) GetProfile(userID int) (*Profile, error) {
 	var p Profile
 	err := s.db.Get(&p,
-		`SELECT id, email, full_name, role, avatar, notes,
-		        email_reminders, ui_settings
+		`SELECT id, email, full_name, role, avatar, notes, ui_settings
 		 FROM users WHERE id=$1`,
 		userID)
 	if err != nil {
@@ -106,13 +99,12 @@ func (s *Service) UpdateProfile(userID int, req UpdateProfileRequest) (*Profile,
 
 	_, err := s.db.Exec(`
 		UPDATE users
-		SET avatar          = COALESCE($1, avatar),
-		    notes           = COALESCE($2, notes),
-		    email_reminders = COALESCE($3, email_reminders),
-		    ui_settings     = COALESCE($4::jsonb, ui_settings),
-		    updated_at      = NOW()
-		WHERE id=$5`,
-		req.Avatar, req.Notes, req.EmailReminders, ui, userID)
+		SET avatar      = COALESCE($1, avatar),
+		    notes       = COALESCE($2, notes),
+		    ui_settings = COALESCE($3::jsonb, ui_settings),
+		    updated_at  = NOW()
+		WHERE id=$4`,
+		req.Avatar, req.Notes, ui, userID)
 	if err != nil {
 		return nil, err
 	}

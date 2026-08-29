@@ -469,7 +469,9 @@ export default function BudgetVersionPage() {
         <div style={{
           position: 'sticky',
           top: -24,
-          zIndex: 5,
+          // Выше закреплённых колонок и шапки таблиц: antd ставит им
+          // z-index 17, и при прокрутке БДР они наезжали на эту полосу.
+          zIndex: 30,
           background: 'var(--ibcon-white)',
           padding: '16px 24px',
           borderBottom: '1px solid var(--ibcon-line)',

@@ -504,9 +504,8 @@ func (h *Handler) export(c *gin.Context) {
 	// БДДС в неё не попадают: он их не видит и на экране.
 	meta.Limited = auth.LimitedExport(claims.Role)
 
-	// Сводка по ИТР: сотрудники версии и должности с признаком ИТР.
-	// Администратору проекта её не собираем — она про ФОТ и выручку,
-	// которых он не видит.
+	// Сотрудники нужны сводке по ИТР и таблице зарплат. Администратору
+	// проекта их не отдаём — он не видит ни ФОТ, ни выручки.
 	if !meta.Limited && inp.Employees != nil {
 		meta.Employees = inp.Employees.Employees
 		if itr, itrErr := h.refsSvc.ITRPositions(); itrErr == nil {

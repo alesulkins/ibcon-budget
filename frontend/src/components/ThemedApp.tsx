@@ -17,13 +17,21 @@ import {
  * светлой теме, только наоборот.
  */
 const DARK = {
-  white: '#1B2A31', // «фирменный белый» тёмной темы: карточки, поля
-  bg: '#142127', // рабочая область
   text: '#E6EDF0',
   textSoft: '#9FB3BC',
   line: 'rgba(230, 237, 240, 0.12)',
   hover: 'rgba(230, 237, 240, 0.06)',
 };
+
+/**
+ * Поверхности тёмной темы выводятся из ВЫБРАННОГО цвета, а не берутся из
+ * фиксированной палитры: иначе фиолетовый сайдбар стоял бы на синем
+ * фоне. Коэффициенты подобраны по фирменной паре #183E4D → #142127 и
+ * #1B2A31: рабочая область темнее выбранного цвета, карточки чуть
+ * светлее её — та же лесенка, что в светлой теме, только вниз.
+ */
+const DARK_BG_MIX = -0.62; // рабочая область
+const DARK_SURFACE_MIX = -0.5; // карточки, поля, всплывающие панели
 
 /**
  * Оттенок фирменного цвета: k > 0 светлее, k < 0 темнее.
@@ -66,12 +74,18 @@ export default function ThemedApp() {
   const dark = theme === 'dark';
   const basePx = FONT_SIZE_PX[fontSize];
 
-  const white = dark ? DARK.white : BRAND_WHITE;
-  const bg = dark ? DARK.bg : PAGE_BG;
+  // Светлая тема: фон и карточки остаются фирменными бежевыми — решение
+  // владельца. Меняется акцент (сайдбар, кнопки, выделение), а не бумага
+  // под содержимым.
+  const white = dark ? shade(brandColor, DARK_SURFACE_MIX) : BRAND_WHITE;
+  const bg = dark ? shade(brandColor, DARK_BG_MIX) : PAGE_BG;
   const text = dark ? DARK.text : TEXT;
   const textSoft = dark ? DARK.textSoft : TEXT_SOFT;
   const line = dark ? DARK.line : LINE;
-  const hover = dark ? DARK.hover : HOVER_LIGHT;
+  // Подсветка при наведении — тот же цвет, взятый почти прозрачным:
+  // своего серого в оформлении нет, и на фиолетовом сине-зелёная
+  // подсветка выглядела бы чужой.
+  const hover = dark ? DARK.hover : alpha(brandColor, 0.055);
 
   /**
    * Часть оформления живёт в index.css — правилами, которые нельзя
@@ -92,13 +106,20 @@ export default function ThemedApp() {
 
     // Оттенки фирменного цвета: растяжка сайдбара и шапка входа. Раньше
     // они были вписаны литералами и не менялись вместе с цветом.
-    const light = shade(brandColor, 0.18);
-    const dark = shade(brandColor, -0.28);
-    root.setProperty('--ibcon-brand-light', light);
-    root.setProperty('--ibcon-brand-dark', dark);
+    //
+    // Имена намеренно не «light»/«dark»: рядом уже есть флаг темы `dark`,
+    // и одноимённая переменная затеняла бы его — все проверки ниже
+    // читали бы строку с цветом, а она истинна всегда, и светлая тема
+    // получала бы тёмные подписи.
+    const brandLight = shade(brandColor, 0.18);
+    const brandDark = shade(brandColor, -0.28);
+    root.setProperty('--ibcon-brand-light', brandLight);
+    // Ступень между обычным и наведённым состоянием кнопки.
+    root.setProperty('--ibcon-brand-hover', shade(brandColor, 0.3));
+    root.setProperty('--ibcon-brand-dark', brandDark);
     root.setProperty('--ibcon-sider-gradient',
-      `linear-gradient(170deg, ${alpha(light, 0.92)} 0%, `
-      + `${alpha(brandColor, 0.95)} 45%, ${alpha(dark, 0.97)} 100%)`);
+      `linear-gradient(170deg, ${alpha(brandLight, 0.92)} 0%, `
+      + `${alpha(brandColor, 0.95)} 45%, ${alpha(brandDark, 0.97)} 100%)`);
 
     // Шаги мастера. В тёмной теме подложка пройденного шага и подписи
     // строились из тёмного фирменного цвета и почти сливались с фоном —
@@ -109,6 +130,12 @@ export default function ThemedApp() {
       dark ? 'rgba(230, 237, 240, 0.28)' : alpha(brandColor, 0.18));
     root.setProperty('--ibcon-step-todo', dark ? DARK.textSoft : '#8c9aa0');
     root.setProperty('--ibcon-step-label', dark ? DARK.text : '#595959');
+    // На тёмном фоне фирменный цвет как подпись не читается — берём
+    // светлый тон той же гаммы.
+    root.setProperty('--ibcon-step-active-label',
+      dark ? shade(brandColor, 0.62) : brandColor);
+    root.setProperty('--ibcon-scrollbar',
+      dark ? 'rgba(230, 237, 240, 0.24)' : alpha(brandColor, 0.28));
     // Базовый кегль: от него antd считает свои размеры, а наши
     // относительные единицы — свои.
     root.setProperty('--ibcon-font-size', `${basePx}px`);

@@ -1,20 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Card, Avatar, Typography, Button, Input, Space, message, Modal,
   Form, Row, Col, Descriptions, Upload, Alert, Popconfirm,
 } from 'antd';
 import {
-  LockOutlined, UploadOutlined, SaveOutlined, DeleteOutlined,
+  LockOutlined, UploadOutlined, DeleteOutlined,
 } from '@ant-design/icons';
 import type { UploadProps } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { profileApi } from '../../api';
+import { useAutosave } from '../../hooks/useAutosave';
 import Reminders from './Reminders';
 import { ROLE_LABELS } from '../../types';
 import type { Profile } from '../../types';
 import { initials } from '../../utils/names';
 import { extractError } from '../../api/client';
-import { BRAND } from '../../theme';
 import StatusTag from '../../components/StatusTag';
 
 const { Text, Paragraph } = Typography;
@@ -34,7 +34,9 @@ const MAX_AVATAR_BYTES = 1024 * 1024;
 export default function ProfilePage() {
   const qc = useQueryClient();
   const [notes, setNotes] = useState('');
-  const [notesDirty, setNotesDirty] = useState(false);
+  // Пока профиль не загружен, автосохранению нечего сравнивать: без
+  // этого флага оно записало бы пустые заметки поверх настоящих.
+  const [notesReady, setNotesReady] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [passwordForm] = Form.useForm();
 
@@ -46,15 +48,28 @@ export default function ProfilePage() {
   useEffect(() => {
     if (profile) {
       setNotes(profile.notes ?? '');
-      setNotesDirty(false);
+      setNotesReady(true);
     }
   }, [profile]);
+
+  /**
+   * Заметки сохраняются сами — тем же механизмом, что формы бюджета.
+   * Кнопка «Сохранить» осталась бы единственным местом платформы, где
+   * набранное можно потерять, закрыв вкладку.
+   *
+   * Аватар сохраняется отдельной мутацией: он меняется одним нажатием, и
+   * ждать окна автосохранения там незачем.
+   */
+  const saveNotes = useCallback(
+    (value: string) => profileApi.update({ notes: value }),
+    [],
+  );
+  useAutosave({ data: notes, ready: notesReady, save: saveNotes });
 
   const updateMutation = useMutation({
     mutationFn: (data: { avatar?: string; notes?: string }) => profileApi.update(data),
     onSuccess: (p: Profile) => {
       qc.setQueryData(['profile'], p);
-      setNotesDirty(false);
       message.success('Сохранено');
     },
     onError: (e) => message.error(extractError(e)),
@@ -109,13 +124,13 @@ export default function ProfilePage() {
     <div style={{ maxWidth: 980 }}>
       <Row gutter={16} align="stretch">
         {/* ── Аватар и реквизиты ─────────────────────────────────── */}
-        <Col xs={24} md={10}>
+        <Col xs={24} md={7}>
           <Card size="small" style={{ height: '100%' }}>
             <div style={{ textAlign: 'center', marginBottom: 16 }}>
               <Avatar
                 size={96}
                 src={isImage ? avatar : undefined}
-                style={{ background: isImage ? undefined : BRAND, fontSize: 40 }}
+                style={{ background: isImage ? undefined : 'var(--ibcon-brand)', fontSize: 40 }}
               >
                 {!isImage && (avatar || initials(profile.full_name))}
               </Avatar>
@@ -154,7 +169,7 @@ export default function ProfilePage() {
                     width: 38,
                     height: 38,
                     padding: 0,
-                    background: avatar === s ? BRAND : undefined,
+                    background: avatar === s ? 'var(--ibcon-brand)' : undefined,
                   }}
                   onClick={() => updateMutation.mutate({ avatar: s })}
                 >
@@ -189,31 +204,19 @@ export default function ProfilePage() {
         {/* ── Рабочие заметки ──────────────────────────────────────
             Правая часть делится на три доли: две под заметки, одна под
             напоминания — их пишут коротко, а заметки длинные. */}
-        <Col xs={24} md={9}>
+        <Col xs={24} md={11}>
           <Card
             size="small"
             title="Рабочие заметки и напоминания"
             style={{ height: '100%'}}
-            extra={(
-              <Button
-                type="primary"
-                size="small"
-                icon={<SaveOutlined />}
-                
-                disabled={!notesDirty}
-                loading={updateMutation.isPending}
-                onClick={() => updateMutation.mutate({ notes })}
-              >
-                Сохранить
-              </Button>
-            )}
           >
             <Paragraph type="secondary" style={{ fontSize: 12 }}>
-              Заметки видны только вам и хранятся в вашей учётной записи.
+              Заметки видны только вам, хранятся в учётной записи и
+              сохраняются сами.
             </Paragraph>
             <TextArea
               value={notes}
-              onChange={(e) => { setNotes(e.target.value); setNotesDirty(true); }}
+              onChange={(e) => setNotes(e.target.value)}
               rows={18}
               placeholder="Например: пересчитать бюджет по проекту №12 после уточнения ТКП…"
             />
@@ -221,9 +224,9 @@ export default function ProfilePage() {
         </Col>
 
         {/* ── Напоминания ──────────────────────────────────────────── */}
-        <Col xs={24} md={5}>
+        <Col xs={24} md={6}>
           <Card size="small" title="Напоминания" style={{ height: '100%' }}>
-            <Reminders emailReminders={profile?.email_reminders ?? true} />
+            <Reminders />
           </Card>
         </Col>
       </Row>

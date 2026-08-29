@@ -19,10 +19,8 @@ export const authApi = {
 export const profileApi = {
   get: () => client.get<Profile>('/users/me').then(r => r.data),
 
-  update: (data: {
-    avatar?: string; notes?: string;
-    email_reminders?: boolean; ui_settings?: UISettings;
-  }) => client.put<Profile>('/users/me', data).then(r => r.data),
+  update: (data: { avatar?: string; notes?: string; ui_settings?: UISettings }) =>
+    client.put<Profile>('/users/me', data).then(r => r.data),
 
   changePassword: (currentPassword: string, newPassword: string) =>
     client.put<{ status: string }>('/users/me/password', {

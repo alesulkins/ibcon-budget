@@ -1,8 +1,6 @@
 package main
 
 import (
-	"time"
-
 	"log/slog"
 	"os"
 
@@ -71,19 +69,11 @@ func main() {
 	refSvc := references.NewService(database)
 	references.NewHandler(refSvc, acl, auditSvc).Register(protected)
 
-	// Напоминания личного кабинета. Рассылка писем стартует только при
-	// настроенном SMTP; иначе напоминания всплывают на экране, а воркер
-	// не запускается вовсе.
+	// Напоминания личного кабинета. Показываются всплывающим
+	// уведомлением на экране; рассылки писем нет — решение владельца
+	// 2026-08-30.
 	remSvc := reminders.NewService(database)
 	reminders.NewHandler(remSvc).Register(protected)
-	reminders.NewWorker(
-		remSvc,
-		reminders.NewMailer(reminders.SMTPConfig{
-			Host: cfg.SMTPHost, Port: cfg.SMTPPort,
-			User: cfg.SMTPUser, Pass: cfg.SMTPPass, From: cfg.SMTPFrom,
-		}),
-		time.Minute,
-	).Start()
 
 	projectsSvc := projects.NewService(database)
 	projects.NewHandler(projectsSvc, usersSvc, acl, auditSvc).Register(protected)

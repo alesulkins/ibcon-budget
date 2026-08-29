@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
+import { SCROLL_ROOT_ID } from './useScrollRestore';
 
 /**
  * Id блока «Личный кабинет» внизу сайдбара (AppLayout.tsx) — единственный
@@ -57,7 +58,18 @@ export function useFillToSiderFooter<T extends HTMLElement>(reserveBottom = 0) {
 
       const top = el.getBoundingClientRect().top;
       const footerTop = footer.getBoundingClientRect().top;
-      const available = footerTop - top - BOTTOM_GAP - reserveBottom;
+      let available = footerTop - top - BOTTOM_GAP - reserveBottom;
+
+      // Если страница уже прокручена, верх таблицы оказывается ВЫШЕ окна,
+      // и разница до линии ЛК выходит больше самой рабочей области —
+      // таблица растягивалась на несколько экранов, и прокруток
+      // становилось две. Ограничиваем высотой видимой части.
+      const root = document.getElementById(SCROLL_ROOT_ID);
+      if (root) {
+        const visible = footerTop - root.getBoundingClientRect().top
+          - BOTTOM_GAP - reserveBottom;
+        available = Math.min(available, visible);
+      }
 
       const thead = el.querySelector<HTMLElement>('.ant-table-thead');
       const theadHeight = thead ? thead.getBoundingClientRect().height : 0;

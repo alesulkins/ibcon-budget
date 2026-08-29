@@ -160,7 +160,9 @@ export default function WizardSteps({ items, current, onChange }: Props) {
                   fontSize: 12,
                   lineHeight: 1.3,
                   textAlign: 'center',
-                  color: active ? 'var(--ibcon-brand)' : 'var(--ibcon-step-label)',
+                  // Подпись активного шага — своей переменной: в тёмной
+                  // теме фирменный цвет тёмный и на тёмном фоне пропадал.
+                  color: active ? 'var(--ibcon-step-active-label)' : 'var(--ibcon-step-label)',
                   fontWeight: active ? 600 : 400,
                   // Ключевое: не рвать слова по буквам
                   whiteSpace: 'nowrap',

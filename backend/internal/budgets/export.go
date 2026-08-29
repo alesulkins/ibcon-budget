@@ -489,6 +489,73 @@ func BuildExport(m ExportMeta, r *calc.CalcResult, reps ...*reports.Report) ([]b
 		}
 	}
 
+	// ── Накладные расходы по статьям ─────────────────────────────────
+	// Тот же разрез, что видит администратор проекта: в помесячной
+	// разбивке накладные идут одной строкой, а сверяют их по статьям.
+	row++
+	set(cellAt(colLabel, row), "НАКЛАДНЫЕ РАСХОДЫ ПО СТАТЬЯМ")
+	styleRow(cellAt(colLabel, row), cellAt(colTotal, row), head)
+	row++
+
+	monthlyHeader()
+	for i, label := range overheadTitles {
+		monthlyLine(label, false, func(mr calc.MonthlyResult) float64 { return mr.Overhead[i] })
+	}
+	monthlyLine("Итого накладные расходы", true,
+		func(mr calc.MonthlyResult) float64 { return mr.ProjectCostsExFOT })
+
+	// ── Зарплаты сотрудников ─────────────────────────────────────────
+	// Помесячный ФОТ по каждому человеку: в остальной книге он только
+	// суммой, а зарплатную часть сверяют пофамильно.
+	if len(m.Employees) > 0 {
+		row++
+		set(cellAt(colLabel, row), "ЗАРПЛАТЫ СОТРУДНИКОВ")
+		styleRow(cellAt(colLabel, row), cellAt(colTotal, row), head)
+		row++
+
+		// У этой таблицы своя шапка: перед месяцами идут четыре колонки
+		// описания сотрудника, а не одна «Статья».
+		const (
+			empPosition = 1
+			empName     = 2
+			empCountry  = 3
+			empSalary   = 4
+			empTotal    = 5
+			empFirst    = 6
+		)
+		empLastCol := empFirst + len(r.Monthly) - 1
+
+		set(cellAt(empPosition, row), "Должность")
+		set(cellAt(empName, row), "ФИО")
+		set(cellAt(empCountry, row), "Страна НО")
+		set(cellAt(empSalary, row), "План ФОТ на руки, ₽")
+		set(cellAt(empTotal, row), "Итого за проект")
+		for i := range r.Monthly {
+			set(cellAt(empFirst+i, row), monthLabel(i))
+		}
+		styleRow(cellAt(empPosition, row), cellAt(empLastCol, row), head)
+		row++
+
+		for i := range m.Employees {
+			emp := &m.Employees[i]
+			set(cellAt(empPosition, row), emp.Position)
+			set(cellAt(empName, row), emp.FullName)
+			set(cellAt(empCountry, row), emp.Country)
+			set(cellAt(empSalary, row), emp.SalaryNet)
+			styleRow(cellAt(empPosition, row), cellAt(empCountry, row), text)
+
+			var sum float64
+			for month := 1; month <= len(r.Monthly); month++ {
+				v := calc.EmployeeFOTAt(emp, month, m.StartDate)
+				sum += v
+				set(cellAt(empFirst+month-1, row), v)
+			}
+			set(cellAt(empTotal, row), sum)
+			styleRow(cellAt(empSalary, row), cellAt(empLastCol, row), money)
+			row++
+		}
+	}
+
 	// ── Помесячная разбивка ──────────────────────────────────────────
 	set(fmt.Sprintf("A%d", row), "ПОМЕСЯЧНАЯ РАЗБИВКА")
 	_ = f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("A%d", row), head)

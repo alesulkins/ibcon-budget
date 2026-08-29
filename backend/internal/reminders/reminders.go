@@ -1,9 +1,8 @@
 // Package reminders — напоминания личного кабинета.
 //
 // Напоминание это заметка со сроком: когда срок наступил, платформа
-// показывает её всплывающим уведомлением, а при включённой почте ещё и
-// шлёт письмом. Тумблер почты общий на все напоминания (users.
-// email_reminders) — это настройка доставки, а не свойство записи.
+// показывает её всплывающим уведомлением на любой странице. Рассылки
+// писем нет — решение владельца 2026-08-30.
 package reminders
 
 import (
@@ -25,11 +24,9 @@ type Reminder struct {
 	Text     string    `db:"text"      json:"text"`
 	RemindAt time.Time `db:"remind_at" json:"remind_at"`
 
-	// ShownAt и EmailedAt разведены намеренно: почту можно выключить, и
-	// тогда напоминание будет показано, но не отправлено. Одна отметка
-	// «сработало» этого не различала бы.
-	ShownAt   *time.Time `db:"shown_at"   json:"shown_at,omitempty"`
-	EmailedAt *time.Time `db:"emailed_at" json:"emailed_at,omitempty"`
+	// ShownAt — когда напоминание всплыло на экране. По нему оно
+	// перестаёт попадать в выборку наступивших.
+	ShownAt *time.Time `db:"shown_at" json:"shown_at,omitempty"`
 
 	// Done — закрыто пользователем. Записи не удаляем: список сделанного
 	// — тоже история работы.
@@ -45,7 +42,7 @@ func NewService(db *sqlx.DB) *Service {
 	return &Service{db: db}
 }
 
-const cols = `id, user_id, text, remind_at, shown_at, emailed_at, done, created_at`
+const cols = `id, user_id, text, remind_at, shown_at, done, created_at`
 
 // List — все напоминания пользователя, ближайшие по сроку сверху.
 // Выполненные уходят вниз: работают с активными.
@@ -161,35 +158,5 @@ func (s *Service) MarkShown(userID int, ids []int) error {
 		return err
 	}
 	_, err = s.db.Exec(s.db.Rebind(q), args...)
-	return err
-}
-
-// PendingEmail — что нужно отправить письмом: срок наступил, напоминание
-// не выполнено, письмо ещё не уходило, и у владельца включена почта.
-type PendingEmail struct {
-	Reminder
-	Email    string `db:"email"`
-	FullName string `db:"full_name"`
-}
-
-func (s *Service) PendingEmails(limit int) ([]PendingEmail, error) {
-	rows := []PendingEmail{}
-	return rows, s.db.Select(&rows, `
-		SELECT r.id, r.user_id, r.text, r.remind_at, r.shown_at, r.emailed_at,
-		       r.done, r.created_at, u.email, u.full_name
-		FROM reminders r
-		JOIN users u ON u.id = r.user_id
-		WHERE r.done = FALSE
-		  AND r.emailed_at IS NULL
-		  AND r.remind_at <= NOW()
-		  AND u.active = TRUE
-		  AND u.email_reminders = TRUE
-		ORDER BY r.remind_at
-		LIMIT $1`, limit)
-}
-
-func (s *Service) MarkEmailed(id int) error {
-	_, err := s.db.Exec(
-		`UPDATE reminders SET emailed_at=NOW(), updated_at=NOW() WHERE id=$1`, id)
 	return err
 }

@@ -470,3 +470,60 @@ func safeAt(s []string, i int) string {
 	}
 	return ""
 }
+
+// Полная книга содержит и накладные по статьям (как у администратора),
+// и помесячные зарплаты каждого сотрудника: в остальной книге ФОТ идёт
+// одной суммой, а сверяют его пофамильно.
+func TestBuildExport_OverheadAndSalaries(t *testing.T) {
+	res := testResult()
+	meta := testMeta(false)
+	meta.Employees = []calc.Employee{{
+		Position: "Инженер ПТО", FullName: "Тестов Т.Т.",
+		Country: calc.CountryRF, SalaryNet: 200_000,
+		MonthlySchedule: []string{calc.ScheduleOF, calc.ScheduleMV, calc.ScheduleOF},
+	}}
+
+	data, err := BuildExport(meta, res)
+	if err != nil {
+		t.Fatalf("сборка книги: %v", err)
+	}
+	f := openBook(t, data)
+	defer f.Close()
+
+	rows, _ := f.GetRows("Бюджет")
+	var salary []string
+	sections := map[string]bool{}
+	for _, r := range rows {
+		if len(r) == 0 {
+			continue
+		}
+		sections[r[0]] = true
+		if r[0] == "Инженер ПТО" {
+			salary = r
+		}
+	}
+
+	for _, want := range []string{
+		"НАКЛАДНЫЕ РАСХОДЫ ПО СТАТЬЯМ", "ЗАРПЛАТЫ СОТРУДНИКОВ",
+		"Аренда офиса", "Итого накладные расходы",
+	} {
+		if !sections[want] {
+			t.Errorf("в книге нет блока или строки %q", want)
+		}
+	}
+
+	if salary == nil {
+		t.Fatal("строка сотрудника не найдена")
+	}
+	// Должность, ФИО, страна, оклад, итог, дальше месяцы.
+	// Второй месяц — межвахтовый отдых: фиксированные 30 000.
+	want := []string{
+		"Инженер ПТО", "Тестов Т.Т.", "россия", "200,000.00", "430,000.00",
+		"200,000.00", "30,000.00", "200,000.00",
+	}
+	for i := range want {
+		if got := safeAt(salary, i); got != want[i] {
+			t.Errorf("колонка %d: got %q, want %q", i, got, want[i])
+		}
+	}
+}

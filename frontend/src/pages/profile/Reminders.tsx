@@ -1,48 +1,48 @@
 import { useState } from 'react';
 import {
-  Button, Checkbox, DatePicker, Empty, Input, Space, Switch, Tooltip,
-  Typography, message,
+  Button, Checkbox, DatePicker, Input, Modal, Typography, message,
 } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dayjs, { type Dayjs } from 'dayjs';
-import { remindersApi, profileApi } from '../../api';
+import { remindersApi } from '../../api';
 import type { Reminder } from '../../types';
 import { extractError } from '../../api/client';
 import DeleteRowButton from '../../components/DeleteRowButton';
 import { LINE, TEXT_SOFT, STATUS } from '../../theme';
 
-interface Props {
-  /** Слать ли напоминания письмом — общий тумблер из профиля. */
-  emailReminders: boolean;
-}
-
 /**
  * Напоминания личного кабинета: заметка со сроком, которая в срок
- * всплывает уведомлением на экране, а при включённой почте ещё и уходит
- * письмом.
+ * всплывает уведомлением на экране.
  *
- * Тумблер почты один на все напоминания, а не на каждое: это настройка
- * доставки, а не свойство записи.
+ * Поля ввода не висят пустыми над списком — вместо них строка-приглашение
+ * «Добавить напоминание». Форма открывается по нажатию: пока напоминание
+ * не пишут, место занимает сам список, а не заготовка под него.
  */
-export default function Reminders({ emailReminders }: Props) {
+export default function Reminders() {
   const qc = useQueryClient();
+  const [adding, setAdding] = useState(false);
   const [text, setText] = useState('');
   const [at, setAt] = useState<Dayjs | null>(null);
 
-  const { data: items = [], isLoading } = useQuery({
+  const { data: items = [] } = useQuery({
     queryKey: ['reminders'],
     queryFn: remindersApi.list,
   });
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['reminders'] });
 
+  const closeForm = () => {
+    setAdding(false);
+    setText('');
+    setAt(null);
+  };
+
   const createMutation = useMutation({
     mutationFn: () => remindersApi.create(text.trim(), at!.toISOString()),
     onSuccess: () => {
       invalidate();
-      setText('');
-      setAt(null);
+      closeForm();
       message.success('Напоминание добавлено');
     },
     onError: (e) => message.error(extractError(e)),
@@ -61,65 +61,26 @@ export default function Reminders({ emailReminders }: Props) {
     onError: (e) => message.error(extractError(e)),
   });
 
-  const emailMutation = useMutation({
-    mutationFn: (on: boolean) => profileApi.update({ email_reminders: on }),
-    onSuccess: (_, on) => {
-      qc.invalidateQueries({ queryKey: ['profile'] });
-      message.success(on
-        ? 'Напоминания будут приходить на почту'
-        : 'Напоминания будут только всплывать на экране');
-    },
-    onError: (e) => message.error(extractError(e)),
-  });
-
-  const canAdd = text.trim() !== '' && at !== null;
+  const canSave = text.trim() !== '' && at !== null;
 
   return (
     <div>
-      <Space align="center" size={8} style={{ marginBottom: 12 }}>
-        <Switch
-          size="small"
-          checked={emailReminders}
-          loading={emailMutation.isPending}
-          onChange={(on) => emailMutation.mutate(on)}
-        />
-        <Typography.Text style={{ fontSize: 13 }}>
-          Отправлять напоминания на почту
+      {/* Приглашение вместо пустой формы: список важнее заготовки. */}
+      <Button
+        type="dashed"
+        block
+        icon={<PlusOutlined />}
+        style={{ marginBottom: 12 }}
+        onClick={() => setAdding(true)}
+      >
+        Добавить напоминание
+      </Button>
+
+      {items.length === 0 && (
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          Напоминание всплывёт на экране в указанное время — на любой
+          странице, а не только здесь.
         </Typography.Text>
-        <Tooltip title="Выключено — напоминание только всплывает на экране, письмо не отправляется.">
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>?</Typography.Text>
-        </Tooltip>
-      </Space>
-
-      <Space.Compact style={{ width: '100%', marginBottom: 12 }}>
-        <Input
-          placeholder="О чём напомнить"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onPressEnter={() => { if (canAdd) createMutation.mutate(); }}
-        />
-        <DatePicker
-          showTime={{ format: 'HH:mm' }}
-          format="DD.MM.YYYY HH:mm"
-          placeholder="Когда"
-          value={at}
-          onChange={setAt}
-          style={{ width: 200 }}
-        />
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          disabled={!canAdd}
-          loading={createMutation.isPending}
-          onClick={() => createMutation.mutate()}
-        />
-      </Space.Compact>
-
-      {items.length === 0 && !isLoading && (
-        <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description="Напоминаний пока нет"
-        />
       )}
 
       {items.map((r: Reminder) => {
@@ -150,7 +111,6 @@ export default function Reminders({ emailReminders }: Props) {
               <div style={{ fontSize: 12, color: overdue ? STATUS.red : TEXT_SOFT }}>
                 {dayjs(r.remind_at).format('DD.MM.YYYY HH:mm')}
                 {overdue && ' · срок прошёл'}
-                {r.emailed_at && ' · письмо отправлено'}
               </div>
             </div>
             <DeleteRowButton
@@ -160,6 +120,35 @@ export default function Reminders({ emailReminders }: Props) {
           </div>
         );
       })}
+
+      <Modal
+        title="Новое напоминание"
+        open={adding}
+        onCancel={closeForm}
+        onOk={() => createMutation.mutate()}
+        okText="Добавить"
+        cancelText="Отмена"
+        okButtonProps={{ disabled: !canSave }}
+        confirmLoading={createMutation.isPending}
+        width={420}
+      >
+        <Input.TextArea
+          placeholder="О чём напомнить"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={3}
+          style={{ marginBottom: 12 }}
+          autoFocus
+        />
+        <DatePicker
+          showTime={{ format: 'HH:mm' }}
+          format="DD.MM.YYYY HH:mm"
+          placeholder="Когда напомнить"
+          value={at}
+          onChange={setAt}
+          style={{ width: '100%' }}
+        />
+      </Modal>
     </div>
   );
 }
