@@ -37,6 +37,12 @@ type ExportMeta struct {
 	StartDate      time.Time
 	DurationMonths int
 
+	// Params — параметры версии: проценты и сроки банковских гарантий.
+	// В CalcResult их нет — там только посчитанные суммы, — а в книге
+	// нужно видеть, из чего сумма получилась. nil допустим: у версии,
+	// которую ещё не заполняли, параметров нет.
+	Params *calc.InputBudgetParams
+
 	// Limited — урезанная выгрузка администратора проекта: строки
 	// 178-212 листа «2.Бюджет», то есть накладные расходы по статьям и
 	// их итог. Ни ФОТ, ни выручки, ни прибыли, ни рентабельности в такой
@@ -283,6 +289,7 @@ func BuildExport(m ExportMeta, r *calc.CalcResult, reps ...*reports.Report) ([]b
 		{"Итого расходы без НДС", r.TotalCosts, false},
 		{"Итого стоимость работ без НДС", r.TotalRevenue, true},
 		{"Выручка с НДС", r.TotalRevenueWithVAT, false},
+		{"Операционная маржинальность", r.OperatingMargin, false},
 		{"Операционная прибыль", r.OperatingProfit, false},
 		{"Налог на прибыль", r.Tax, true},
 		{"Чистая прибыль", r.NetProfit, true},
@@ -340,7 +347,12 @@ func BuildExport(m ExportMeta, r *calc.CalcResult, reps ...*reports.Report) ([]b
 		{"226 БГ на гарантийный период", false, func(x calc.MonthlyResult) float64 { return x.BGWarranty }},
 		{"230 БГ на аванс", false, func(x calc.MonthlyResult) float64 { return x.BGAdvance }},
 		{"232 Итого расходы", false, func(x calc.MonthlyResult) float64 { return x.TotalCosts }},
+		{"234 Операционная маржинальность", false, func(x calc.MonthlyResult) float64 { return x.MarginAmount }},
 		{"236 Выручка", false, func(x calc.MonthlyResult) float64 { return x.Revenue }},
+		// Строка 249 справочная: начисляется только за первые четыре
+		// месяца и ни на что в расчёте не влияет.
+		{"249 Стоимость + ставка рефинансирования", false,
+			func(x calc.MonthlyResult) float64 { return x.RefRateAmount }},
 	}
 	monthsLastCol, _ := excelize.ColumnNumberToName(len(r.Monthly) + 1)
 	for _, l := range lines {
@@ -357,6 +369,76 @@ func BuildExport(m ExportMeta, r *calc.CalcResult, reps ...*reports.Report) ([]b
 		styleRow(fmt.Sprintf("B%d", row), fmt.Sprintf("%s%d", monthsLastCol, row), numStyle)
 		row++
 	}
+
+	// ── Банковские гарантии ──────────────────────────────────────────
+	// Суммы БГ уже стоят в помесячной разбивке, но по одной сумме не
+	// понять, из чего она вышла: процент от договора, ставка, режим
+	// ставки и срок задаются отдельно и в книге были не видны.
+	if m.Params != nil {
+		row++
+		set(fmt.Sprintf("A%d", row), "БАНКОВСКИЕ ГАРАНТИИ")
+		styleRow(fmt.Sprintf("A%d", row), fmt.Sprintf("F%d", row), head)
+		row++
+
+		bgHeader := []string{
+			"Вид гарантии", "% от договора", "Ставка, %",
+			"Режим ставки", "Срок, мес.", "Сумма за проект",
+		}
+		for i, h := range bgHeader {
+			col, _ := excelize.ColumnNumberToName(i + 1)
+			set(fmt.Sprintf("%s%d", col, row), h)
+		}
+		styleRow(fmt.Sprintf("A%d", row), fmt.Sprintf("F%d", row), head)
+		row++
+
+		bgs := []struct {
+			label string
+			bg    calc.BankGuarantee
+			total func(calc.MonthlyResult) float64
+		}{
+			{"На исполнение обязательств", m.Params.BGExecution,
+				func(x calc.MonthlyResult) float64 { return x.BGExecution }},
+			{"На гарантийный период", m.Params.BGWarranty,
+				func(x calc.MonthlyResult) float64 { return x.BGWarranty }},
+			{"На аванс", m.Params.BGAdvance,
+				func(x calc.MonthlyResult) float64 { return x.BGAdvance }},
+		}
+		for _, b := range bgs {
+			var sum float64
+			for _, mr := range r.Monthly {
+				sum += b.total(mr)
+			}
+			set(fmt.Sprintf("A%d", row), b.label)
+			set(fmt.Sprintf("B%d", row), b.bg.Pct)
+			set(fmt.Sprintf("C%d", row), b.bg.RatePct)
+			// Режим ставки пустой у незаполненной гарантии — не пишем
+			// «%/год» там, где гарантии нет вовсе.
+			set(fmt.Sprintf("D%d", row), b.bg.RateType)
+			set(fmt.Sprintf("E%d", row), b.bg.DurationMos)
+			set(fmt.Sprintf("F%d", row), sum)
+			styleRow(fmt.Sprintf("A%d", row), fmt.Sprintf("E%d", row), text)
+			styleRow(fmt.Sprintf("F%d", row), fmt.Sprintf("F%d", row), money)
+			row++
+		}
+	}
+
+	// ── Вердикт по рентабельности ────────────────────────────────────
+	// Та же шкала и те же цвета, что в реестре проектов и на экране
+	// результатов: у книги и у экрана оценка обязана совпадать.
+	row++
+	grade := profitabilityGrade(r.Profitability)
+	verdict, err := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Family: reports.FontName, Bold: true, Size: 12, Color: "FFFFFF"},
+		Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{grade.Color}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	set(fmt.Sprintf("A%d", row), fmt.Sprintf("%s — рентабельность %.2f %%",
+		grade.Label, r.Profitability))
+	// Заливка на всю ширину помесячной разбивки: строка-вывод должна
+	// читаться как подведение черты, а не как ещё одна ячейка.
+	styleRow(fmt.Sprintf("A%d", row), fmt.Sprintf("%s%d", monthsLastCol, row), verdict)
 
 	if len(reps) > 0 {
 		if err := reports.WriteSheets(f, reps...); err != nil {

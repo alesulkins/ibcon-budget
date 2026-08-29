@@ -179,3 +179,166 @@ func TestBuildExport_Font(t *testing.T) {
 func contains(haystack, needle string) bool {
 	return bytes.Contains([]byte(haystack), []byte(needle))
 }
+
+// Помесячная разбивка содержит маржинальность и справочную строку 249.
+func TestBuildExport_MonthlyRows(t *testing.T) {
+	res := testResult()
+	for i := range res.Monthly {
+		res.Monthly[i].MarginAmount = 200
+		res.Monthly[i].RefRateAmount = 50
+	}
+	data, err := BuildExport(testMeta(false), res)
+	if err != nil {
+		t.Fatalf("сборка книги: %v", err)
+	}
+	f := openBook(t, data)
+	defer f.Close()
+
+	// GetRows отдаёт значения уже по формату ячейки: money — два знака.
+	want := map[string]string{
+		"234 Операционная маржинальность":         "200.00",
+		"249 Стоимость + ставка рефинансирования": "50.00",
+	}
+	rows, _ := f.GetRows("Бюджет")
+	found := map[string]bool{}
+	for _, r := range rows {
+		if len(r) < 2 {
+			continue
+		}
+		if v, ok := want[r[0]]; ok {
+			found[r[0]] = true
+			if r[1] != v {
+				t.Errorf("%s: первый месяц %q, ожидалось %q", r[0], r[1], v)
+			}
+		}
+	}
+	for label := range want {
+		if !found[label] {
+			t.Errorf("строка %q не найдена в выгрузке", label)
+		}
+	}
+}
+
+// Блок банковских гарантий показывает условия, а не только сумму: по
+// одной сумме не понять, из чего она вышла.
+func TestBuildExport_BankGuaranteeDetails(t *testing.T) {
+	res := testResult()
+	for i := range res.Monthly {
+		res.Monthly[i].BGExecution = 10
+	}
+	meta := testMeta(false)
+	meta.Params = &calc.InputBudgetParams{
+		BGExecution: calc.BankGuarantee{
+			Pct: 30, RatePct: 5, RateType: calc.BGRatePerYear, DurationMos: 12,
+		},
+	}
+
+	data, err := BuildExport(meta, res)
+	if err != nil {
+		t.Fatalf("сборка книги: %v", err)
+	}
+	f := openBook(t, data)
+	defer f.Close()
+
+	rows, _ := f.GetRows("Бюджет")
+	var line []string
+	for _, r := range rows {
+		if len(r) > 0 && r[0] == "На исполнение обязательств" {
+			line = r
+		}
+	}
+	if line == nil {
+		t.Fatal("строка «На исполнение обязательств» не найдена")
+	}
+	// % от договора, ставка, режим, срок, сумма за проект (10 × 3 месяца).
+	// Сумма за проект — денежная ячейка, поэтому с двумя знаками;
+	// условия гарантии пишутся как есть.
+	want := []string{"На исполнение обязательств", "30", "5", "%/год", "12", "30.00"}
+	for i := range want {
+		if i >= len(line) || line[i] != want[i] {
+			t.Errorf("колонка %d: got %q, want %q", i, safeAt(line, i), want[i])
+		}
+	}
+}
+
+// Финальная строка-вывод: тот же вердикт и та же заливка, что на экранах.
+func TestBuildExport_Verdict(t *testing.T) {
+	cases := []struct {
+		profitability float64
+		label         string
+		color         string
+	}{
+		{35, "Сверхприбыльный", "2F7D3A"},
+		{25, "Высокорентабельный", "4E9455"},
+		{10, "Среднерентабельный", "B07A12"},
+		{3, "Низкорентабельный", "A8621A"},
+		{0.5, "Порог рентабельности", "8E4A2A"},
+		{-4, "Убыточный", "9C2B2B"},
+	}
+
+	for _, c := range cases {
+		res := testResult()
+		res.Profitability = c.profitability
+
+		data, err := BuildExport(testMeta(false), res)
+		if err != nil {
+			t.Fatalf("сборка книги: %v", err)
+		}
+		f := openBook(t, data)
+
+		rows, _ := f.GetRows("Бюджет")
+		found := -1
+		for i, r := range rows {
+			if len(r) > 0 && contains(r[0], c.label) {
+				found = i
+			}
+		}
+		if found < 0 {
+			f.Close()
+			t.Errorf("рентабельность %.1f: вердикт %q не найден", c.profitability, c.label)
+			continue
+		}
+
+		cell, _ := excelize.CoordinatesToCellName(1, found+1)
+		sid, _ := f.GetCellStyle("Бюджет", cell)
+		st, err := f.GetStyle(sid)
+		if err != nil {
+			f.Close()
+			t.Fatalf("чтение стиля: %v", err)
+		}
+		if len(st.Fill.Color) == 0 || st.Fill.Color[0] != c.color {
+			t.Errorf("рентабельность %.1f: заливка %v, ожидалась %s",
+				c.profitability, st.Fill.Color, c.color)
+		}
+		f.Close()
+	}
+}
+
+// Границы шкалы: нижняя включается, «> 30 %» — строго больше.
+func TestProfitabilityGrade_Boundaries(t *testing.T) {
+	cases := []struct {
+		n     float64
+		label string
+	}{
+		{30.01, "Сверхприбыльный"},
+		{30, "Высокорентабельный"}, // ровно 30 — ещё не «сверх»
+		{20, "Высокорентабельный"},
+		{19.99, "Среднерентабельный"},
+		{5, "Среднерентабельный"},
+		{1, "Низкорентабельный"},
+		{0, "Порог рентабельности"},
+		{-0.01, "Убыточный"},
+	}
+	for _, c := range cases {
+		if got := profitabilityGrade(c.n).Label; got != c.label {
+			t.Errorf("%.2f%%: got %q, want %q", c.n, got, c.label)
+		}
+	}
+}
+
+func safeAt(s []string, i int) string {
+	if i < len(s) {
+		return s[i]
+	}
+	return ""
+}

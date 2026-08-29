@@ -479,6 +479,7 @@ func Run(inp *BudgetInputs) *CalcResult {
 	res.TotalCosts = totalGrossCostsAll
 	res.TotalRevenue = totalRevenue
 	res.OperatingProfit = totalOpProfit
+	res.OperatingMargin = opMarginTotal
 	res.Tax = tax
 	res.NetProfit = netProfit
 	res.Profitability = math.Round(profitability*100) / 100

@@ -487,6 +487,7 @@ func (h *Handler) export(c *gin.Context) {
 		Status:         v.Status,
 		StartDate:      proj.StartDate,
 		DurationMonths: proj.DurationMonths,
+		Params:         inp.Params,
 	}
 	if v.VersionLabel != nil {
 		meta.VersionLabel = *v.VersionLabel
