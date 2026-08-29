@@ -76,20 +76,20 @@ func employeeName(e *Employee) string {
 // в последнем месяце. Именно так работает защита формы
 // IF('2.Бюджет'!G14=0; 0; ...): она смотрит на ИТОГ за проект, а не на
 // статус последнего месяца. Решение владельца от 2026-08-22.
-func severancePay(emp *Employee, startDate time.Time, duration int, projectWide bool) float64 {
+func severancePay(emp *Employee, startDate time.Time, duration int) float64 {
 	if duration <= 0 {
 		return 0
 	}
 
 	var totalFOT float64
 	for m := 1; m <= duration; m++ {
-		totalFOT += employeeFOT(emp, m, startDate, projectWide)
+		totalFOT += employeeFOT(emp, m, startDate)
 	}
 	if totalFOT == 0 {
 		return 0 // не работал ни одного месяца
 	}
 
-	lastFOT := employeeFOT(emp, duration, startDate, projectWide)
+	lastFOT := employeeFOT(emp, duration, startDate)
 
 	return totalFOT/severanceWorkDays*severanceCalendarDays/severanceMonthsInYear +
 		severanceLastMonthsX*lastFOT
@@ -123,10 +123,6 @@ func calcBonuses(
 		RF:    make([]float64, duration),
 		KG:    make([]float64, duration),
 	}
-	// Премии считаются от проиндексированного оклада, поэтому им нужно то
-	// же правило общей индексации, что и ФОТ (см. projectWideIndexation).
-	projectWide := projectWideIndexation(emps, startDate, duration)
-
 	if duration <= 0 {
 		return res
 	}
@@ -170,7 +166,7 @@ func calcBonuses(
 					continue
 				}
 
-				salary := e.SalaryNet * aprilIndexation(e, m, startDate, projectWide)
+				salary := e.SalaryNet * aprilIndexation(e, m, startDate)
 
 				var sum float64
 				names := make([]string, 0, len(due))
@@ -195,7 +191,7 @@ func calcBonuses(
 	// ── Компенсация при увольнении (последний месяц) ─────────────────────
 	for i := range emps {
 		e := &emps[i]
-		add(duration, e.Country, severancePay(e, startDate, duration, projectWide))
+		add(duration, e.Country, severancePay(e, startDate, duration))
 	}
 
 	return res

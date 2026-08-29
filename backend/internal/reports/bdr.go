@@ -2,67 +2,51 @@ package reports
 
 import "ibcon-budget/internal/calc"
 
-// Кодификатор БДР и карта «строка 2.Бюджет → статья БДР».
+// Кодификатор БДР и карта «строка 2.Бюджет → статья».
 // Источник — audit/service_sheets.md, раздел 1.
 //
-// Индексы Overhead: [0] = строка 178, [33] = строка 211.
-func oh(row int) source {
-	i := row - 178
-	return func(m *calc.MonthlyResult, _ *calc.CalcResult) float64 { return m.Overhead[i] }
-}
-
-// sum складывает несколько источников в одну статью отчёта: в форме
-// несколько строк 2.Бюджет сходятся в одну статью (например, субподряд).
-func sum(srcs ...source) source {
-	return func(m *calc.MonthlyResult, r *calc.CalcResult) float64 {
-		var t float64
-		for _, s := range srcs {
-			t += s(m, r)
-		}
-		return t
-	}
-}
-
-func field(f func(m *calc.MonthlyResult) float64) source {
-	return func(m *calc.MonthlyResult, _ *calc.CalcResult) float64 { return f(m) }
-}
-
+// БДР — отчёт о НАЧИСЛЕНИЯХ, поэтому почти каждая статья берёт свой
+// месяц как есть. Единственное исключение — налог на прибыль: он
+// начисляется поквартально (см. taxBDR).
+//
+// Статьи без источника платформа не заполняет: в форме их вводят руками
+// прямо в отчёте. Они остаются в кодификаторе пустыми строками, чтобы
+// структура отчёта совпадала с эталонной.
+//
 // ИСПРАВЛЕНИЯ БАГОВ ФОРМЫ (audit/service_sheets.md, «Ошибки Эксель»):
 //
-//  1. Строка 174 (взносы Киргизии) в форме потеряна — здесь она входит в
-//     статью взносов с ФОТ. В БДР — тем же месяцем, что и в 2.Бюджет
-//     (сдвиг на месяц действует только в БДДС).
-//  2. Строка 209 (охрана объекта) в форме потеряна — здесь она есть
-//     отдельной статьёй «Охрана объекта».
-//  3. Строка 195 (приобретение мебели) в форме учтена ДВАЖДЫ — в мебели
-//     и в охране объекта. Здесь она учитывается один раз, в мебели.
+//  1. Строка 174 (взносы Киргизии) в форме потеряна — здесь входит в
+//     статью «Взносы от ФОТ» вместе со взносами РФ. В БДР — своим
+//     месяцем, сдвиг на месяц действует только в БДДС.
+//  2. Строка 209 (охрана объекта) в форме потеряна — здесь она есть.
+//  3. Строка 195 (мебель) в форме учтена ДВАЖДЫ — в мебели и в охране
+//     объекта. Здесь она учитывается один раз, в мебели.
 func bdrArticles() []article {
 	return []article{
 		{code: "1", name: "Выручка"},
-		{code: "1.1", name: "Выручка", src: field(func(m *calc.MonthlyResult) float64 { return m.Revenue })},
+		{code: "1.1", name: "Выручка", src: fld(func(m *calc.MonthlyResult) float64 { return m.Revenue })},
 		{code: "1.2", name: "Прочие поступления"},
 		{code: "1.3", name: "Распределение дохода"},
 		{code: "1.4", name: "Распределение поступлений по фин. деятельности"},
 		{code: "1.5", name: "Проценты к получению"},
 
 		{code: "2", name: "Себестоимость"},
+
 		{code: "2.1", name: "Прямые расходы"},
 		{code: "2.1.1", name: "Субподряд"},
 		{code: "2.1.1.02", name: "Лабораторные исследования", src: oh(188)},
 		{code: "2.1.1.03", name: "Лазерное сканирование"},
 		{code: "2.1.1.04", name: "Работы по аэромониторингу"},
-		// 200 ГПХ внешний + 201 ГПХ сотрудников + 202 субподряд + 203
-		{code: "2.1.1.05", name: "Субподрядные работы",
-			src: sum(oh(200), oh(201), oh(202), oh(203))},
+		{code: "2.1.1.05", name: "Субподрядные работы", src: ohSum(200, 201, 202, 203)},
 		// 168 оклад + 170 переработки РФ + 172 НДФЛ
-		{code: "2.1.2", name: "ФОТ оплаты труда", src: field(func(m *calc.MonthlyResult) float64 {
+		{code: "2.1.2", name: "ФОТ оплаты труда", src: fld(func(m *calc.MonthlyResult) float64 {
 			return m.FOT + m.OvertimeRF + m.NDFL
 		})},
-		// Взносы РФ (173) и Киргизии (174). Форма теряла 174 — см. шапку.
-		{code: "2.1.3", name: "Взносы от ФОТ", src: field(func(m *calc.MonthlyResult) float64 {
+		// Взносы РФ (173) и Киргизии (174) — форма теряла 174.
+		{code: "2.1.3", name: "Взносы от ФОТ", src: fld(func(m *calc.MonthlyResult) float64 {
 			return m.InsuranceRF + m.InsuranceKG
 		})},
-		{code: "2.1.4", name: "Мотивация (КПЭ)", src: field(func(m *calc.MonthlyResult) float64 { return m.Bonuses })},
+		{code: "2.1.4", name: "Мотивация (КПЭ)", src: fld(func(m *calc.MonthlyResult) float64 { return m.Bonuses })},
 		{code: "2.1.5", name: "Мотивация (КПЭ) год"},
 		{code: "2.1.6", name: "Материальная помощь"},
 		{code: "2.1.7", name: "Больничные листы"},
@@ -124,17 +108,17 @@ func bdrArticles() []article {
 		{code: "2.2.5.09", name: "Аренда транспорта", src: oh(180)},
 
 		{code: "2.2.6", name: "Финансовые расходы"},
-		{code: "2.2.6.01", name: "БГ на аванс", src: field(func(m *calc.MonthlyResult) float64 { return m.BGAdvance })},
-		{code: "2.2.6.02", name: "БГ по неисполнению обязательств", src: field(func(m *calc.MonthlyResult) float64 { return m.BGExecution })},
-		{code: "2.2.6.03", name: "БГ на гарантийные обязательства", src: field(func(m *calc.MonthlyResult) float64 { return m.BGWarranty })},
+		{code: "2.2.6.01", name: "БГ на аванс", src: fld(func(m *calc.MonthlyResult) float64 { return m.BGAdvance })},
+		{code: "2.2.6.02", name: "БГ по неисполнению обязательств", src: fld(func(m *calc.MonthlyResult) float64 { return m.BGExecution })},
+		{code: "2.2.6.03", name: "БГ на гарантийные обязательства", src: fld(func(m *calc.MonthlyResult) float64 { return m.BGWarranty })},
 		{code: "2.2.6.04", name: "БГ"},
 		{code: "2.2.6.05", name: "Проценты к уплате"},
 		{code: "2.2.6.06", name: "Курсовые разницы"},
 		{code: "2.2.6.07", name: "Обеспечение заявок (конкурсы/контракты)"},
 		{code: "2.2.6.08", name: "Страхование ответственности", src: oh(207)},
-		// Строка 216 «Итого (вкл. непредвиденные и АУП)» — решение владельца.
+		// Строка 218 «Прочие расходы» — решение владельца 2026-08-29.
 		{code: "2.2.6.09", name: "Распределение расходов CF%",
-			src: field(func(m *calc.MonthlyResult) float64 { return m.TotalCostsGross })},
+			src: fld(func(m *calc.MonthlyResult) float64 { return m.OtherExpenses })},
 		{code: "2.2.6.10", name: "Услуги банков", src: oh(206)},
 
 		{code: "2.2.7", name: "Прочие расходы"},
@@ -154,20 +138,15 @@ func bdrArticles() []article {
 		{code: "2.2.7.13", name: "Материальные расходы"},
 		{code: "2.2.7.14", name: "Списание материалов"},
 		{code: "2.2.7.15", name: "Штрафы"},
-		{code: "2.2.7.16", name: "Распределение расхода", src: field(func(m *calc.MonthlyResult) float64 { return m.AUP })},
+		{code: "2.2.7.16", name: "Распределение расхода", src: fld(func(m *calc.MonthlyResult) float64 { return m.AUP })},
 		{code: "2.2.7.17", name: "Общехозяйственные расходы"},
-		{code: "2.2.7.18", name: "Непредвиденные", src: field(func(m *calc.MonthlyResult) float64 { return m.Unpredictables })},
-		{code: "2.2.7.19", name: "Прочие расходы", src: field(func(m *calc.MonthlyResult) float64 { return m.OtherExpenses })},
+		{code: "2.2.7.18", name: "Непредвиденные", src: fld(func(m *calc.MonthlyResult) float64 { return m.Unpredictables })},
+		{code: "2.2.7.19", name: "Прочие расходы"},
 
 		{code: "2.2.8", name: "Налоги"},
-		{code: "2.2.8.01", name: "Налог на прибыль"},
+		// Поквартально: март, июнь, сентябрь, декабрь — см. taxBDR.
+		{code: "2.2.8.01", name: "Налог на прибыль", src: taxBDR},
 		{code: "2.2.8.02", name: "Имущественные налоги"},
 		{code: "2.2.8.03", name: "Прочие налоги"},
 	}
 }
-
-// bddsArticles — кодификатор БДДС. Источники статей пока не заполнены:
-// в audit/service_sheets.md описан только сам кодификатор и пять статей
-// с НДС, а карта «строка 2.Бюджет → статья БДДС» отсутствует. Ставить её
-// по догадке нельзя — это денежный отчёт.
-func bddsArticles() []article { return nil }

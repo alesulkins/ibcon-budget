@@ -234,7 +234,7 @@ func TestSeverancePay_ExcelReference(t *testing.T) {
 		},
 	}
 
-	got := severancePay(emp, start, 6, false)
+	got := severancePay(emp, start, 6)
 	if math.Abs(got-45_606.06060606061) > 0.01 {
 		t.Errorf("компенсация сотрудника 1: want 45606.06, got %.2f", got)
 	}
@@ -259,7 +259,7 @@ func TestSeverancePay_NeverWorked(t *testing.T) {
 		Country: "Россия", SalaryNet: 200_000,
 		MonthlySchedule: schedule360(ScheduleNotHired, 6),
 	}
-	if got := severancePay(emp, start, 6, false); got != 0 {
+	if got := severancePay(emp, start, 6); got != 0 {
 		t.Errorf("не работал ни разу: want 0, got %.2f", got)
 	}
 }

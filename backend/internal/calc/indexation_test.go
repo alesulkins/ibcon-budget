@@ -53,7 +53,7 @@ func TestAprilIndexation_ThreeYears(t *testing.T) {
 		{36, "ноя 2029", 266_200},
 	}
 	for _, tt := range tests {
-		got := employeeFOT(emp, tt.month, start, false)
+		got := employeeFOT(emp, tt.month, start)
 		if math.Abs(got-tt.want) > 0.01 {
 			t.Errorf("месяц %d (%s): got %.2f, want %.2f", tt.month, tt.date, got, tt.want)
 		}
@@ -90,7 +90,7 @@ func TestAprilIndexation_HiredInMay(t *testing.T) {
 		{29, "апр 2029", 121_000}, // вторая → ×1.21
 	}
 	for _, tt := range tests {
-		got := employeeFOT(emp, tt.month, start, false)
+		got := employeeFOT(emp, tt.month, start)
 		if math.Abs(got-tt.want) > 0.01 {
 			t.Errorf("месяц %d (%s): got %.2f, want %.2f", tt.month, tt.date, got, tt.want)
 		}
@@ -118,7 +118,7 @@ func TestAprilIndexation_ProjectStartsInApril(t *testing.T) {
 		{25, "апр 2029", 181_500}, // ещё через год → ×1.21
 	}
 	for _, tt := range tests {
-		got := employeeFOT(emp, tt.month, start, false)
+		got := employeeFOT(emp, tt.month, start)
 		if math.Abs(got-tt.want) > 0.01 {
 			t.Errorf("месяц %d (%s): got %.2f, want %.2f", tt.month, tt.date, got, tt.want)
 		}
@@ -146,11 +146,11 @@ func TestAprilIndexation_RehiredKeepsSeniority(t *testing.T) {
 
 	// Месяц 11 (окт 2027) — уже после возврата. Апрель 2027 (месяц 5)
 	// засчитан, потому что стаж не обнулялся.
-	if got := employeeFOT(emp, 11, start, false); math.Abs(got-110_000) > 0.01 {
+	if got := employeeFOT(emp, 11, start); math.Abs(got-110_000) > 0.01 {
 		t.Errorf("после возврата: got %.2f, want 110000 (стаж сохранён)", got)
 	}
 	// Месяц 17 (апр 2028) — второй апрель → ×1.21
-	if got := employeeFOT(emp, 17, start, false); math.Abs(got-121_000) > 0.01 {
+	if got := employeeFOT(emp, 17, start); math.Abs(got-121_000) > 0.01 {
 		t.Errorf("второй апрель после возврата: got %.2f, want 121000", got)
 	}
 }
@@ -173,7 +173,7 @@ func TestAprilIndexation_InterShiftPayStaysFixed(t *testing.T) {
 
 	// Месяцы до и после каждой ступени индексации — везде ровно 30 000
 	for _, m := range []int{1, 4, 5, 17, 29, 36} {
-		if got := employeeFOT(emp, m, start, false); math.Abs(got-interShiftPay) > 0.01 {
+		if got := employeeFOT(emp, m, start); math.Abs(got-interShiftPay) > 0.01 {
 			t.Errorf("месяц %d: МВ должен оставаться %.0f, got %.2f",
 				m, interShiftPay, got)
 		}
@@ -181,7 +181,7 @@ func TestAprilIndexation_InterShiftPayStaysFixed(t *testing.T) {
 
 	// При этом сам множитель индексации на этот месяц не равен единице —
 	// то есть фиксированность выплаты не следствие отсутствия индексации.
-	if k := aprilIndexation(emp, 29, start, false); math.Abs(k-1.331) > 1e-9 {
+	if k := aprilIndexation(emp, 29, start); math.Abs(k-1.331) > 1e-9 {
 		t.Errorf("множитель индексации на месяц 29: got %.4f, want 1.331", k)
 	}
 }
@@ -248,14 +248,14 @@ func TestAprilIndexation_Multiplier(t *testing.T) {
 		{17, 1.21}, {28, 1.21}, {29, 1.331}, {36, 1.331},
 	}
 	for _, tt := range tests {
-		if got := aprilIndexation(emp, tt.month, start, false); math.Abs(got-tt.want) > 1e-9 {
+		if got := aprilIndexation(emp, tt.month, start); math.Abs(got-tt.want) > 1e-9 {
 			t.Errorf("множитель на месяц %d: got %.6f, want %.4f", tt.month, got, tt.want)
 		}
 	}
 
 	// Сотрудник, не принятый ни в одном месяце: индексации нет
 	never := &Employee{MonthlySchedule: schedule360(ScheduleNotHired, 12)}
-	if got := aprilIndexation(never, 12, start, false); got != 1 {
+	if got := aprilIndexation(never, 12, start); got != 1 {
 		t.Errorf("не принят ни разу: множитель got %.4f, want 1", got)
 	}
 }

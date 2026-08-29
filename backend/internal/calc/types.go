@@ -499,4 +499,9 @@ type CalcResult struct {
 	// RefRatePct — ставка, по которой посчитан RefRateAmount, % годовых.
 	// Нужна интерфейсу для подписи показателя.
 	RefRatePct float64 `json:"ref_rate_pct"`
+
+	// ProfitTaxRate — применённая ставка налога на прибыль, долей единицы
+	// (0.25 = 25%). Нужна БДР и БДДС: там налог платится поквартально и
+	// считается заново, от операционной прибыли квартала.
+	ProfitTaxRate float64 `json:"profit_tax_rate"`
 }

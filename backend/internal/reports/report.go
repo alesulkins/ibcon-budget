@@ -1,22 +1,30 @@
 // Package reports строит БДР (отчёт о доходах и расходах) и БДДС (отчёт о
 // движении денежных средств) из результатов расчёта бюджета.
 //
-// Разбор эталонных листов — audit/service_sheets.md.
+// Разбор эталонных листов и карты статей — audit/service_sheets.md.
 //
 // Как устроено. Оба отчёта — плоский список статей с иерархическим
 // кодификатором («1», «2.2.1», «2.2.1.01»). Уровень читается из самого
-// кода, а групповые суммы собираются по префиксу кода: строка «2.2.1»
-// равна сумме всех строк, чей код начинается с «2.2.1.». Отдельного
-// дерева не строим — кодификатор УЖЕ дерево, а два представления одного
-// и того же расходились бы при правках.
+// кода, а групповые суммы собираются по префиксу: строка «2.2.1» равна
+// сумме всех строк «2.2.1.…». Отдельного дерева не строим — кодификатор
+// УЖЕ дерево, а два представления одного и того же расходились бы при
+// правках.
 //
 // В форме агрегация сделана через SUMPRODUCT по календарной дате
-// колонки, а не по номеру месяца. Здесь это не нужно: расчёт и так
-// возвращает помесячный массив в порядке месяцев проекта.
+// колонки. Здесь это не нужно: расчёт возвращает помесячный массив в
+// порядке месяцев проекта, а календарь нужен только там, где от него
+// зависит сама сумма (квартальный налог на прибыль).
+//
+// Главное отличие БДДС от БДР — не набор статей, а ВРЕМЯ платежа.
+// Начисление и оплата расходятся: зарплата платится дважды в месяц,
+// взносы — в следующем месяце, налог на прибыль — поквартально. Поэтому
+// источник статьи получает не «значение месяца», а весь расчёт и номер
+// месяца, и сам решает, что из какого месяца взять.
 package reports
 
 import (
 	"strings"
+	"time"
 
 	"ibcon-budget/internal/calc"
 )
@@ -29,17 +37,56 @@ const (
 	KindBDDS Kind = "bdds"
 )
 
-// source — откуда статья берёт значение месяца.
+// Params — контекст проекта, которого нет в результатах расчёта.
+type Params struct {
+	// StartDate — первый месяц проекта. Нужен, чтобы разложить месяцы по
+	// календарю: налог на прибыль платится в конце квартала, а кварталы
+	// календарные, а не «каждые три месяца проекта».
+	StartDate time.Time
+	// ExecutorName — от него зависит сдвиг выручки в БДДС: у киргизского
+	// филиала деньги приходят месяцем позже, у российских — в срок.
+	ExecutorName string
+}
+
+// ctx — всё, что нужно источнику статьи, чтобы посчитать свой месяц.
+type ctx struct {
+	res    *calc.CalcResult
+	params Params
+	// n — число месяцев проекта, оно же горизонт отчёта.
+	n int
+}
+
+// monthDate — календарная дата месяца проекта i (0-based).
 //
-// m — итоги месяца, res — итоги всего проекта (нужны там, где в форме
-// значение не разложено по месяцам, например налог на прибыль).
-type source func(m *calc.MonthlyResult, res *calc.CalcResult) float64
+// День фиксируем первым, а не берём из даты старта: AddDate переполняет
+// короткие месяцы, и проект с 31 августа давал бы «31 сентября» → 1
+// октября, то есть сентябрь выпадал из отчёта целиком. Та же защита, что
+// в calc.monthDate.
+func (c *ctx) monthDate(i int) time.Time {
+	return monthDate(c.params.StartDate, i)
+}
+
+// monthDate — то же для мест, где контекста ещё нет (подписи месяцев).
+func monthDate(start time.Time, i int) time.Time {
+	return time.Date(start.Year(), start.Month()+time.Month(i), 1, 0, 0, 0, 0, start.Location())
+}
+
+// isKG — киргизский исполнитель. Сравнение регистронезависимое, как и
+// везде в расчёте.
+func (c *ctx) isKG() bool {
+	return strings.EqualFold(strings.TrimSpace(c.params.ExecutorName), calc.ExecutorAibiconKG)
+}
+
+// source — сколько статья даёт в месяце i (0-based).
+type source func(c *ctx, i int) float64
 
 // article — одна строка кодификатора.
 type article struct {
 	code string
 	name string
-	// src — nil у групп: их значение собирается из вложенных строк.
+	// src — nil у групп: их значение собирается из вложенных строк, и у
+	// ручных статей, которые платформа не заполняет (их вводят в самом
+	// отчёте, см. audit/service_sheets.md — «ручной ввод»).
 	src source
 }
 
@@ -47,7 +94,7 @@ type article struct {
 type Row struct {
 	Code string `json:"code"`
 	Name string `json:"name"`
-	// Level — глубина в кодификаторе: 0 у «1», 1 у «1.1», 2 у «2.2.1»…
+	// Level — глубина в кодификаторе: 0 у «1», 1 у «1.1», 2 у «2.2.1».
 	Level int `json:"level"`
 	// Group — строка собирает сумму вложенных, а не имеет своего источника.
 	Group bool `json:"group"`
@@ -62,19 +109,39 @@ type Report struct {
 	// Months — сколько месяцев в отчёте. Ровно длительность проекта:
 	// жёстких 12 месяцев формы здесь нет (audit/service_sheets.md,
 	// находка БДР-B), иначе проект длиннее года обрезался бы молча.
-	Months int   `json:"months"`
-	Rows   []Row `json:"rows"`
+	Months int `json:"months"`
+	// MonthLabels — подписи месяцев («янв. 27»), чтобы выгрузка и экран
+	// не собирали их каждый по-своему.
+	MonthLabels []string `json:"month_labels"`
+	Rows        []Row    `json:"rows"`
+}
+
+var monthShort = [...]string{
+	"янв", "фев", "мар", "апр", "май", "июн",
+	"июл", "авг", "сен", "окт", "ноя", "дек",
+}
+
+func monthLabel(start time.Time, i int) string {
+	d := monthDate(start, i)
+	return monthShort[int(d.Month())-1] + ". " + d.Format("06")
 }
 
 // codeLevel — глубина кода: «1» → 0, «2.2.1» → 2.
-func codeLevel(code string) int {
-	return strings.Count(code, ".")
-}
+func codeLevel(code string) int { return strings.Count(code, ".") }
 
 // build собирает отчёт из кодификатора и результатов расчёта.
-func build(kind Kind, arts []article, res *calc.CalcResult) *Report {
-	n := len(res.Monthly)
-	rep := &Report{Kind: kind, Months: n, Rows: make([]Row, 0, len(arts))}
+func build(kind Kind, arts []article, res *calc.CalcResult, p Params) *Report {
+	c := &ctx{res: res, params: p, n: len(res.Monthly)}
+
+	rep := &Report{
+		Kind:        kind,
+		Months:      c.n,
+		MonthLabels: make([]string, c.n),
+		Rows:        make([]Row, 0, len(arts)),
+	}
+	for i := 0; i < c.n; i++ {
+		rep.MonthLabels[i] = monthLabel(p.StartDate, i)
+	}
 
 	for _, a := range arts {
 		row := Row{
@@ -82,11 +149,11 @@ func build(kind Kind, arts []article, res *calc.CalcResult) *Report {
 			Name:    a.name,
 			Level:   codeLevel(a.code),
 			Group:   a.src == nil,
-			Monthly: make([]float64, n),
+			Monthly: make([]float64, c.n),
 		}
 		if a.src != nil {
-			for m := 0; m < n; m++ {
-				row.Monthly[m] = a.src(&res.Monthly[m], res)
+			for i := 0; i < c.n; i++ {
+				row.Monthly[i] = a.src(c, i)
 			}
 		}
 		rep.Rows = append(rep.Rows, row)
@@ -103,12 +170,11 @@ func build(kind Kind, arts []article, res *calc.CalcResult) *Report {
 
 // rollUp заполняет групповые строки суммой вложенных.
 //
-// Вложенность определяется по коду: «2.2.1» собирает все строки с кодом
-// «2.2.1.…». Считается по прямым потомкам — иначе внуки попали бы в сумму
-// дважды, через себя и через своего родителя.
+// Вложенность определяется по коду: «2.2.1» собирает строки «2.2.1.…».
+// Идём от самых глубоких уровней к мелким и складываем только прямых
+// потомков — иначе внуки попали бы в сумму дважды, через себя и через
+// своего родителя.
 func rollUp(rep *Report) {
-	// От самых глубоких к самым мелким: к моменту, когда доходим до
-	// родителя, все его дети уже посчитаны.
 	byCode := make(map[string]int, len(rep.Rows))
 	for i, r := range rep.Rows {
 		byCode[r.Code] = i
@@ -127,13 +193,13 @@ func rollUp(rep *Report) {
 			if r.Level != level {
 				continue
 			}
-			parentCode := r.Code[:strings.LastIndex(r.Code, ".")]
-			pi, ok := byCode[parentCode]
+			parent := r.Code[:strings.LastIndex(r.Code, ".")]
+			pi, ok := byCode[parent]
 			if !ok {
 				// Родителя нет в кодификаторе — строка висит сама по себе.
 				// В форме такое есть: код «2.06.07» внутри группы 2.2.6,
-				// опечатка кодификатора. Строку показываем, в сумму
-				// группы она не входит — ровно как в форме.
+				// опечатка кодификатора. Строку показываем, в сумму группы
+				// она не входит — ровно как в форме.
 				continue
 			}
 			if !rep.Rows[pi].Group {
@@ -147,11 +213,9 @@ func rollUp(rep *Report) {
 }
 
 // Build — публичная точка входа.
-func Build(kind Kind, res *calc.CalcResult) *Report {
-	switch kind {
-	case KindBDDS:
-		return build(kind, bddsArticles(), res)
-	default:
-		return build(KindBDR, bdrArticles(), res)
+func Build(kind Kind, res *calc.CalcResult, p Params) *Report {
+	if kind == KindBDDS {
+		return build(kind, bddsArticles(), res, p)
 	}
+	return build(KindBDR, bdrArticles(), res, p)
 }

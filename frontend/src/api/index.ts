@@ -2,7 +2,7 @@ import { client } from './client';
 import type {
   AuthResponse, User,
   Project, ProjectListItem,
-  BudgetVersion, CalcResult,
+  BudgetVersion, CalcResult, BudgetReport,
   Executor, Position, WorkMode, CostItem,
   AuditEntry, PaginatedResponse, Profile,
 } from '../types';
@@ -179,26 +179,42 @@ export const budgetsApi = {
    * filename* с кодировкой UTF-8, иначе русское название проекта
    * сохранилось бы крякозябрами.
    */
-  exportXlsx: async (vid: number) => {
-    const res = await client.get(`/budget-versions/${vid}/export`, {
-      responseType: 'blob',
-    });
+  exportXlsx: (vid: number) =>
+    downloadFile(`/budget-versions/${vid}/export`, `budget-${vid}.xlsx`),
 
-    const disposition = String(res.headers['content-disposition'] ?? '');
-    const utf8 = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
-    const name = utf8 ? decodeURIComponent(utf8[1]) : `budget-${vid}.xlsx`;
+  /** БДР и БДДС одной выборкой: на экране это соседние вкладки. */
+  reports: (vid: number) =>
+    client.get<{ bdr: BudgetReport; bdds: BudgetReport }>(
+      `/budget-versions/${vid}/reports`,
+    ).then(r => r.data),
 
-    const url = URL.createObjectURL(res.data as Blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    return name;
-  },
+  /** Книга с двумя листами — БДР и БДДС. */
+  exportReports: (vid: number) =>
+    downloadFile(`/budget-versions/${vid}/reports/export`, `reports-${vid}.xlsx`),
 };
+
+/**
+ * Скачивание файла с сервера. Имя берём из Content-Disposition —
+ * сервер кладёт его в filename* с кодировкой UTF-8, иначе русское
+ * название проекта сохранилось бы крякозябрами.
+ */
+async function downloadFile(url: string, fallbackName: string) {
+  const res = await client.get(url, { responseType: 'blob' });
+
+  const disposition = String(res.headers['content-disposition'] ?? '');
+  const utf8 = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
+  const name = utf8 ? decodeURIComponent(utf8[1]) : fallbackName;
+
+  const href = URL.createObjectURL(res.data as Blob);
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(href);
+  return name;
+}
 
 // ─── Audit ─────────────────────────────────────────────────────────────────
 export const auditApi = {

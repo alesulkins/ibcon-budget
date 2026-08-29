@@ -486,6 +486,10 @@ func Run(inp *BudgetInputs) *CalcResult {
 		res.TotalRevenueWithVAT += v
 	}
 	res.RefRatePct = refRatePct
+	// Ставка налога, которая реально применена. Нужна отчётам: в БДР и
+	// БДДС налог на прибыль платится поквартально и считается там заново,
+	// от операционной прибыли квартала.
+	res.ProfitTaxRate = effectiveTaxRate(inp.Params, inp.ExecutorName)
 	for _, v := range refRateArr {
 		res.RefRateAmount += v
 	}

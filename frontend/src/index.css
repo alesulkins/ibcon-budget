@@ -352,3 +352,9 @@ html body {
 .ant-input-number-group-addon {
   font-family: inherit;
 }
+
+/* Групповые строки БДР и БДДС — та же мягкая подложка, что у итогов
+   помесячной разбивки: иерархия кодификатора читается без рамок. */
+.ibcon-report-group > td {
+  background: rgba(24, 62, 77, 0.04);
+}

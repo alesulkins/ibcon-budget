@@ -15,6 +15,7 @@ import (
 	"ibcon-budget/internal/calc"
 	"ibcon-budget/internal/middleware"
 	"ibcon-budget/internal/projects"
+	"ibcon-budget/internal/reports"
 	"ibcon-budget/internal/users"
 )
 
@@ -52,6 +53,10 @@ func (h *Handler) Register(r gin.IRouter) {
 	ver.GET("/inputs", h.getAllInputs)
 	ver.GET("/calculate", h.calculate)
 	ver.GET("/export", h.export)
+	// БДР и БДДС: на экран — по праву просмотра бюджета, в файл — по
+	// праву выгрузки, как и основная книга.
+	ver.GET("/reports", h.budgetReports)
+	ver.GET("/reports/export", h.exportReports)
 }
 
 func (h *Handler) projectID(c *gin.Context) int {
@@ -534,4 +539,100 @@ func exportComment(projectID, versionNo int, name string, limited bool) string {
 		s += " (выгрузка администратора проекта: строки 178-214)"
 	}
 	return s
+}
+
+// ── БДР и БДДС ───────────────────────────────────────────────────────────
+
+// reportContext — общая подготовка обоих отчётов: проверка права, расчёт
+// версии и параметры проекта. Отчёты — представление того же расчёта, что
+// и «Результаты»: отдельного хранения у них нет.
+func (h *Handler) reportContext(c *gin.Context, perm string) (
+	*calc.CalcResult, reports.Params, *projects.Project, *BudgetVersion, bool,
+) {
+	vid := h.versionID(c)
+	v, err := h.svc.GetVersion(vid)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "версия не найдена"})
+		return nil, reports.Params{}, nil, nil, false
+	}
+	claims := middleware.GetClaims(c)
+	if !h.acl.Can(claims, perm, v.ProjectID) {
+		access.Deny(c, perm)
+		return nil, reports.Params{}, nil, nil, false
+	}
+
+	proj, err := h.projectsSvc.Get(v.ProjectID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "проект не найден"})
+		return nil, reports.Params{}, nil, nil, false
+	}
+
+	rawInputs, err := h.svc.GetAllInputs(vid)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return nil, reports.Params{}, nil, nil, false
+	}
+	inp, err := calc.LoadInputs(rawInputs, proj.StartDate, proj.DurationMonths, proj.ExecutorName)
+	if err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+		return nil, reports.Params{}, nil, nil, false
+	}
+
+	p := reports.Params{StartDate: proj.StartDate, ExecutorName: proj.ExecutorName}
+	return calc.Run(inp), p, proj, v, true
+}
+
+// budgetReports отдаёт оба отчёта одним ответом: на экране они лежат
+// соседними вкладками, и раздельные запросы дали бы два расчёта.
+func (h *Handler) budgetReports(c *gin.Context) {
+	res, p, _, _, ok := h.reportContext(c, auth.PermBudgetView)
+	if !ok {
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"bdr":  reports.Build(reports.KindBDR, res, p),
+		"bdds": reports.Build(reports.KindBDDS, res, p),
+	})
+}
+
+// exportReports выгружает книгу с двумя листами — БДР и БДДС.
+func (h *Handler) exportReports(c *gin.Context) {
+	res, p, proj, v, ok := h.reportContext(c, auth.PermBudgetExport)
+	if !ok {
+		return
+	}
+	claims := middleware.GetClaims(c)
+
+	meta := reports.Meta{
+		ProjectName:  proj.Name,
+		Customer:     proj.Customer,
+		ExecutorName: proj.ExecutorName,
+		VersionNo:    v.VersionNo,
+	}
+	if v.VersionLabel != nil {
+		meta.VersionLabel = *v.VersionLabel
+	}
+
+	data, err := reports.BuildExport(meta,
+		reports.Build(reports.KindBDR, res, p),
+		reports.Build(reports.KindBDDS, res, p),
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "не удалось собрать файл: " + err.Error()})
+		return
+	}
+
+	vid := v.ID
+	h.audit.Log(auditlog.Entry{
+		UserID: &claims.UserID, UserRole: claims.Role,
+		Action: "export_reports", ObjectType: "budget_version", ObjectID: &vid,
+		Comment: fmt.Sprintf("Проект %d, бюджет %d.%d — БДР и БДДС",
+			proj.ID, proj.ID, v.VersionNo),
+	})
+
+	// Имя файла русское: без filename* браузер сохранит крякозябрами.
+	c.Header("Content-Disposition",
+		"attachment; filename=\"reports.xlsx\"; filename*=UTF-8''"+url.PathEscape(reports.FileName(meta)))
+	c.Data(http.StatusOK,
+		"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", data)
 }

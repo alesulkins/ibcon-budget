@@ -28,6 +28,7 @@ import PurchasesInput from './inputs/PurchasesInput';
 import GphEmployeesInput from './inputs/GphEmployeesInput';
 import OverheadInput from './inputs/OverheadInput';
 import BudgetParamsInput from './inputs/BudgetParamsInput';
+import BudgetReports from './BudgetReports';
 import CalcResults from './CalcResults';
 import StatusTag from '../../components/StatusTag';
 import VersionSwitch from '../../components/VersionSwitch';
@@ -59,6 +60,7 @@ const WIZARD_STEPS = [
   { key: 'overhead',     title: 'Прочие расходы',          desc: 'Строки 178-211 (накладные)' },
   { key: 'params',       title: 'Параметры',               desc: 'Непредвиденные, АУП, БГ, маржа' },
   { key: 'results',      title: 'Результаты',              desc: 'Итоги расчёта бюджета' },
+  { key: 'reports',      title: 'БДР и БДДС',              desc: 'Отчёты по кодификатору' },
 ];
 
 export default function BudgetVersionPage() {
@@ -334,6 +336,13 @@ export default function BudgetVersionPage() {
             versionId={versionId}
             executor={project!.executor_name}
             readonly={isReadonly}
+          />
+        );
+      case 'reports':
+        return (
+          <BudgetReports
+            versionId={versionId}
+            permissions={version!.permissions}
           />
         );
       case 'results':
