@@ -79,7 +79,9 @@ export default function VersionSwitch({ current, versions }: Props) {
                 fontWeight: active ? 600 : 400,
                 lineHeight: 1.3,
                 cursor: active ? 'default' : 'pointer',
-                background: active ? BRAND : 'transparent',
+                // Цвет переменной, а не константой: фирменный цвет
+                // выбирается в настройках, и константа его не знает.
+                background: active ? 'var(--ibcon-brand)' : 'transparent',
                 color: active ? '#FDF9F8' : TEXT_SOFT,
                 whiteSpace: 'nowrap',
               }}

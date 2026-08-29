@@ -143,7 +143,7 @@ export default function CalcResults({
               {
                 title: 'Стоимость работ без НДС (G236)',
                 value: `${fmtNum(r.total_revenue)} ₽`,
-                color: BRAND,
+                color: 'var(--ibcon-brand)',
                 bold: true,
               },
               {

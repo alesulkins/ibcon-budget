@@ -47,6 +47,7 @@ export default function UserPanel({ user, projects, onClose }: Props) {
     if (!user) return;
     form.setFieldsValue({
       full_name: user.full_name,
+      email: user.email,
       role: user.role,
       active: user.active,
     });
@@ -75,7 +76,7 @@ export default function UserPanel({ user, projects, onClose }: Props) {
   const invalidate = () => qc.invalidateQueries({ queryKey: ['users'] });
 
   const saveMutation = useMutation({
-    mutationFn: (vals: { full_name: string; role: string; active: boolean }) =>
+    mutationFn: (vals: { full_name: string; email: string; role: string; active: boolean }) =>
       usersApi.update(user!.id, vals),
     onSuccess: () => { invalidate(); message.success('Сохранено'); },
     onError: (e) => message.error(extractError(e)),
@@ -165,7 +166,10 @@ export default function UserPanel({ user, projects, onClose }: Props) {
           form={form}
           layout="vertical"
           onFinish={saveMutation.mutate}
-          initialValues={{ full_name: user.full_name, role: user.role, active: user.active }}
+          initialValues={{
+            full_name: user.full_name, email: user.email,
+            role: user.role, active: user.active,
+          }}
         >
           <Form.Item
             name="full_name"
@@ -174,6 +178,17 @@ export default function UserPanel({ user, projects, onClose }: Props) {
             extra="Фамилия Имя Отчество. В таблицах показывается сокращённо: Фамилия И.О."
           >
             <Input placeholder="Иванов Иван Иванович" />
+          </Form.Item>
+          <Form.Item
+            name="email"
+            label="Email"
+            rules={[
+              { required: true, message: 'Не заполнено обязательное поле: email' },
+              { type: 'email', message: 'Похоже, это не адрес почты' },
+            ]}
+            extra="Это же логин для входа. Сам пользователь адрес не меняет: подмена почты была бы подменой входа."
+          >
+            <Input />
           </Form.Item>
           <Form.Item
             name="role"

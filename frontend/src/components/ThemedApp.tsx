@@ -26,6 +26,34 @@ const DARK = {
 };
 
 /**
+ * Оттенок фирменного цвета: k > 0 светлее, k < 0 темнее.
+ *
+ * Нужен растяжке сайдбара и экрану входа: раньше их оттенки были
+ * вписаны литералами и не менялись вместе с выбранным цветом.
+ */
+function shade(hex: string, k: number): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return hex; // не шестизначный hex — оставляем как есть
+  const n = parseInt(m[1], 16);
+  const mix = (c: number) => {
+    const target = k > 0 ? 255 : 0;
+    return Math.round(c + (target - c) * Math.abs(k));
+  };
+  const r = mix((n >> 16) & 255);
+  const g = mix((n >> 8) & 255);
+  const b = mix(n & 255);
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+}
+
+/** rgba из hex — для полупрозрачных подложек поверх фирменного цвета. */
+function alpha(hex: string, a: number): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+}
+
+/**
  * Оформление приложения: тема, размер шрифта и фирменные цвета из
  * персональных настроек пользователя.
  *
@@ -61,13 +89,33 @@ export default function ThemedApp() {
     root.setProperty('--ibcon-text', text);
     root.setProperty('--ibcon-hover', hover);
     root.setProperty('--ibcon-notice', noticeColor);
+
+    // Оттенки фирменного цвета: растяжка сайдбара и шапка входа. Раньше
+    // они были вписаны литералами и не менялись вместе с цветом.
+    const light = shade(brandColor, 0.18);
+    const dark = shade(brandColor, -0.28);
+    root.setProperty('--ibcon-brand-light', light);
+    root.setProperty('--ibcon-brand-dark', dark);
+    root.setProperty('--ibcon-sider-gradient',
+      `linear-gradient(170deg, ${alpha(light, 0.92)} 0%, `
+      + `${alpha(brandColor, 0.95)} 45%, ${alpha(dark, 0.97)} 100%)`);
+
+    // Шаги мастера. В тёмной теме подложка пройденного шага и подписи
+    // строились из тёмного фирменного цвета и почти сливались с фоном —
+    // там берём светлые тона.
+    root.setProperty('--ibcon-step-done-bg',
+      dark ? 'rgba(230, 237, 240, 0.16)' : alpha(brandColor, 0.12));
+    root.setProperty('--ibcon-step-border',
+      dark ? 'rgba(230, 237, 240, 0.28)' : alpha(brandColor, 0.18));
+    root.setProperty('--ibcon-step-todo', dark ? DARK.textSoft : '#8c9aa0');
+    root.setProperty('--ibcon-step-label', dark ? DARK.text : '#595959');
     // Базовый кегль: от него antd считает свои размеры, а наши
     // относительные единицы — свои.
     root.setProperty('--ibcon-font-size', `${basePx}px`);
     // Тема как атрибут — по нему index.css правит то, что не выражается
     // переменными (например, инверсию теней).
     document.documentElement.dataset.theme = theme;
-  }, [brandColor, white, bg, line, textSoft, text, hover, noticeColor, basePx, theme]);
+  }, [brandColor, white, bg, line, textSoft, text, hover, noticeColor, basePx, theme, dark]);
 
   return (
     <ConfigProvider

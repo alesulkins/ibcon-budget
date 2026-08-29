@@ -32,6 +32,20 @@
   --ibcon-header-bg: rgba(255, 255, 255, 0.86);
   --ibcon-header-shadow: 0 2px 10px rgba(16, 30, 54, 0.035);
 
+  /* Оттенки фирменного цвета и шаги мастера. Значения подставляет
+     ThemedApp из выбранного пользователем цвета и темы; здесь —
+     умолчания на случай, если он ещё не отработал. */
+  --ibcon-brand-light: #22576c;
+  --ibcon-brand-dark: #0f2832;
+  --ibcon-sider-gradient: linear-gradient(170deg,
+    rgba(34, 87, 108, 0.92) 0%,
+    rgba(24, 62, 77, 0.95) 45%,
+    rgba(15, 40, 50, 0.97) 100%);
+  --ibcon-step-done-bg: rgba(24, 62, 77, 0.12);
+  --ibcon-step-border: rgba(24, 62, 77, 0.18);
+  --ibcon-step-todo: #8c9aa0;
+  --ibcon-step-label: #595959;
+
   /* Размеры ячеек таблиц, отступ и подсветка в меню задаются токенами
      компонентов в ThemedApp, а не здесь: см. «РУЧКИ ПОДГОНКИ» в
      theme.ts — там же объяснено, почему CSS тут бессилен. */
@@ -58,6 +72,15 @@ html {
   --ibcon-header-bg: rgba(20, 33, 39, 0.86);
   /* Тень на тёмном фоне не читается и лишь пачкает край. */
   --ibcon-header-shadow: none;
+}
+
+/* Активная вкладка справочника: antd красит её colorPrimary, а он в
+   тёмной теме тёмный — на тёмном фоне выбранной вкладки не видно. */
+:root[data-theme='dark'] .ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: var(--ibcon-text);
+}
+:root[data-theme='dark'] .ant-tabs-ink-bar {
+  background: var(--ibcon-text);
 }
 
 :root[data-theme='dark'] .ant-card,

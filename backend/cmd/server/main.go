@@ -89,7 +89,7 @@ func main() {
 	projects.NewHandler(projectsSvc, usersSvc, acl, auditSvc).Register(protected)
 
 	budgetsSvc := budgets.NewService(database)
-	budgets.NewHandler(budgetsSvc, projectsSvc, usersSvc, acl, auditSvc).Register(protected)
+	budgets.NewHandler(budgetsSvc, projectsSvc, usersSvc, refSvc, acl, auditSvc).Register(protected)
 
 	// Health check
 	r.GET("/health", func(c *gin.Context) {

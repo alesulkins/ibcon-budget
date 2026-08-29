@@ -119,7 +119,7 @@ func TestBuildExport_LimitedForAdmin(t *testing.T) {
 
 	// Граница выгрузки — строка 212. Всё, что дальше, администратору не
 	// показывается: и непредвиденные (214), и АУП (215).
-	mustHave := []string{"212 Итого накладные расходы", "182 Аренда офиса"}
+	mustHave := []string{"Итого накладные расходы", "Аренда офиса"}
 	for _, want := range mustHave {
 		if !contains(text, want) {
 			t.Errorf("в книге администратора нет строки %q", want)
@@ -180,13 +180,13 @@ func contains(haystack, needle string) bool {
 	return bytes.Contains([]byte(haystack), []byte(needle))
 }
 
-// Помесячная разбивка содержит маржинальность и справочную строку 249.
-func TestBuildExport_MonthlyRows(t *testing.T) {
+// Маржинальность и справочная строка 249 стоят в итоговых показателях,
+// а не в помесячной разбивке: их смотрят как итог за проект.
+func TestBuildExport_TotalsRows(t *testing.T) {
 	res := testResult()
-	for i := range res.Monthly {
-		res.Monthly[i].MarginAmount = 200
-		res.Monthly[i].RefRateAmount = 50
-	}
+	res.OperatingMargin = 600
+	res.RefRateAmount = 150
+
 	data, err := BuildExport(testMeta(false), res)
 	if err != nil {
 		t.Fatalf("сборка книги: %v", err)
@@ -194,10 +194,9 @@ func TestBuildExport_MonthlyRows(t *testing.T) {
 	f := openBook(t, data)
 	defer f.Close()
 
-	// GetRows отдаёт значения уже по формату ячейки: money — два знака.
 	want := map[string]string{
-		"234 Операционная маржинальность":         "200.00",
-		"249 Стоимость + ставка рефинансирования": "50.00",
+		"Операционная маржинальность":         "600.00",
+		"Стоимость + ставка рефинансирования": "150.00",
 	}
 	rows, _ := f.GetRows("Бюджет")
 	found := map[string]bool{}
@@ -208,14 +207,143 @@ func TestBuildExport_MonthlyRows(t *testing.T) {
 		if v, ok := want[r[0]]; ok {
 			found[r[0]] = true
 			if r[1] != v {
-				t.Errorf("%s: первый месяц %q, ожидалось %q", r[0], r[1], v)
+				t.Errorf("%s: значение %q, ожидалось %q", r[0], r[1], v)
 			}
 		}
 	}
 	for label := range want {
 		if !found[label] {
-			t.Errorf("строка %q не найдена в выгрузке", label)
+			t.Errorf("строка %q не найдена в итоговых показателях", label)
 		}
+	}
+}
+
+// Помесячная таблица: итог стоит ПЕРЕД месяцами, а месяцы идут подряд.
+// AddDate переполнял короткие месяцы, и проект с 31 августа терял
+// сентябрь: шапка шла «08, 10, 10, 12, 12».
+func TestBuildExport_MonthlyLayout(t *testing.T) {
+	res := testResult()
+	res.Monthly = append(res.Monthly, res.Monthly[0], res.Monthly[0])
+	for i := range res.Monthly {
+		res.Monthly[i].Month = i + 1
+		res.Monthly[i].TotalFOT = 100
+	}
+
+	meta := testMeta(false)
+	meta.StartDate = time.Date(2026, time.August, 31, 0, 0, 0, 0, time.UTC)
+	meta.DurationMonths = len(res.Monthly)
+
+	data, err := BuildExport(meta, res)
+	if err != nil {
+		t.Fatalf("сборка книги: %v", err)
+	}
+	f := openBook(t, data)
+	defer f.Close()
+
+	rows, _ := f.GetRows("Бюджет")
+	var header, fot []string
+	for _, r := range rows {
+		if len(r) > 1 && r[0] == "Статья" && r[1] == "Итого" {
+			header = r
+		}
+		if len(r) > 1 && r[0] == "ФОТ вкл. взносы" {
+			fot = r
+		}
+	}
+	if header == nil {
+		t.Fatal("шапка помесячной таблицы не найдена")
+	}
+	wantMonths := []string{"08.2026", "09.2026", "10.2026", "11.2026", "12.2026"}
+	for i, w := range wantMonths {
+		if got := safeAt(header, i+2); got != w {
+			t.Errorf("месяц %d: got %q, want %q", i+1, got, w)
+		}
+	}
+	// Итог за проект — сразу после названия статьи.
+	if fot == nil {
+		t.Fatal("строка «ФОТ вкл. взносы» не найдена")
+	}
+	if got := safeAt(fot, 1); got != "500.00" {
+		t.Errorf("итог строки ФОТ: got %q, want 500.00", got)
+	}
+}
+
+// Номера строк формы в подписях не пишем: пользователю они не нужны.
+func TestBuildExport_NoRowNumbers(t *testing.T) {
+	res := testResult()
+	data, err := BuildExport(testMeta(false), res)
+	if err != nil {
+		t.Fatalf("сборка книги: %v", err)
+	}
+	f := openBook(t, data)
+	defer f.Close()
+
+	rows, _ := f.GetRows("Бюджет")
+	for _, r := range rows {
+		if len(r) == 0 {
+			continue
+		}
+		label := r[0]
+		if len(label) > 3 && label[0] >= '1' && label[0] <= '2' &&
+			label[1] >= '0' && label[1] <= '9' && label[3] == ' ' {
+			t.Errorf("в подписи остался номер строки формы: %q", label)
+		}
+	}
+}
+
+// Сводка по ИТР: человеко-месяцы делятся на длительность проекта.
+// Явочно — только месяцы с зарплатой выше выплаты за межвахтовый отдых.
+func TestBuildExport_ITRSummary(t *testing.T) {
+	res := testResult()
+	res.TotalRevenue = 3_000_000
+
+	meta := testMeta(false)
+	// Инженер работает все три месяца полностью, техник — на межвахтовом
+	// отдыхе (выплата 30 000, ниже порога явки), рабочий не ИТР вовсе.
+	meta.Employees = []calc.Employee{
+		{Position: "Инженер ПТО", SalaryNet: 200_000,
+			MonthlySchedule: []string{calc.ScheduleOF, calc.ScheduleOF, calc.ScheduleOF}},
+		{Position: "Техник ПТО", SalaryNet: 200_000,
+			MonthlySchedule: []string{calc.ScheduleMV, calc.ScheduleMV, calc.ScheduleMV}},
+		{Position: "Разнорабочий", SalaryNet: 100_000,
+			MonthlySchedule: []string{calc.ScheduleOF, calc.ScheduleOF, calc.ScheduleOF}},
+	}
+	meta.ITRPositions = map[string]bool{"инженер пто": true, "техник пто": true}
+
+	data, err := BuildExport(meta, res)
+	if err != nil {
+		t.Fatalf("сборка книги: %v", err)
+	}
+	f := openBook(t, data)
+	defer f.Close()
+
+	rows, _ := f.GetRows("Бюджет")
+	var count, cost []string
+	for _, r := range rows {
+		if len(r) > 2 && r[0] == "Кол-во ИТР в среднем в мес." {
+			count = r
+		}
+		if len(r) > 2 && r[0] == "Средняя стоимость чел/мес" {
+			cost = r
+		}
+	}
+	if count == nil || cost == nil {
+		t.Fatal("сводка по ИТР не найдена")
+	}
+	// Явочно — только инженер (3 месяца / 3 = 1);
+	// списочно — инженер и техник (6 / 3 = 2). Разнорабочий не ИТР.
+	if got := safeAt(count, 1); got != "1.00" {
+		t.Errorf("явочно: got %q, want 1.00", got)
+	}
+	if got := safeAt(count, 2); got != "2.00" {
+		t.Errorf("списочно: got %q, want 2.00", got)
+	}
+	// Выручка 3 000 000 за 3 месяца = 1 000 000 в месяц.
+	if got := safeAt(cost, 1); got != "1,000,000.00" {
+		t.Errorf("стоимость чел/мес явочно: got %q, want 1,000,000.00", got)
+	}
+	if got := safeAt(cost, 2); got != "500,000.00" {
+		t.Errorf("стоимость чел/мес списочно: got %q, want 500,000.00", got)
 	}
 }
 

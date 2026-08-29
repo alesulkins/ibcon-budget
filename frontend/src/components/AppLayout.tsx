@@ -5,7 +5,7 @@ import {
   RightOutlined,
 } from '@ant-design/icons';
 import {
-  IconProjects, IconReferences, IconUsers, IconHistory,
+  IconProjects, IconReferences, IconUsers, IconHistory, IconSettings,
 } from './SidebarIcons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { profileApi, projectsApi, budgetsApi } from '../api';
@@ -31,6 +31,7 @@ const SECTION_TITLES: Record<string, string> = {
   '/users': 'Пользователи',
   '/audit': 'История изменений',
   '/profile': 'Личный кабинет',
+  '/settings': 'Настройки',
 };
 
 /**
@@ -56,7 +57,7 @@ function ProfileAvatar({ profile, fullName, size, on }: {
         // светлый, там нужна фирменная заливка.
         background: isImage
           ? undefined
-          : on === 'sider' ? 'rgba(253, 249, 248, 0.16)' : BRAND,
+          : on === 'sider' ? 'rgba(253, 249, 248, 0.16)' : 'var(--ibcon-brand)',
         flexShrink: 0,
       }}
     >
@@ -130,6 +131,13 @@ export default function AppLayout() {
       icon: <IconHistory />,
       label: 'История изменений',
     }] : []),
+    // Настройки интерфейса — свой раздел, а не подвал личного кабинета:
+    // в них заходят отдельно от работы с профилем.
+    {
+      key: '/settings',
+      icon: <IconSettings />,
+      label: 'Настройки',
+    },
   ];
 
   const selectedKey = '/' + location.pathname.split('/')[1];
@@ -272,10 +280,9 @@ export default function AppLayout() {
         // внутренний блик. Панель читается как стеклянная пластина над
         // страницей, а не как вырезанный из бумаги прямоугольник.
         style={{
-          background: 'linear-gradient(170deg,'
-            + ' rgba(34, 87, 108, 0.92) 0%,'
-            + ' rgba(24, 62, 77, 0.95) 45%,'
-            + ' rgba(15, 40, 50, 0.97) 100%)',
+          // Растяжку собирает ThemedApp из выбранного фирменного цвета:
+          // литералами она не реагировала бы на смену цвета в настройках.
+          background: 'var(--ibcon-sider-gradient)',
           backdropFilter: 'blur(14px)',
           height: '100%',
           borderRight: '1px solid rgba(253, 249, 248, 0.14)',

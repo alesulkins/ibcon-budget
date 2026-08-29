@@ -15,6 +15,7 @@ import (
 	"ibcon-budget/internal/calc"
 	"ibcon-budget/internal/middleware"
 	"ibcon-budget/internal/projects"
+	"ibcon-budget/internal/references"
 	"ibcon-budget/internal/reports"
 	"ibcon-budget/internal/users"
 )
@@ -23,13 +24,19 @@ type Handler struct {
 	svc         *Service
 	projectsSvc *projects.Service
 	usersSvc    *users.Service
-	acl         *access.Service
-	audit       *auditlog.Service
+	// refsSvc нужен выгрузке: сводка по ИТР спрашивает у справочника
+	// должностей, кто из сотрудников инженер.
+	refsSvc *references.Service
+	acl     *access.Service
+	audit   *auditlog.Service
 }
 
 func NewHandler(svc *Service, projectsSvc *projects.Service, usersSvc *users.Service,
-	acl *access.Service, audit *auditlog.Service) *Handler {
-	return &Handler{svc: svc, projectsSvc: projectsSvc, usersSvc: usersSvc, acl: acl, audit: audit}
+	refsSvc *references.Service, acl *access.Service, audit *auditlog.Service) *Handler {
+	return &Handler{
+		svc: svc, projectsSvc: projectsSvc, usersSvc: usersSvc,
+		refsSvc: refsSvc, acl: acl, audit: audit,
+	}
 }
 
 // Права проверяются внутри обработчиков, а не посредником по ролям:
@@ -496,6 +503,16 @@ func (h *Handler) export(c *gin.Context) {
 	// 178-212 листа «2.Бюджет», без ФОТ, выручки и прибыли. Листы БДР и
 	// БДДС в неё не попадают: он их не видит и на экране.
 	meta.Limited = auth.LimitedExport(claims.Role)
+
+	// Сводка по ИТР: сотрудники версии и должности с признаком ИТР.
+	// Администратору проекта её не собираем — она про ФОТ и выручку,
+	// которых он не видит.
+	if !meta.Limited && inp.Employees != nil {
+		meta.Employees = inp.Employees.Employees
+		if itr, itrErr := h.refsSvc.ITRPositions(); itrErr == nil {
+			meta.ITRPositions = itr
+		}
+	}
 
 	var sheets []*reports.Report
 	if !meta.Limited {

@@ -10,7 +10,6 @@ import type { UploadProps } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { profileApi } from '../../api';
 import Reminders from './Reminders';
-import InterfaceSettings from './InterfaceSettings';
 import { ROLE_LABELS } from '../../types';
 import type { Profile } from '../../types';
 import { initials } from '../../utils/names';
@@ -187,8 +186,10 @@ export default function ProfilePage() {
           </Card>
         </Col>
 
-        {/* ── Рабочие заметки ────────────────────────────────────── */}
-        <Col xs={24} md={14}>
+        {/* ── Рабочие заметки ──────────────────────────────────────
+            Правая часть делится на три доли: две под заметки, одна под
+            напоминания — их пишут коротко, а заметки длинные. */}
+        <Col xs={24} md={9}>
           <Card
             size="small"
             title="Рабочие заметки и напоминания"
@@ -218,18 +219,11 @@ export default function ProfilePage() {
             />
           </Card>
         </Col>
-      </Row>
 
-      {/* ── Напоминания и настройки интерфейса ───────────────────── */}
-      <Row gutter={16} align="stretch" style={{ marginTop: 16 }}>
-        <Col xs={24} md={14}>
+        {/* ── Напоминания ──────────────────────────────────────────── */}
+        <Col xs={24} md={5}>
           <Card size="small" title="Напоминания" style={{ height: '100%' }}>
             <Reminders emailReminders={profile?.email_reminders ?? true} />
-          </Card>
-        </Col>
-        <Col xs={24} md={10}>
-          <Card size="small" title="Настройки интерфейса" style={{ height: '100%' }}>
-            <InterfaceSettings />
           </Card>
         </Col>
       </Row>

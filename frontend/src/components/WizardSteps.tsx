@@ -111,8 +111,9 @@ export default function WizardSteps({ items, current, onChange }: Props) {
         //   active — текущий шаг: фирменная заливка, белая цифра
         //   done   — ПРОЙДЕННЫЙ шаг: фирменный цвет, взятый прозрачным
         //   иначе  — ещё не открытый шаг
-        const bg = active ? BRAND : done ? 'rgba(24, 62, 77, 0.12)' : 'transparent';
-        const fg = active ? '#fff' : done ? BRAND : '#8c9aa0';
+        // Фирменный цвет — переменной: он настраивается пользователем.
+        const bg = active ? 'var(--ibcon-brand)' : done ? 'var(--ibcon-step-done-bg)' : 'transparent';
+        const fg = active ? '#fff' : done ? 'var(--ibcon-brand)' : 'var(--ibcon-step-todo)';
 
         return (
           <div
@@ -139,7 +140,7 @@ export default function WizardSteps({ items, current, onChange }: Props) {
                 color: fg,
                 border: active
                   ? 'none'
-                  : `1px solid ${done ? BRAND : 'rgba(24, 62, 77, 0.18)'}`,
+                  : `1px solid ${done ? 'var(--ibcon-brand)' : 'var(--ibcon-step-border)'}`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -159,7 +160,7 @@ export default function WizardSteps({ items, current, onChange }: Props) {
                   fontSize: 12,
                   lineHeight: 1.3,
                   textAlign: 'center',
-                  color: active ? BRAND : '#595959',
+                  color: active ? 'var(--ibcon-brand)' : 'var(--ibcon-step-label)',
                   fontWeight: active ? 600 : 400,
                   // Ключевое: не рвать слова по буквам
                   whiteSpace: 'nowrap',

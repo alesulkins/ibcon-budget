@@ -641,7 +641,7 @@ export default function EmployeesInput({
                     <span style={{
                       flex: '0 0 62px',
                       fontWeight: 600,
-                      color: '#595959',
+                      color: 'var(--ibcon-muted)',
                       whiteSpace: 'nowrap',
                     }}>
                       {code}

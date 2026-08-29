@@ -3,6 +3,7 @@ package budgets
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/xuri/excelize/v2"
@@ -37,6 +38,13 @@ type ExportMeta struct {
 	StartDate      time.Time
 	DurationMonths int
 
+	// Employees — сотрудники версии и ITRPositions — названия должностей
+	// с признаком ИТР. Нужны сводке по ИТР: она считает, у скольких
+	// инженеров в каком месяце была начислена зарплата, а в итогах
+	// расчёта лежит только сумма по всем сразу.
+	Employees    []calc.Employee
+	ITRPositions map[string]bool
+
 	// Params — параметры версии: проценты и сроки банковских гарантий.
 	// В CalcResult их нет — там только посчитанные суммы, — а в книге
 	// нужно видеть, из чего сумма получилась. nil допустим: у версии,
@@ -58,40 +66,40 @@ type ExportMeta struct {
 // порядке, в каком движок раскладывает MonthlyResult.Overhead.
 // Индекс массива + 178 = номер строки формы.
 var overheadTitles = [34]string{
-	"178 Аренда квартир (вкл. уборку)",
-	"179 Услуги риелтора",
-	"180 Аренда транспорта и покупка авто",
-	"181 Обустройство строительной площадки",
-	"182 Аренда офиса",
-	"183 Уборка офиса",
-	"184 Билеты",
-	"185 Командировочные расходы",
-	"186 Интернет",
-	"187 Мобильная связь",
-	"188 Лабораторные исследования",
-	"189 Приборы строительного контроля",
-	"190 Обучение персонала",
-	"191 Медицинский осмотр",
-	"192 Спецодежда",
-	"193 Приобретение ПО",
-	"194 Приобретение ПК и оргтехники",
-	"195 Приобретение мебели",
-	"196 Содержание офиса",
-	"197 Почтовые расходы",
-	"198 ГСМ",
-	"199 Транспортные услуги",
-	"200 Субподряд, ГПХ внешний",
-	"201 Субподряд, ГПХ сотрудников",
-	"202 Субподрядные работы",
-	"203 Субподряд (организационные улучшения)",
-	"204 Представительские расходы",
-	"205 Корпоративные мероприятия",
-	"206 Услуги банков",
-	"207 Страхование ответственности",
-	"208 Коммунальные расходы",
-	"209 Охрана объекта",
-	"210 Аренда гаража",
-	"211 Страхование КАСКО и ОСАГО",
+	"Аренда квартир (вкл. уборку)",
+	"Услуги риелтора",
+	"Аренда транспорта и покупка авто",
+	"Обустройство строительной площадки",
+	"Аренда офиса",
+	"Уборка офиса",
+	"Билеты",
+	"Командировочные расходы",
+	"Интернет",
+	"Мобильная связь",
+	"Лабораторные исследования",
+	"Приборы строительного контроля",
+	"Обучение персонала",
+	"Медицинский осмотр",
+	"Спецодежда",
+	"Приобретение ПО",
+	"Приобретение ПК и оргтехники",
+	"Приобретение мебели",
+	"Содержание офиса",
+	"Почтовые расходы",
+	"ГСМ",
+	"Транспортные услуги",
+	"Субподряд, ГПХ внешний",
+	"Субподряд, ГПХ сотрудников",
+	"Субподрядные работы",
+	"Субподряд (организационные улучшения)",
+	"Представительские расходы",
+	"Корпоративные мероприятия",
+	"Услуги банков",
+	"Страхование ответственности",
+	"Коммунальные расходы",
+	"Охрана объекта",
+	"Аренда гаража",
+	"Страхование КАСКО и ОСАГО",
 }
 
 // statusTitles — подписи статусов, те же, что в интерфейсе.
@@ -191,6 +199,61 @@ func BuildExport(m ExportMeta, r *calc.CalcResult, reps ...*reports.Report) ([]b
 	// styleRow — один стиль на диапазон ячеек строки.
 	styleRow := func(from, to string, st int) { _ = f.SetCellStyle(sheet, from, to, st) }
 	row := 1
+
+	// Раскладка помесячных таблиц: A — статья, B — итог за проект,
+	// дальше месяцы. Итог стоит ПЕРЕД месяцами: его смотрят первым, а в
+	// конце строки на длинном проекте до него пришлось бы доскроллить.
+	const (
+		colLabel = 1
+		colTotal = 2
+		colFirst = 3 // первый месяц
+	)
+	cellAt := func(col, row int) string {
+		name, _ := excelize.CoordinatesToCellName(col, row)
+		return name
+	}
+	lastMonthCol := colFirst + len(r.Monthly) - 1
+
+	// monthLabel — подпись месяца проекта. День фиксируем первым:
+	// AddDate переполняет короткие месяцы, и проект с 31 августа давал
+	// «31 сентября» → 1 октября, то есть сентябрь выпадал, а октябрь шёл
+	// дважды.
+	monthLabel := func(i int) string {
+		d := time.Date(m.StartDate.Year(), m.StartDate.Month()+time.Month(i), 1,
+			0, 0, 0, 0, m.StartDate.Location())
+		return d.Format("01.2006")
+	}
+
+	// monthlyHeader — шапка помесячной таблицы.
+	monthlyHeader := func() {
+		set(cellAt(colLabel, row), "Статья")
+		set(cellAt(colTotal, row), "Итого")
+		for i := range r.Monthly {
+			set(cellAt(colFirst+i, row), monthLabel(i))
+		}
+		styleRow(cellAt(colLabel, row), cellAt(lastMonthCol, row), head)
+		row++
+	}
+
+	// monthlyLine — строка помесячной таблицы: итог слева, месяцы правее.
+	monthlyLine := func(label string, bold bool, value func(calc.MonthlyResult) float64) {
+		set(cellAt(colLabel, row), label)
+		nameStyle, numStyle := text, money
+		if bold {
+			nameStyle, numStyle = textBold, moneyBold
+		}
+		styleRow(cellAt(colLabel, row), cellAt(colLabel, row), nameStyle)
+
+		var sum float64
+		for i, mr := range r.Monthly {
+			v := value(mr)
+			sum += v
+			set(cellAt(colFirst+i, row), v)
+		}
+		set(cellAt(colTotal, row), sum)
+		styleRow(cellAt(colTotal, row), cellAt(lastMonthCol, row), numStyle)
+		row++
+	}
 	put := func(label string, v any) {
 		set(fmt.Sprintf("A%d", row), label)
 		styleRow(fmt.Sprintf("A%d", row), fmt.Sprintf("A%d", row), text)
@@ -204,6 +267,25 @@ func BuildExport(m ExportMeta, r *calc.CalcResult, reps ...*reports.Report) ([]b
 	set("A1", fmt.Sprintf("Бюджет %d.%d — %s", m.ProjectID, m.VersionNo, m.ProjectName))
 	_ = f.SetCellStyle(sheet, "A1", "A1", title)
 	row = 3
+
+	// Вердикт по рентабельности — первым делом, до карточки проекта:
+	// книгу открывают, чтобы понять, каков бюджет, а не чей он.
+	// Администратору проекта его не показываем: рентабельности он не
+	// видит ни на экране, ни в этой книге.
+	if !m.Limited {
+		grade := profitabilityGrade(r.Profitability)
+		verdict, vErr := f.NewStyle(&excelize.Style{
+			Font: &excelize.Font{Family: reports.FontName, Bold: true, Size: 12, Color: "FFFFFF"},
+			Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{grade.Color}},
+		})
+		if vErr != nil {
+			return nil, vErr
+		}
+		set(cellAt(colLabel, row), fmt.Sprintf("%s — рентабельность %.2f %%",
+			grade.Label, r.Profitability))
+		styleRow(cellAt(colLabel, row), cellAt(colTotal, row), verdict)
+		row += 2
+	}
 
 	put("Заказчик", m.Customer)
 	put("Исполнитель", m.ExecutorName)
@@ -225,43 +307,13 @@ func BuildExport(m ExportMeta, r *calc.CalcResult, reps ...*reports.Report) ([]b
 		_ = f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("A%d", row), head)
 		row++
 
-		headerRow := row
-		set(fmt.Sprintf("A%d", row), "Статья")
-		for i := range r.Monthly {
-			col, _ := excelize.ColumnNumberToName(i + 2)
-			set(fmt.Sprintf("%s%d", col, row), m.StartDate.AddDate(0, i, 0).Format("01.2006"))
-		}
-		totalCol, _ := excelize.ColumnNumberToName(len(r.Monthly) + 2)
-		set(fmt.Sprintf("%s%d", totalCol, row), "Итого")
-		_ = f.SetCellStyle(sheet, fmt.Sprintf("A%d", headerRow),
-			fmt.Sprintf("%s%d", totalCol, headerRow), head)
-		row++
-
-		putLine := func(label string, bold bool, value func(calc.MonthlyResult) float64) {
-			set(fmt.Sprintf("A%d", row), label)
-			nameStyle, numStyle := text, money
-			if bold {
-				nameStyle, numStyle = textBold, moneyBold
-			}
-			styleRow(fmt.Sprintf("A%d", row), fmt.Sprintf("A%d", row), nameStyle)
-			sum := 0.0
-			for i, mr := range r.Monthly {
-				col, _ := excelize.ColumnNumberToName(i + 2)
-				set(fmt.Sprintf("%s%d", col, row), value(mr))
-				sum += value(mr)
-			}
-			set(fmt.Sprintf("%s%d", totalCol, row), sum)
-			firstNum, _ := excelize.ColumnNumberToName(2)
-			styleRow(fmt.Sprintf("%s%d", firstNum, row), fmt.Sprintf("%s%d", totalCol, row), numStyle)
-			row++
-		}
-
+		monthlyHeader()
 		for i, label := range overheadTitles {
-			putLine(label, false, func(mr calc.MonthlyResult) float64 { return mr.Overhead[i] })
+			monthlyLine(label, false, func(mr calc.MonthlyResult) float64 { return mr.Overhead[i] })
 		}
 		// Строка 212 — граница выгрузки администратора проекта. Всё, что
 		// дальше (непредвиденные 214, АУП 215), ему не показывается.
-		putLine("212 Итого накладные расходы", true,
+		monthlyLine("Итого накладные расходы", true,
 			func(mr calc.MonthlyResult) float64 { return mr.ProjectCostsExFOT })
 
 		// Листы БДР и БДДС сюда не добавляются: администратору проекта их
@@ -293,6 +345,9 @@ func BuildExport(m ExportMeta, r *calc.CalcResult, reps ...*reports.Report) ([]b
 		{"Операционная прибыль", r.OperatingProfit, false},
 		{"Налог на прибыль", r.Tax, true},
 		{"Чистая прибыль", r.NetProfit, true},
+		// Справочный показатель: начисляется только за первые четыре
+		// месяца и ни на что в расчёте не влияет.
+		{"Стоимость + ставка рефинансирования", r.RefRateAmount, false},
 	}
 	for _, t := range totals {
 		labelCell := fmt.Sprintf("A%d", row)
@@ -311,63 +366,75 @@ func BuildExport(m ExportMeta, r *calc.CalcResult, reps ...*reports.Report) ([]b
 	styleRow(rentValue, rentValue, moneyBold)
 	row++
 
-	// ── Помесячная разбивка ──────────────────────────────────────────
-	set(fmt.Sprintf("A%d", row), "ПОМЕСЯЧНАЯ РАЗБИВКА")
-	_ = f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("A%d", row), head)
-	row++
+	// ── Сводка по ИТР ────────────────────────────────────────────────
+	//
+	// Явочно и списочно — два взгляда на одну команду. Списочно: человек
+	// числится на проекте, то есть в этом месяце ему вообще начислено.
+	// Явочно: он ещё и работал, а не сидел на межвахтовом отдыхе — там
+	// платят фиксированные 30 000, поэтому порог стоит чуть выше.
+	//
+	// «В среднем в месяц» — количество человеко-месяцев, делённое на
+	// длительность проекта: если инженер отработал половину срока, он
+	// добавляет половину человека.
+	if len(m.Employees) > 0 && len(r.Monthly) > 0 {
+		const attendedThreshold = 30_001 // выше выплаты за межвахтовый отдых
 
-	headerRow := row
-	set(fmt.Sprintf("A%d", row), "Статья")
-	for i := range r.Monthly {
-		col, _ := excelize.ColumnNumberToName(i + 2)
-		set(fmt.Sprintf("%s%d", col, row), m.StartDate.AddDate(0, i, 0).Format("01.2006"))
-	}
-	lastCol, _ := excelize.ColumnNumberToName(len(r.Monthly) + 1)
-	_ = f.SetCellStyle(sheet, fmt.Sprintf("A%d", headerRow),
-		fmt.Sprintf("%s%d", lastCol, headerRow), head)
-	row++
+		var attended, listed float64
+		for i := range m.Employees {
+			emp := &m.Employees[i]
+			if !m.ITRPositions[strings.ToLower(strings.TrimSpace(emp.Position))] {
+				continue
+			}
+			for month := 1; month <= len(r.Monthly); month++ {
+				fot := calc.EmployeeFOTAt(emp, month, m.StartDate)
+				if fot > 0 {
+					listed++
+				}
+				if fot > attendedThreshold {
+					attended++
+				}
+			}
+		}
+		months := float64(len(r.Monthly))
+		attendedAvg := attended / months
+		listedAvg := listed / months
 
-	// Блок ФОТ (строки 168-176 формы) выделен целиком: по нему сверяют
-	// зарплатную часть, и владелец просил его выделить.
-	lines := []struct {
-		label string
-		bold  bool
-		pick  func(calc.MonthlyResult) float64
-	}{
-		{"168 ФОТ", true, func(x calc.MonthlyResult) float64 { return x.FOT }},
-		{"169 Премии и компенсации", true, func(x calc.MonthlyResult) float64 { return x.Bonuses }},
-		{"170-171 Переработки", true, func(x calc.MonthlyResult) float64 { return x.OvertimeRF + x.OvertimeKG }},
-		{"172 НДФЛ", true, func(x calc.MonthlyResult) float64 { return x.NDFL }},
-		{"173-174 Взносы", true, func(x calc.MonthlyResult) float64 { return x.InsuranceRF + x.InsuranceKG }},
-		{"176 ФОТ вкл. взносы", true, func(x calc.MonthlyResult) float64 { return x.TotalFOT }},
-		{"212 Накладные расходы", false, func(x calc.MonthlyResult) float64 { return x.ProjectCostsExFOT }},
-		{"214 Непредвиденные", false, func(x calc.MonthlyResult) float64 { return x.Unpredictables }},
-		{"215 АУП", false, func(x calc.MonthlyResult) float64 { return x.AUP }},
-		{"222 БГ на исполнение", false, func(x calc.MonthlyResult) float64 { return x.BGExecution }},
-		{"226 БГ на гарантийный период", false, func(x calc.MonthlyResult) float64 { return x.BGWarranty }},
-		{"230 БГ на аванс", false, func(x calc.MonthlyResult) float64 { return x.BGAdvance }},
-		{"232 Итого расходы", false, func(x calc.MonthlyResult) float64 { return x.TotalCosts }},
-		{"234 Операционная маржинальность", false, func(x calc.MonthlyResult) float64 { return x.MarginAmount }},
-		{"236 Выручка", false, func(x calc.MonthlyResult) float64 { return x.Revenue }},
-		// Строка 249 справочная: начисляется только за первые четыре
-		// месяца и ни на что в расчёте не влияет.
-		{"249 Стоимость + ставка рефинансирования", false,
-			func(x calc.MonthlyResult) float64 { return x.RefRateAmount }},
-	}
-	monthsLastCol, _ := excelize.ColumnNumberToName(len(r.Monthly) + 1)
-	for _, l := range lines {
-		set(fmt.Sprintf("A%d", row), l.label)
-		nameStyle, numStyle := text, money
-		if l.bold {
-			nameStyle, numStyle = textBold, moneyBold
+		// Стоимость человеко-месяца: сколько денег проект приносит в
+		// месяц на одного инженера. База — стоимость работ без НДС,
+		// делённая на длительность.
+		revenuePerMonth := r.TotalRevenue / months
+		perPerson := func(avg float64) float64 {
+			if avg == 0 {
+				return 0 // инженеров нет — делить не на что
+			}
+			return revenuePerMonth / avg
 		}
-		styleRow(fmt.Sprintf("A%d", row), fmt.Sprintf("A%d", row), nameStyle)
-		for i, mr := range r.Monthly {
-			col, _ := excelize.ColumnNumberToName(i + 2)
-			set(fmt.Sprintf("%s%d", col, row), l.pick(mr))
-		}
-		styleRow(fmt.Sprintf("B%d", row), fmt.Sprintf("%s%d", monthsLastCol, row), numStyle)
+
 		row++
+		set(cellAt(colLabel, row), "СВОДКА ПО ИТР")
+		styleRow(cellAt(colLabel, row), cellAt(3, row), head)
+		row++
+
+		set(cellAt(2, row), "явочно")
+		set(cellAt(3, row), "списочно")
+		styleRow(cellAt(colLabel, row), cellAt(3, row), head)
+		row++
+
+		itrRows := []struct {
+			label            string
+			attended, listed float64
+		}{
+			{"Кол-во ИТР в среднем в мес.", attendedAvg, listedAvg},
+			{"Средняя стоимость чел/мес", perPerson(attendedAvg), perPerson(listedAvg)},
+		}
+		for _, ir := range itrRows {
+			set(cellAt(colLabel, row), ir.label)
+			set(cellAt(2, row), ir.attended)
+			set(cellAt(3, row), ir.listed)
+			styleRow(cellAt(colLabel, row), cellAt(colLabel, row), text)
+			styleRow(cellAt(2, row), cellAt(3, row), money)
+			row++
+		}
 	}
 
 	// ── Банковские гарантии ──────────────────────────────────────────
@@ -422,23 +489,38 @@ func BuildExport(m ExportMeta, r *calc.CalcResult, reps ...*reports.Report) ([]b
 		}
 	}
 
-	// ── Вердикт по рентабельности ────────────────────────────────────
-	// Та же шкала и те же цвета, что в реестре проектов и на экране
-	// результатов: у книги и у экрана оценка обязана совпадать.
+	// ── Помесячная разбивка ──────────────────────────────────────────
+	set(fmt.Sprintf("A%d", row), "ПОМЕСЯЧНАЯ РАЗБИВКА")
+	_ = f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("A%d", row), head)
 	row++
-	grade := profitabilityGrade(r.Profitability)
-	verdict, err := f.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Family: reports.FontName, Bold: true, Size: 12, Color: "FFFFFF"},
-		Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{grade.Color}},
-	})
-	if err != nil {
-		return nil, err
+
+	monthlyHeader()
+
+	// Блок ФОТ (строки 168-176 формы) выделен целиком: по нему сверяют
+	// зарплатную часть.
+	lines := []struct {
+		label string
+		bold  bool
+		pick  func(calc.MonthlyResult) float64
+	}{
+		{"ФОТ", true, func(x calc.MonthlyResult) float64 { return x.FOT }},
+		{"Премии и компенсации", true, func(x calc.MonthlyResult) float64 { return x.Bonuses }},
+		{"Переработки", true, func(x calc.MonthlyResult) float64 { return x.OvertimeRF + x.OvertimeKG }},
+		{"НДФЛ", true, func(x calc.MonthlyResult) float64 { return x.NDFL }},
+		{"Взносы", true, func(x calc.MonthlyResult) float64 { return x.InsuranceRF + x.InsuranceKG }},
+		{"ФОТ вкл. взносы", true, func(x calc.MonthlyResult) float64 { return x.TotalFOT }},
+		{"Накладные расходы", false, func(x calc.MonthlyResult) float64 { return x.ProjectCostsExFOT }},
+		{"Непредвиденные", false, func(x calc.MonthlyResult) float64 { return x.Unpredictables }},
+		{"АУП", false, func(x calc.MonthlyResult) float64 { return x.AUP }},
+		{"БГ на исполнение", false, func(x calc.MonthlyResult) float64 { return x.BGExecution }},
+		{"БГ на гарантийный период", false, func(x calc.MonthlyResult) float64 { return x.BGWarranty }},
+		{"БГ на аванс", false, func(x calc.MonthlyResult) float64 { return x.BGAdvance }},
+		{"Итого расходы", false, func(x calc.MonthlyResult) float64 { return x.TotalCosts }},
+		{"Выручка", false, func(x calc.MonthlyResult) float64 { return x.Revenue }},
 	}
-	set(fmt.Sprintf("A%d", row), fmt.Sprintf("%s — рентабельность %.2f %%",
-		grade.Label, r.Profitability))
-	// Заливка на всю ширину помесячной разбивки: строка-вывод должна
-	// читаться как подведение черты, а не как ещё одна ячейка.
-	styleRow(fmt.Sprintf("A%d", row), fmt.Sprintf("%s%d", monthsLastCol, row), verdict)
+	for _, l := range lines {
+		monthlyLine(l.label, l.bold, l.pick)
+	}
 
 	if len(reps) > 0 {
 		if err := reports.WriteSheets(f, reps...); err != nil {

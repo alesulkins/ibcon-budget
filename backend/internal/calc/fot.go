@@ -150,6 +150,15 @@ func employeeFOT(emp *Employee, monthIdx int, startDate time.Time) float64 {
 	return EffectiveMultiplier(emp, monthIdx, salary) * salary
 }
 
+// EmployeeFOTAt — ФОТ одного сотрудника за месяц monthIdx (1-based).
+//
+// Нужна выгрузке: сводка по ИТР считает, в скольких месяцах у сотрудника
+// была начислена зарплата, а для этого нужен ФОТ по каждому человеку
+// отдельно — в итогах расчёта лежит только сумма по всем.
+func EmployeeFOTAt(emp *Employee, monthIdx int, startDate time.Time) float64 {
+	return employeeFOT(emp, monthIdx, startDate)
+}
+
 // EffectiveMultiplier — множитель графика, который реально идёт в расчёт
 // ФОТ за месяц monthIdx (1-based): ручное значение, если экономист его
 // задал, иначе вычисленное по формуле формы.

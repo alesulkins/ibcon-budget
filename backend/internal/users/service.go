@@ -3,6 +3,7 @@ package users
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jmoiron/sqlx"
 
@@ -71,14 +72,32 @@ func (s *Service) Update(id int, req UpdateRequest) (*User, error) {
 	// role передаём указателем: NULL означает «не меняем», пустая
 	// строка — «снять роль». COALESCE различает их правильно, потому
 	// что пустая строка не NULL.
+	if req.Email != nil {
+		email := strings.ToLower(strings.TrimSpace(*req.Email))
+		if email == "" || !strings.Contains(email, "@") {
+			return nil, errors.New("укажите корректный email")
+		}
+		// Адрес — логин: два одинаковых сделали бы вход неоднозначным.
+		// Проверяем заранее, чтобы вернуть внятную ошибку вместо
+		// нарушения уникального индекса.
+		var busy int
+		_ = s.db.Get(&busy,
+			`SELECT COUNT(*) FROM users WHERE lower(email)=$1 AND id<>$2`, email, id)
+		if busy > 0 {
+			return nil, errors.New("этот email уже занят другим пользователем")
+		}
+		req.Email = &email
+	}
+
 	_, err := s.db.Exec(
 		`UPDATE users SET
 		   full_name = COALESCE($1, full_name),
-		   role      = COALESCE($2, role),
-		   active    = COALESCE($3, active),
+		   email     = COALESCE($2, email),
+		   role      = COALESCE($3, role),
+		   active    = COALESCE($4, active),
 		   updated_at = NOW()
-		 WHERE id=$4`,
-		req.FullName, req.Role, req.Active, id,
+		 WHERE id=$5`,
+		req.FullName, req.Email, req.Role, req.Active, id,
 	)
 	if err != nil {
 		return nil, err

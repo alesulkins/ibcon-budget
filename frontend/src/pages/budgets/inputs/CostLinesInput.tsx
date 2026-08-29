@@ -170,7 +170,7 @@ export default function CostLinesInput({
           head={(
             <thead>
               <tr>
-                <th style={{ ...monthGridHeadCell, textAlign: 'left', color: '#333', fontWeight: 500 }}>
+                <th style={{ ...monthGridHeadCell, textAlign: 'left', color: 'var(--ibcon-text)', fontWeight: 500 }}>
                   {nameLabel}
                 </th>
                 {months.map((m, i) => <th key={i} style={monthGridHeadCell}>{m}</th>)}

@@ -107,13 +107,13 @@ export default function OverheadInput({ versionId, duration, startDate, readonly
         head={(
           <thead>
             <tr>
-              <th style={{ ...monthGridHeadCell, textAlign: 'left', color: '#333', fontWeight: 500 }}>
+              <th style={{ ...monthGridHeadCell, textAlign: 'left', color: 'var(--ibcon-text)', fontWeight: 500 }}>
                 Статья
               </th>
               {Array.from({ length: duration }).map((_, i) => (
                 <th key={i} style={monthGridHeadCell}>{monthLabel(startDate, i)}</th>
               ))}
-              <th style={{ ...monthGridHeadCell, textAlign: 'right', color: '#333', fontWeight: 500 }}>
+              <th style={{ ...monthGridHeadCell, textAlign: 'right', color: 'var(--ibcon-text)', fontWeight: 500 }}>
                 Итого
               </th>
             </tr>

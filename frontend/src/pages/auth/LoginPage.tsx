@@ -94,7 +94,9 @@ export default function LoginPage() {
         {/* Знак компании залит фирменным белым, поэтому стоит на
             фирменной плашке, а не на светлой карточке. */}
         <div style={{
-          background: `linear-gradient(170deg, ${BRAND_LIGHT} 0%, ${BRAND} 100%)`,
+          // Растяжка фирменного цвета: он настраивается пользователем,
+          // поэтому берётся переменной, а не константой.
+          background: 'linear-gradient(170deg, var(--ibcon-brand-light) 0%, var(--ibcon-brand) 100%)',
           padding: '26px 24px 22px',
           textAlign: 'center',
         }}>

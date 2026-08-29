@@ -331,7 +331,7 @@ function PositionsTab({ addSignal }: TabProps) {
   };
 
   const createMutation = useMutation({
-    mutationFn: async (vals: { name: string; salary?: number }) => {
+    mutationFn: async (vals: { name: string; salary?: number; is_itr?: boolean }) => {
       const p = await refsApi.createPosition(vals);
       if (citySalaries.length === 0) return p;
       return refsApi.setCitySalaries(p.id, citySalaries);
@@ -346,7 +346,7 @@ function PositionsTab({ addSignal }: TabProps) {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async (vals: { name?: string; salary?: number; active?: boolean }) => {
+    mutationFn: async (vals: { name?: string; salary?: number; is_itr?: boolean; active?: boolean }) => {
       const p = await refsApi.updatePosition(editing!.id, vals);
       // Оклады по городам — отдельный запрос: они хранятся своей
       // таблицей, а не полем должности.
@@ -388,6 +388,14 @@ function PositionsTab({ addSignal }: TabProps) {
           </Tooltip>
         );
       },
+    },
+    {
+      title: 'ИТР',
+      dataIndex: 'is_itr',
+      width: 90,
+      render: (v: boolean) => (
+        <StatusTag color={v ? 'teal' : 'grey'}>{v ? 'Да' : 'Нет'}</StatusTag>
+      ),
     },
     statusColumn<Position>(),
     editorColumn<Position>(),
@@ -438,6 +446,14 @@ function PositionsTab({ addSignal }: TabProps) {
               formatter={thousandFormatter}
               parser={thousandParser}
             />
+          </Form.Item>
+          <Form.Item
+            name="is_itr"
+            label="ИТР"
+            valuePropName="checked"
+            extra="Инженерно-технический работник. По этому признаку считается сводка по ИТР в выгрузке бюджета."
+          >
+            <Switch checkedChildren="Да" unCheckedChildren="Нет" />
           </Form.Item>
           <Form.Item
             label="Зарплата по городам"

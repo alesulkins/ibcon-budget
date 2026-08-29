@@ -126,13 +126,14 @@ func (h *Handler) createPosition(c *gin.Context) {
 	var body struct {
 		Name   string  `json:"name" binding:"required"`
 		Salary float64 `json:"salary"`
+		IsITR  bool    `json:"is_itr"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	cl := middleware.GetClaims(c)
-	p, err := h.svc.CreatePosition(body.Name, body.Salary, cl.UserID)
+	p, err := h.svc.CreatePosition(body.Name, body.Salary, body.IsITR, cl.UserID)
 	if err != nil {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
@@ -146,6 +147,7 @@ func (h *Handler) updatePosition(c *gin.Context) {
 	var body struct {
 		Name   *string  `json:"name"`
 		Salary *float64 `json:"salary"`
+		IsITR  *bool    `json:"is_itr"`
 		Active *bool    `json:"active"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
@@ -153,7 +155,7 @@ func (h *Handler) updatePosition(c *gin.Context) {
 		return
 	}
 	cl := middleware.GetClaims(c)
-	p, err := h.svc.UpdatePosition(id, body.Name, body.Salary, body.Active, cl.UserID)
+	p, err := h.svc.UpdatePosition(id, body.Name, body.Salary, body.IsITR, body.Active, cl.UserID)
 	if err != nil {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return

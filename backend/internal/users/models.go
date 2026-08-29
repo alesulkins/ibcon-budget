@@ -50,8 +50,12 @@ type CreateRequest struct {
 
 type UpdateRequest struct {
 	FullName *string `json:"full_name"`
-	Role     *string `json:"role"`
-	Active   *bool   `json:"active"`
+	// Email меняет только главный экономист — через раздел
+	// «Пользователи». Сам себе адрес пользователь не правит: по нему
+	// он входит, и подмена почты была бы подменой входа.
+	Email  *string `json:"email"`
+	Role   *string `json:"role"`
+	Active *bool   `json:"active"`
 }
 
 type SetPasswordRequest struct {

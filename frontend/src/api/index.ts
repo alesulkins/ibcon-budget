@@ -63,7 +63,7 @@ export const usersApi = {
   create: (data: { email: string; full_name: string; role: string; password: string }) =>
     client.post<User>('/users', data).then(r => r.data),
 
-  update: (id: number, data: { full_name?: string; role?: string; active?: boolean }) =>
+  update: (id: number, data: { full_name?: string; email?: string; role?: string; active?: boolean }) =>
     client.put<User>(`/users/${id}`, data).then(r => r.data),
 
   setPassword: (id: number, password: string) =>
@@ -123,9 +123,9 @@ export const refsApi = {
     profit_tax_rate?: number; refinancing_rate?: number; active?: boolean;
   }) => client.put<Executor>(`/references/executors/${id}`, data).then(r => r.data),
 
-  createPosition: (data: { name: string; salary?: number }) =>
+  createPosition: (data: { name: string; salary?: number; is_itr?: boolean }) =>
     client.post<Position>('/references/positions', data).then(r => r.data),
-  updatePosition: (id: number, data: { name?: string; salary?: number; active?: boolean }) =>
+  updatePosition: (id: number, data: { name?: string; salary?: number; is_itr?: boolean; active?: boolean }) =>
     client.put<Position>(`/references/positions/${id}`, data).then(r => r.data),
 
   createWorkMode: (data: { code: string; full_name: string }) =>

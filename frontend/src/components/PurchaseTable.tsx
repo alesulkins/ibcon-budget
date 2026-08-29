@@ -106,20 +106,20 @@ export default function PurchaseTable({
         <thead>
           <tr>
             {withName && (
-              <th style={{ ...monthGridHeadCell, textAlign: 'left', color: '#333', fontWeight: 500 }}>
+              <th style={{ ...monthGridHeadCell, textAlign: 'left', color: 'var(--ibcon-text)', fontWeight: 500 }}>
                 {nameLabel}
               </th>
             )}
-            <th style={{ ...monthGridHeadCell, color: '#333', fontWeight: 500 }}>
+            <th style={{ ...monthGridHeadCell, color: 'var(--ibcon-text)', fontWeight: 500 }}>
               {monthColLabel}
             </th>
-            <th style={{ ...monthGridHeadCell, color: '#333', fontWeight: 500 }}>
+            <th style={{ ...monthGridHeadCell, color: 'var(--ibcon-text)', fontWeight: 500 }}>
               {priceLabel}
             </th>
-            <th style={{ ...monthGridHeadCell, color: '#333', fontWeight: 500 }}>
+            <th style={{ ...monthGridHeadCell, color: 'var(--ibcon-text)', fontWeight: 500 }}>
               {countLabel}
             </th>
-            <th style={{ ...monthGridHeadCell, textAlign: 'right', color: '#333', fontWeight: 500 }}>
+            <th style={{ ...monthGridHeadCell, textAlign: 'right', color: 'var(--ibcon-text)', fontWeight: 500 }}>
               Итого
             </th>
             {!readonly && <th style={monthGridHeadCell} />}

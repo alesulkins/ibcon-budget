@@ -75,11 +75,11 @@ export default function MonthTotals({ months, values, label }: Props) {
       head={(
         <thead>
           <tr>
-            <th style={{ ...monthGridHeadCell, textAlign: 'left', color: '#333', fontWeight: 500 }}>
+            <th style={{ ...monthGridHeadCell, textAlign: 'left', color: 'var(--ibcon-text)', fontWeight: 500 }}>
               {label}
             </th>
             {months.map((m, i) => <th key={i} style={monthGridHeadCell}>{m}</th>)}
-            <th style={{ ...monthGridHeadCell, textAlign: 'right', color: '#333', fontWeight: 500 }}>
+            <th style={{ ...monthGridHeadCell, textAlign: 'right', color: 'var(--ibcon-text)', fontWeight: 500 }}>
               Итого
             </th>
           </tr>

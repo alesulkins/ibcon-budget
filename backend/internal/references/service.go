@@ -89,7 +89,7 @@ func (s *Service) getExecutor(id int) (*Executor, error) {
 
 // ---------- Positions ----------
 
-const positionCols = `t.id, t.name, t.salary, t.active, t.updated_at, t.updated_by`
+const positionCols = `t.id, t.name, t.salary, t.is_itr, t.active, t.updated_at, t.updated_by`
 
 func (s *Service) ListPositions(activeOnly bool) ([]Position, error) {
 	q := withEditor("positions", positionCols) + activeFilter(activeOnly) + ` ORDER BY t.name`
@@ -202,11 +202,11 @@ func (s *Service) SetCitySalaries(positionID int, salaries []CitySalary, by int)
 	return tx.Commit()
 }
 
-func (s *Service) CreatePosition(name string, salary float64, by int) (*Position, error) {
+func (s *Service) CreatePosition(name string, salary float64, isITR bool, by int) (*Position, error) {
 	var id int
 	err := s.db.QueryRowx(
-		`INSERT INTO positions (name, salary, updated_by) VALUES ($1,$2,$3) RETURNING id`,
-		name, salary, by,
+		`INSERT INTO positions (name, salary, is_itr, updated_by) VALUES ($1,$2,$3,$4) RETURNING id`,
+		name, salary, isITR, by,
 	).Scan(&id)
 	if err != nil {
 		return nil, err
@@ -214,15 +214,16 @@ func (s *Service) CreatePosition(name string, salary float64, by int) (*Position
 	return s.getPosition(id)
 }
 
-func (s *Service) UpdatePosition(id int, name *string, salary *float64, active *bool, by int) (*Position, error) {
+func (s *Service) UpdatePosition(id int, name *string, salary *float64, isITR, active *bool, by int) (*Position, error) {
 	_, err := s.db.Exec(
 		`UPDATE positions SET
 		   name   = COALESCE($1, name),
 		   salary = COALESCE($2, salary),
-		   active = COALESCE($3, active),
-		   updated_at = NOW(), updated_by = $4
-		 WHERE id=$5`,
-		name, salary, active, by, id,
+		   is_itr = COALESCE($3, is_itr),
+		   active = COALESCE($4, active),
+		   updated_at = NOW(), updated_by = $5
+		 WHERE id=$6`,
+		name, salary, isITR, active, by, id,
 	)
 	if err != nil {
 		return nil, err
@@ -335,4 +336,22 @@ func (s *Service) getCostItem(id int) (*CostItem, error) {
 	var ci CostItem
 	err := s.db.QueryRowx(withEditor("cost_items", costItemCols)+` WHERE t.id=$1`, id).StructScan(&ci)
 	return &ci, err
+}
+
+// ITRPositions — названия должностей с признаком ИТР, в нижнем регистре.
+//
+// Сотрудник хранит должность СТРОКОЙ (snapshot на момент ввода), поэтому
+// связать его со справочником можно только по имени; регистр приводим,
+// потому что в старых версиях название могли ввести иначе.
+func (s *Service) ITRPositions() (map[string]bool, error) {
+	var names []string
+	if err := s.db.Select(&names,
+		`SELECT lower(btrim(name)) FROM positions WHERE is_itr = TRUE`); err != nil {
+		return nil, err
+	}
+	set := make(map[string]bool, len(names))
+	for _, n := range names {
+		set[n] = true
+	}
+	return set, nil
 }
