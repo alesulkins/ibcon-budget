@@ -225,25 +225,30 @@ export default function UsersPage() {
       {/* Название раздела живёт в шапке (AppLayout).
           Поиск и фильтр слева, кнопка создания — справа, как в реестре
           проектов: одинаковая раскладка у всех списков. */}
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+      {/* Поля сжимаются, кнопка — нет: с жёсткими ширинами на крупном
+          шрифте строка переставала помещаться и кнопка съезжала вниз. */}
+      <div style={{
+        display: 'flex', gap: 12, alignItems: 'center',
+        flexWrap: 'nowrap', marginBottom: 12,
+      }}>
         <Input.Search
           allowClear
           placeholder="Поиск по ФИО или роли"
-          style={{ width: 300 }}
+          style={{ flex: '2 1 200px', minWidth: 150 }}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
         <Select
           allowClear
           placeholder="Все роли"
-          style={{ width: 220 }}
+          style={{ flex: '1 1 160px', minWidth: 130 }}
           value={roleFilter}
           onChange={(v) => setRoleFilter(v)}
           options={roleOptions}
         />
         <Button
           type="primary" icon={<PlusOutlined />}
-          style={{ marginLeft: 'auto' }}
+          style={{ marginLeft: 'auto', flexShrink: 0 }}
           onClick={() => { setShowCreate(true); createForm.resetFields(); }}
         >
           Создать пользователя

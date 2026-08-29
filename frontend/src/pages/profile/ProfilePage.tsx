@@ -124,7 +124,7 @@ export default function ProfilePage() {
     <div style={{ maxWidth: 980 }}>
       <Row gutter={16} align="stretch">
         {/* ── Аватар и реквизиты ─────────────────────────────────── */}
-        <Col xs={24} md={7}>
+        <Col xs={24} md={9}>
           <Card size="small" style={{ height: '100%' }}>
             <div style={{ textAlign: 'center', marginBottom: 16 }}>
               <Avatar
@@ -158,7 +158,14 @@ export default function ProfilePage() {
             <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
               Или выберите стикер:
             </Text>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
+            {/* Сетка, а не перенос по ширине: 24 стикера ложатся ровно
+                на три строки по восемь при любом размере шрифта. */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(8, 38px)',
+              gap: 6,
+              marginBottom: 16,
+            }}>
               {STICKERS.map((s) => (
                 <Button
                   key={s}
@@ -204,7 +211,7 @@ export default function ProfilePage() {
         {/* ── Рабочие заметки ──────────────────────────────────────
             Правая часть делится на три доли: две под заметки, одна под
             напоминания — их пишут коротко, а заметки длинные. */}
-        <Col xs={24} md={11}>
+        <Col xs={24} md={8}>
           <Card
             size="small"
             title="Рабочие заметки и напоминания"
@@ -224,7 +231,7 @@ export default function ProfilePage() {
         </Col>
 
         {/* ── Напоминания ──────────────────────────────────────────── */}
-        <Col xs={24} md={6}>
+        <Col xs={24} md={7}>
           <Card size="small" title="Напоминания" style={{ height: '100%' }}>
             <Reminders />
           </Card>
@@ -240,7 +247,7 @@ export default function ProfilePage() {
         confirmLoading={passwordMutation.isPending}
         okText="Изменить"
         cancelText="Отмена"
-        destroyOnClose
+        destroyOnHidden
       >
         <Alert
           type="info"

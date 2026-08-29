@@ -465,7 +465,7 @@ export default function BudgetVersionPage() {
           top гасит внутренний отступ рабочей области (padding: 24), иначе
           между прилипшей полосой и краем оставалась бы щель, сквозь
           которую видно уезжающий контент. */}
-      <Card bodyStyle={{ padding: 0 }}>
+      <Card styles={{ body: { padding: 0 } }}>
         <div style={{
           position: 'sticky',
           top: -24,

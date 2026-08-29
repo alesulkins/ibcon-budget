@@ -466,7 +466,7 @@ export default function ProjectDetailPage() {
         confirmLoading={versionStatusMutation.isPending}
         okText="Изменить"
         cancelText="Отмена"
-        destroyOnClose
+        destroyOnHidden
       >
         <Form
           form={versionStatusForm}

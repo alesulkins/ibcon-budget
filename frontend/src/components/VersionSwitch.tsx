@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Tooltip } from 'antd';
 import type { BudgetVersion } from '../types';
 import { BUDGET_STATUS_LABELS } from '../types';
-import { LINE, BRAND, TEXT_SOFT, RADIUS } from '../theme';
+import { LINE, TEXT_SOFT, RADIUS } from '../theme';
 import { carryScrollTo } from '../hooks/useScrollRestore';
 
 interface Props {

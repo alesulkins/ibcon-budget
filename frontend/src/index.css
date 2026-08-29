@@ -432,3 +432,32 @@ html body {
 .ibcon-report-group > td {
   background: var(--ibcon-hover);
 }
+
+/* ── Всплывающие сообщения и уведомления ───────────────────────────
+ *
+ * Цвет задаётся в настройках интерфейса и приходит переменной. Через
+ * токены antd его не задать: сообщения вызываются статическим
+ * `message.success(...)`, а статический вызов живёт вне ConfigProvider
+ * и темы не видит вовсе.
+ *
+ * Красится акцент — рамка, иконка и заголовок, — а не вся плашка:
+ * читаемость текста не должна зависеть от выбранного цвета.
+ *
+ * Ошибки не трогаем: красный у них смысловой, а не оформительский. */
+.ant-message-notice-content {
+  border-left: 3px solid var(--ibcon-notice);
+}
+
+.ant-message-success .anticon,
+.ant-message-info .anticon,
+.ant-message-loading .anticon {
+  color: var(--ibcon-notice);
+}
+
+.ant-notification-notice {
+  border-left: 3px solid var(--ibcon-notice);
+}
+
+.ant-notification-notice-message {
+  color: var(--ibcon-notice);
+}

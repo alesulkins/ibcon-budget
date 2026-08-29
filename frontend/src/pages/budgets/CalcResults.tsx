@@ -12,7 +12,7 @@ import { fmtMoney, monthLabel, fmtNum } from '../../utils/fmt';
 import { profitabilityGrade } from '../../utils/profitability';
 import Profitability from '../../components/Profitability';
 import { extractError } from '../../api/client';
-import { BRAND, FONT_NUM, LINE, TEXT_SOFT, RADIUS_LG } from '../../theme';
+import { FONT_NUM, LINE, TEXT_SOFT, RADIUS_LG } from '../../theme';
 
 interface Props {
   versionId: number;

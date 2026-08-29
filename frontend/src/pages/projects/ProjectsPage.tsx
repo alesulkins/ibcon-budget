@@ -238,12 +238,16 @@ export default function ProjectsPage() {
 
       {/* Название раздела живёт в шапке (AppLayout). Фильтры и кнопка
           стоят одной строкой: у всех контролов одна высота, кнопка
-          прижата к правому краю. */}
+          прижата к правому краю.
+
+          Поля сжимаются, кнопки — нет. С жёсткими ширинами на крупном
+          шрифте строка переставала помещаться, и кнопка «Создать
+          проект» съезжала на вторую строку. */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
         gap: 8,
-        flexWrap: 'wrap',
+        flexWrap: 'nowrap',
         marginBottom: 16,
       }}>
         <Input
@@ -251,13 +255,13 @@ export default function ProjectsPage() {
           placeholder="Поиск по проекту, заказчику..."
           value={search}
           onChange={e => setSearch(e.target.value)}
-          style={{ width: 280 }}
+          style={{ flex: '2 1 180px', minWidth: 140 }}
           allowClear
         />
         <Select
           placeholder="Статус проекта"
           allowClear
-          style={{ width: 180 }}
+          style={{ flex: '1 1 130px', minWidth: 110 }}
           value={statusFilter}
           onChange={setStatusFilter}
           options={Object.entries(PROJECT_STATUS_LABELS).map(([value, label]) => ({ value, label }))}
@@ -265,7 +269,7 @@ export default function ProjectsPage() {
         <Select
           placeholder="Статус бюджета"
           allowClear
-          style={{ width: 180 }}
+          style={{ flex: '1 1 130px', minWidth: 110 }}
           value={budgetStatusFilter}
           onChange={setBudgetStatusFilter}
           options={Object.entries(BUDGET_STATUS_LABELS).map(([value, label]) => ({ value, label }))}
@@ -273,7 +277,7 @@ export default function ProjectsPage() {
         <Select
           placeholder="Исполнитель"
           allowClear
-          style={{ width: 200 }}
+          style={{ flex: '1 1 140px', minWidth: 110 }}
           value={executorFilter}
           onChange={setExecutorFilter}
           options={(executors ?? []).map(e => ({ value: e.name, label: e.name }))}
@@ -281,6 +285,7 @@ export default function ProjectsPage() {
         <Button
           onClick={resetFilters}
           disabled={!hasActiveFilters}
+          style={{ flexShrink: 0 }}
         >
           Сбросить фильтры
         </Button>
@@ -291,8 +296,9 @@ export default function ProjectsPage() {
             icon={<PlusOutlined />}
             onClick={() => setShowCreate(true)}
             // marginLeft: auto — кнопка уходит вправо, а фильтры остаются
-            // слева; при переносе строки она встаёт в конец последней.
-            style={{ marginLeft: 'auto' }}
+            // слева. flexShrink: 0 — подпись не должна ужиматься и
+            // переноситься, сжимаются поля.
+            style={{ marginLeft: 'auto', flexShrink: 0 }}
           >
             Создать проект
           </Button>
@@ -328,7 +334,7 @@ export default function ProjectsPage() {
         width={640}
         okText="Создать"
         cancelText="Отмена"
-        maskClosable={false}
+        mask={{ closable: false }}
       >
         <Form
           form={form}

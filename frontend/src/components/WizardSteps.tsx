@@ -1,6 +1,5 @@
 import { useRef, useEffect } from 'react';
 import { Tooltip } from 'antd';
-import { BRAND } from '../theme';
 
 export interface WizardStepItem {
   key: string;

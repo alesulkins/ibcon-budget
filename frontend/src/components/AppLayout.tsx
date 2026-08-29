@@ -18,7 +18,6 @@ import { PERM, usePermissions } from '../store/permissions';
 import { useScrollRestore, SCROLL_ROOT_ID } from '../hooks/useScrollRestore';
 import { SIDER_FOOTER_ID } from '../hooks/useFillHeight';
 import ReminderPopups from './ReminderPopups';
-import { BRAND } from '../theme';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
