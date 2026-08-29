@@ -121,8 +121,10 @@ export default function BudgetVersionPage() {
   const perms = version?.permissions;
   const canEditBudget = canIn(perms, PERM.budgetEdit);
 
-  // АП видит только строки 178-214 (шаг overhead) — таким же урезанным
-  // приходит и его выгрузка в xlsx.
+  // АП видит только строки 178-212 (шаг overhead) — таким же урезанным
+  // приходит и его выгрузка в xlsx. Шага «БДР и БДДС» у него нет вовсе:
+  // отчёты показывают выручку и прибыль, которых он видеть не должен.
+  // Ограничение держит бэкенд, здесь только не рисуем недоступное.
   const isAP = (currentUser()?.role ?? '') === 'AP';
   const apOnlyStepIdx = WIZARD_STEPS.findIndex(s => s.key === 'overhead');
 
@@ -343,6 +345,7 @@ export default function BudgetVersionPage() {
           <BudgetReports
             versionId={versionId}
             permissions={version!.permissions}
+            readonly={isReadonly}
           />
         );
       case 'results':

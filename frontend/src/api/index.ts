@@ -173,7 +173,9 @@ export const budgetsApi = {
     client.get<CalcResult>(`/budget-versions/${vid}/calculate`).then(r => r.data),
 
   /**
-   * Выгружает версию бюджета в xlsx и отдаёт файл браузеру.
+   * Выгружает версию бюджета в xlsx и отдаёт файл браузеру. Книга
+   * содержит три листа сразу — «Бюджет», БДР и БДДС; у администратора
+   * проекта только один урезанный лист «Бюджет».
    *
    * Имя файла берём из Content-Disposition: сервер кладёт его туда в
    * filename* с кодировкой UTF-8, иначе русское название проекта
@@ -187,10 +189,6 @@ export const budgetsApi = {
     client.get<{ bdr: BudgetReport; bdds: BudgetReport }>(
       `/budget-versions/${vid}/reports`,
     ).then(r => r.data),
-
-  /** Книга с двумя листами — БДР и БДДС. */
-  exportReports: (vid: number) =>
-    downloadFile(`/budget-versions/${vid}/reports/export`, `reports-${vid}.xlsx`),
 };
 
 /**

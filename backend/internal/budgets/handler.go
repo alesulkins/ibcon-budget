@@ -53,10 +53,10 @@ func (h *Handler) Register(r gin.IRouter) {
 	ver.GET("/inputs", h.getAllInputs)
 	ver.GET("/calculate", h.calculate)
 	ver.GET("/export", h.export)
-	// БДР и БДДС: на экран — по праву просмотра бюджета, в файл — по
-	// праву выгрузки, как и основная книга.
+	// БДР и БДДС на экран — по праву просмотра бюджета. Отдельной
+	// выгрузки у них нет: они лежат листами в общей книге, которую
+	// отдаёт /export.
 	ver.GET("/reports", h.budgetReports)
-	ver.GET("/reports/export", h.exportReports)
 }
 
 func (h *Handler) projectID(c *gin.Context) int {
@@ -492,10 +492,24 @@ func (h *Handler) export(c *gin.Context) {
 		meta.VersionLabel = *v.VersionLabel
 	}
 	// Администратору проекта книга собирается урезанной — строки
-	// 178-214 листа «2.Бюджет», без ФОТ, выручки и прибыли.
+	// 178-212 листа «2.Бюджет», без ФОТ, выручки и прибыли. Листы БДР и
+	// БДДС в неё не попадают: он их не видит и на экране.
 	meta.Limited = auth.LimitedExport(claims.Role)
 
-	data, err := BuildExport(meta, result)
+	var sheets []*reports.Report
+	if !meta.Limited {
+		p := reports.Params{
+			StartDate:    proj.StartDate,
+			ExecutorName: proj.ExecutorName,
+			Manual:       h.manualReportValues(vid),
+		}
+		sheets = []*reports.Report{
+			reports.Build(reports.KindBDR, result, p),
+			reports.Build(reports.KindBDDS, result, p),
+		}
+	}
+
+	data, err := BuildExport(meta, result, sheets...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "не удалось собрать файл: " + err.Error()})
 		return
@@ -578,8 +592,30 @@ func (h *Handler) reportContext(c *gin.Context, perm string) (
 		return nil, reports.Params{}, nil, nil, false
 	}
 
-	p := reports.Params{StartDate: proj.StartDate, ExecutorName: proj.ExecutorName}
+	p := reports.Params{
+		StartDate:    proj.StartDate,
+		ExecutorName: proj.ExecutorName,
+		Manual:       h.manualReportValues(vid),
+	}
 	return calc.Run(inp), p, proj, v, true
+}
+
+// TypeReportManual — ключ ввода, под которым лежат суммы, введённые
+// руками прямо в БДР и БДДС. Это НЕ данные расчёта: движок бюджета их не
+// читает, поэтому в calc.LoadInputs ключа нет.
+const TypeReportManual = "report_manual"
+
+// manualReportValues — ручные суммы статей отчётов. Ошибку чтения глотаем
+// намеренно: ручных значений может не быть вовсе (обычный случай), а
+// сломать из-за них весь отчёт — хуже, чем показать его без них.
+func (h *Handler) manualReportValues(vid int) reports.ManualValues {
+	var mv reports.ManualValues
+	raw, err := h.svc.GetInput(vid, TypeReportManual)
+	if err != nil || len(raw) == 0 {
+		return mv
+	}
+	_ = json.Unmarshal(raw, &mv)
+	return mv
 }
 
 // budgetReports отдаёт оба отчёта одним ответом: на экране они лежат
@@ -593,46 +629,4 @@ func (h *Handler) budgetReports(c *gin.Context) {
 		"bdr":  reports.Build(reports.KindBDR, res, p),
 		"bdds": reports.Build(reports.KindBDDS, res, p),
 	})
-}
-
-// exportReports выгружает книгу с двумя листами — БДР и БДДС.
-func (h *Handler) exportReports(c *gin.Context) {
-	res, p, proj, v, ok := h.reportContext(c, auth.PermBudgetExport)
-	if !ok {
-		return
-	}
-	claims := middleware.GetClaims(c)
-
-	meta := reports.Meta{
-		ProjectName:  proj.Name,
-		Customer:     proj.Customer,
-		ExecutorName: proj.ExecutorName,
-		VersionNo:    v.VersionNo,
-	}
-	if v.VersionLabel != nil {
-		meta.VersionLabel = *v.VersionLabel
-	}
-
-	data, err := reports.BuildExport(meta,
-		reports.Build(reports.KindBDR, res, p),
-		reports.Build(reports.KindBDDS, res, p),
-	)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "не удалось собрать файл: " + err.Error()})
-		return
-	}
-
-	vid := v.ID
-	h.audit.Log(auditlog.Entry{
-		UserID: &claims.UserID, UserRole: claims.Role,
-		Action: "export_reports", ObjectType: "budget_version", ObjectID: &vid,
-		Comment: fmt.Sprintf("Проект %d, бюджет %d.%d — БДР и БДДС",
-			proj.ID, proj.ID, v.VersionNo),
-	})
-
-	// Имя файла русское: без filename* браузер сохранит крякозябрами.
-	c.Header("Content-Disposition",
-		"attachment; filename=\"reports.xlsx\"; filename*=UTF-8''"+url.PathEscape(reports.FileName(meta)))
-	c.Data(http.StatusOK,
-		"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", data)
 }

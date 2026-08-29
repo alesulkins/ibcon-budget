@@ -46,6 +46,29 @@ type Params struct {
 	// ExecutorName — от него зависит сдвиг выручки в БДДС: у киргизского
 	// филиала деньги приходят месяцем позже, у российских — в срок.
 	ExecutorName string
+	// Manual — суммы, введённые руками в самом отчёте.
+	Manual ManualValues
+}
+
+// ManualValues — ручные значения статей, которые платформа не считает.
+//
+// В форме такие статьи заполняются прямо в отчёте («ручной ввод» в
+// audit/service_sheets.md): расчёт про них ничего не знает, но в отчёте
+// они нужны. Ключ — код статьи, значение — суммы по месяцам проекта.
+//
+// Хранятся отдельно для каждого отчёта: одна и та же статья может быть
+// расчётной в БДР и ручной в БДДС.
+type ManualValues struct {
+	BDR  map[string][]float64 `json:"bdr"`
+	BDDS map[string][]float64 `json:"bdds"`
+}
+
+// forKind — ручные значения нужного отчёта.
+func (m ManualValues) forKind(k Kind) map[string][]float64 {
+	if k == KindBDDS {
+		return m.BDDS
+	}
+	return m.BDR
 }
 
 // ctx — всё, что нужно источнику статьи, чтобы посчитать свой месяц.
@@ -98,6 +121,9 @@ type Row struct {
 	Level int `json:"level"`
 	// Group — строка собирает сумму вложенных, а не имеет своего источника.
 	Group bool `json:"group"`
+	// Manual — статью платформа не считает, её заполняют руками прямо в
+	// отчёте. Интерфейс по этому признаку открывает ячейки на правку.
+	Manual bool `json:"manual"`
 	// Monthly — значения по месяцам проекта, индекс 0 = первый месяц.
 	Monthly []float64 `json:"monthly"`
 	Total   float64   `json:"total"`
@@ -143,17 +169,39 @@ func build(kind Kind, arts []article, res *calc.CalcResult, p Params) *Report {
 		rep.MonthLabels[i] = monthLabel(p.StartDate, i)
 	}
 
+	// Группа — это строка, У КОТОРОЙ ЕСТЬ ПОТОМКИ в кодификаторе, а не
+	// просто строка без источника: у ручных статей источника тоже нет, но
+	// их значение вводят, а не собирают снизу.
+	hasChildren := make(map[string]bool, len(arts))
 	for _, a := range arts {
+		if i := strings.LastIndex(a.code, "."); i > 0 {
+			hasChildren[a.code[:i]] = true
+		}
+	}
+
+	manual := p.Manual.forKind(kind)
+	for _, a := range arts {
+		group := a.src == nil && hasChildren[a.code]
 		row := Row{
 			Code:    a.code,
 			Name:    a.name,
 			Level:   codeLevel(a.code),
-			Group:   a.src == nil,
+			Group:   group,
+			Manual:  a.src == nil && !group,
 			Monthly: make([]float64, c.n),
 		}
-		if a.src != nil {
+		switch {
+		case a.src != nil:
 			for i := 0; i < c.n; i++ {
 				row.Monthly[i] = a.src(c, i)
+			}
+		case row.Manual:
+			// Введённое руками. Массив может быть короче горизонта (проект
+			// продлили после ввода) — недостающие месяцы остаются нулём.
+			for i, v := range manual[a.code] {
+				if i < c.n {
+					row.Monthly[i] = v
+				}
 			}
 		}
 		rep.Rows = append(rep.Rows, row)

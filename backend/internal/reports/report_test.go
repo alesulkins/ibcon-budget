@@ -443,3 +443,96 @@ func TestProfitTax_NoMonthOverflow(t *testing.T) {
 		t.Errorf("январь и февраль должны быть без налога, got %v", got[:2])
 	}
 }
+
+// ── Ручные статьи ───────────────────────────────────────────────────────
+
+// Статью, которую платформа не считает, заполняют руками прямо в отчёте.
+// Её значение попадает в отчёт и поднимается в групповые суммы наравне с
+// расчётными.
+func TestBuild_ManualValues(t *testing.T) {
+	start := date(2027, time.January)
+	res := resWith(3, func(m *calc.MonthlyResult) {})
+
+	p := rf(start)
+	// 2.2.1.05 «Ремонт офиса» — ручная статья группы «Аренда и содержание
+	// офиса»; 2.2.1.01 «Аренда (офис)» в той же группе считается.
+	p.Manual = ManualValues{BDR: map[string][]float64{
+		"2.2.1.05": {10, 20, 30},
+	}}
+	rep := Build(KindBDR, res, p)
+
+	r := row(t, rep, "2.2.1.05")
+	if !r.Manual {
+		t.Error("статья без источника должна быть помечена как ручная")
+	}
+	if r.Total != 60 {
+		t.Errorf("ручная статья: want 60, got %.2f", r.Total)
+	}
+	// Поднялась в группу и в итог отчёта.
+	if v := row(t, rep, "2.2.1").Total; v != 60 {
+		t.Errorf("группа: want 60, got %.2f", v)
+	}
+	if v := row(t, rep, "2").Total; v != 60 {
+		t.Errorf("себестоимость: want 60, got %.2f", v)
+	}
+}
+
+// Ручные значения одного отчёта не протекают в другой: одна и та же
+// статья может быть расчётной в БДР и ручной в БДДС.
+func TestBuild_ManualValuesPerKind(t *testing.T) {
+	start := date(2027, time.January)
+	res := resWith(2, func(m *calc.MonthlyResult) {})
+
+	p := rf(start)
+	p.Manual = ManualValues{BDDS: map[string][]float64{"2.2.1.03": {5, 5}}}
+
+	if v := row(t, Build(KindBDDS, res, p), "2.2.1.03").Total; v != 10 {
+		t.Errorf("БДДС: want 10, got %.2f", v)
+	}
+	// В БДР код 2.2.1.03 — это другая статья, и ручных значений ей не
+	// задавали.
+	if v := row(t, Build(KindBDR, res, p), "2.2.1.03").Total; v != 0 {
+		t.Errorf("БДР не должен видеть ручные значения БДДС, got %.2f", v)
+	}
+}
+
+// Массив короче горизонта (проект продлили после ввода) не должен ронять
+// сборку — недостающие месяцы остаются нулями, лишние отбрасываются.
+func TestBuild_ManualValuesLengthMismatch(t *testing.T) {
+	start := date(2027, time.January)
+	res := resWith(3, func(m *calc.MonthlyResult) {})
+
+	p := rf(start)
+	p.Manual = ManualValues{BDR: map[string][]float64{
+		"2.2.1.05": {7},             // короче горизонта
+		"2.2.1.03": {1, 2, 3, 4, 5}, // длиннее
+	}}
+	rep := Build(KindBDR, res, p)
+
+	if got := row(t, rep, "2.2.1.05").Monthly; got[0] != 7 || got[1] != 0 || got[2] != 0 {
+		t.Errorf("короткий массив: want [7 0 0], got %v", got)
+	}
+	if v := row(t, rep, "2.2.1.03").Total; v != 6 {
+		t.Errorf("длинный массив: лишние месяцы должны отбрасываться, got %.2f", v)
+	}
+}
+
+// Групповая строка — та, у которой есть потомки, а не любая строка без
+// источника: ручные статьи тоже без источника, но заполняются, а не
+// собираются снизу.
+func TestBuild_GroupVsManual(t *testing.T) {
+	rep := Build(KindBDR, resWith(1, func(m *calc.MonthlyResult) {}), rf(date(2027, time.January)))
+
+	g := row(t, rep, "2.2.1") // есть потомки
+	if !g.Group || g.Manual {
+		t.Errorf("2.2.1: want group, got group=%v manual=%v", g.Group, g.Manual)
+	}
+	m := row(t, rep, "2.2.1.05") // потомков нет, источника нет
+	if m.Group || !m.Manual {
+		t.Errorf("2.2.1.05: want manual, got group=%v manual=%v", m.Group, m.Manual)
+	}
+	c := row(t, rep, "2.2.1.01") // считается
+	if c.Group || c.Manual {
+		t.Errorf("2.2.1.01: want calculated, got group=%v manual=%v", c.Group, c.Manual)
+	}
+}

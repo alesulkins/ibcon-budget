@@ -3,7 +3,7 @@ import {
   Card, Button, Table, Space,
   message, Spin,
 } from 'antd';
-import { CalculatorOutlined, FileExcelOutlined } from '@ant-design/icons';
+import { CalculatorOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
 import { budgetsApi } from '../../api';
@@ -103,7 +103,9 @@ export default function CalcResults({
     <div>
       <Space style={{ marginBottom: 16 }}>
         {/* Кнопка остаётся и когда результат уже на экране: после правок
-            на предыдущих шагах ею запускают пересчёт явно. */}
+            на предыдущих шагах ею запускают пересчёт явно.
+            Выгрузки здесь нет: книга собирается из трёх листов сразу —
+            «Бюджет», БДР и БДДС, — и живёт на шаге «БДР и БДДС». */}
         <Button
           type="primary"
           icon={<CalculatorOutlined />}
@@ -113,14 +115,6 @@ export default function CalcResults({
         >
           {r ? 'Пересчитать бюджет' : 'Рассчитать бюджет'}
         </Button>
-        {r && (
-          <Button
-            icon={<FileExcelOutlined />}
-            onClick={() => message.info('XLSX-выгрузка будет доступна в Этапе 5')}
-          >
-            Выгрузить XLSX
-          </Button>
-        )}
       </Space>
 
       {(calcMutation.isPending || (isFetching && !r)) && (

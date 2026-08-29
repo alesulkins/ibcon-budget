@@ -1,8 +1,6 @@
 package reports
 
 import (
-	"bytes"
-	"fmt"
 	"strings"
 
 	"github.com/xuri/excelize/v2"
@@ -11,15 +9,12 @@ import (
 // Выгрузка БДР и БДДС в xlsx. Раскладка повторяет эталонные листы:
 // кодификатор, статья, месяцы, итог. Оттенки заливки формы не переносим —
 // иерархию показываем отступом и жирностью, как на экране.
+//
+// Листы добавляются в общую книгу вместе с листом «Бюджет»: экономист
+// работает с тремя листами сразу, и разносить их по файлам незачем.
 
-// Meta — шапка листа: чей это отчёт.
-type Meta struct {
-	ProjectName  string
-	Customer     string
-	ExecutorName string
-	VersionNo    int
-	VersionLabel string
-}
+// FontName — шрифт всех листов книги. Тот же, что в эталонных формах.
+const FontName = "Aptos Narrow"
 
 const (
 	colCode  = 1 // A
@@ -35,40 +30,26 @@ func SheetTitle(k Kind) string {
 	return "БДР"
 }
 
-// BuildExport собирает книгу с обоими отчётами: два листа, как в форме.
-func BuildExport(meta Meta, bdr, bdds *Report) ([]byte, error) {
-	f := excelize.NewFile()
-	defer f.Close()
-
+// WriteSheets добавляет листы БДР и БДДС в уже открытую книгу — рядом с
+// листом «Бюджет», который собирает пакет budgets.
+func WriteSheets(f *excelize.File, reps ...*Report) error {
 	styles, err := newStyles(f)
 	if err != nil {
-		return nil, err
+		return err
 	}
-
-	for i, rep := range []*Report{bdr, bdds} {
+	for _, rep := range reps {
 		name := SheetTitle(rep.Kind)
-		if i == 0 {
-			// Первый лист книги уже существует под именем Sheet1.
-			if err := f.SetSheetName("Sheet1", name); err != nil {
-				return nil, err
-			}
-		} else if _, err := f.NewSheet(name); err != nil {
-			return nil, err
+		if _, err := f.NewSheet(name); err != nil {
+			return err
 		}
-		if err := writeSheet(f, name, meta, rep, styles); err != nil {
-			return nil, err
+		if err := writeSheet(f, name, rep, styles); err != nil {
+			return err
 		}
 	}
-
-	var buf bytes.Buffer
-	if err := f.Write(&buf); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
+	return nil
 }
 
 type sheetStyles struct {
-	title  int
 	header int
 	group  [3]int // жирность по уровню: 0 — самый крупный
 	leaf   int
@@ -76,19 +57,23 @@ type sheetStyles struct {
 	moneyB int
 }
 
+// font — базовый шрифт листа. Возвращаем новый объект на каждый стиль:
+// excelize держит указатель, и общий на всех давал бы одну правку на всю
+// книгу.
+func font(bold bool, size float64) *excelize.Font {
+	return &excelize.Font{Family: FontName, Bold: bold, Size: size}
+}
+
+const baseSize = 11
+
 func newStyles(f *excelize.File) (*sheetStyles, error) {
 	s := &sheetStyles{}
 	var err error
 
 	mk := func(st *excelize.Style) (int, error) { return f.NewStyle(st) }
 
-	if s.title, err = mk(&excelize.Style{
-		Font: &excelize.Font{Bold: true, Size: 13},
-	}); err != nil {
-		return nil, err
-	}
 	if s.header, err = mk(&excelize.Style{
-		Font:      &excelize.Font{Bold: true},
+		Font:      font(true, baseSize),
 		Alignment: &excelize.Alignment{Horizontal: "center", WrapText: true},
 		Border:    bottomBorder(),
 	}); err != nil {
@@ -97,24 +82,25 @@ func newStyles(f *excelize.File) (*sheetStyles, error) {
 	// Три уровня группировки: чем выше, тем крупнее.
 	sizes := [3]float64{12, 11, 11}
 	for i := range s.group {
-		if s.group[i], err = mk(&excelize.Style{
-			Font: &excelize.Font{Bold: true, Size: sizes[i]},
-		}); err != nil {
+		if s.group[i], err = mk(&excelize.Style{Font: font(true, sizes[i])}); err != nil {
 			return nil, err
 		}
 	}
-	if s.leaf, err = mk(&excelize.Style{}); err != nil {
+	if s.leaf, err = mk(&excelize.Style{Font: font(false, baseSize)}); err != nil {
 		return nil, err
 	}
 	// Денежный формат с разделителем тысяч. Запятая в коде формата — это
 	// ПЛЕЙСХОЛДЕР разделителя тысяч, а не сам символ: Excel подставит
 	// разделитель своей локали (в русской — неразрывный пробел).
 	const numFmt = `#,##0.00`
-	if s.money, err = mk(&excelize.Style{CustomNumFmt: strPtr(numFmt)}); err != nil {
+	if s.money, err = mk(&excelize.Style{
+		Font:         font(false, baseSize),
+		CustomNumFmt: strPtr(numFmt),
+	}); err != nil {
 		return nil, err
 	}
 	if s.moneyB, err = mk(&excelize.Style{
-		Font:         &excelize.Font{Bold: true},
+		Font:         font(true, baseSize),
 		CustomNumFmt: strPtr(numFmt),
 	}); err != nil {
 		return nil, err
@@ -128,30 +114,18 @@ func bottomBorder() []excelize.Border {
 	return []excelize.Border{{Type: "bottom", Color: "BFBFBF", Style: 1}}
 }
 
-func writeSheet(f *excelize.File, sheet string, meta Meta, rep *Report, st *sheetStyles) error {
+// writeSheet раскладывает отчёт по листу. Лист начинается сразу с
+// таблицы: название проекта и версия — в имени файла, а внутри книги
+// шапка только мешала бы сводить листы формулами.
+func writeSheet(f *excelize.File, sheet string, rep *Report, st *sheetStyles) error {
 	cell := func(col, row int) string {
 		name, _ := excelize.CoordinatesToCellName(col, row)
 		return name
 	}
 
-	// ── Шапка ───────────────────────────────────────────────────────────
-	var version string
-	if meta.VersionNo > 0 {
-		version = fmt.Sprintf("Версия %d", meta.VersionNo)
-		if meta.VersionLabel != "" {
-			version += " (" + meta.VersionLabel + ")"
-		}
-	}
-	title := SheetTitle(rep.Kind) + " — " + meta.ProjectName
-	_ = f.SetCellStr(sheet, cell(colCode, 1), title)
-	_ = f.SetCellStyle(sheet, cell(colCode, 1), cell(colCode, 1), st.title)
-
-	sub := strings.Join(nonEmpty(meta.Customer, meta.ExecutorName, version), " · ")
-	_ = f.SetCellStr(sheet, cell(colCode, 2), sub)
-
 	// ── Заголовок таблицы ───────────────────────────────────────────────
-	const hdr = 4
-	_ = f.SetCellStr(sheet, cell(colCode, hdr), "Код")
+	const hdr = 1
+	_ = f.SetCellStr(sheet, cell(colCode, hdr), "Кодификатор")
 	_ = f.SetCellStr(sheet, cell(colName, hdr), "Статья оборотов")
 	for i, label := range rep.MonthLabels {
 		_ = f.SetCellStr(sheet, cell(firstCol+i, hdr), label)
@@ -197,7 +171,7 @@ func writeSheet(f *excelize.File, sheet string, meta Meta, rep *Report, st *shee
 	}
 
 	// ── Ширины и закрепление ────────────────────────────────────────────
-	_ = f.SetColWidth(sheet, "A", "A", 12)
+	_ = f.SetColWidth(sheet, "A", "A", 14)
 	_ = f.SetColWidth(sheet, "B", "B", 52)
 	firstMonth, _ := excelize.ColumnNumberToName(firstCol)
 	lastCol, _ := excelize.ColumnNumberToName(totalCol)
@@ -213,33 +187,4 @@ func writeSheet(f *excelize.File, sheet string, meta Meta, rep *Report, st *shee
 		TopLeftCell: cell(firstCol, hdr+1),
 		ActivePane:  "bottomRight",
 	})
-}
-
-func nonEmpty(vals ...string) []string {
-	out := make([]string, 0, len(vals))
-	for _, v := range vals {
-		if strings.TrimSpace(v) != "" {
-			out = append(out, v)
-		}
-	}
-	return out
-}
-
-// FileName — имя файла выгрузки. Русское, поэтому отдаётся с filename*.
-func FileName(meta Meta) string {
-	name := "БДР_БДДС"
-	if meta.ProjectName != "" {
-		name += "_" + meta.ProjectName
-	}
-	if meta.VersionNo > 0 {
-		name += fmt.Sprintf("_в%d", meta.VersionNo)
-	}
-	// Символы, недопустимые в именах файлов.
-	name = strings.Map(func(r rune) rune {
-		if strings.ContainsRune(`/\:*?"<>|`, r) {
-			return '_'
-		}
-		return r
-	}, name)
-	return name + ".xlsx"
 }
