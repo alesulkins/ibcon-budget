@@ -3,6 +3,7 @@ package references
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -40,6 +41,12 @@ func (h *Handler) Register(r gin.IRouter) {
 	ge.PUT("/work-modes/:id", h.updateWorkMode)
 	ge.POST("/cost-items", h.createCostItem)
 	ge.PUT("/cost-items/:id", h.updateCostItem)
+
+	// Города и оклады должности по городам. Список городов читают формы
+	// должности, поэтому просмотр — всем авторизованным.
+	refs.GET("/cities", h.listCities)
+	ge.POST("/cities", h.createCity)
+	ge.PUT("/positions/:id/salaries", h.setCitySalaries)
 }
 
 // activeOnly — по умолчанию отдаём только активные записи: списки
@@ -253,4 +260,82 @@ func (h *Handler) updateCostItem(c *gin.Context) {
 	}
 	h.audit.Log(auditlog.Entry{UserID: &cl.UserID, UserRole: cl.Role, Action: "update_cost_item", ObjectType: "cost_item", ObjectID: &id})
 	c.JSON(http.StatusOK, ci)
+}
+
+// ---- Cities ----
+
+func (h *Handler) listCities(c *gin.Context) {
+	rows, err := h.svc.ListCities(activeOnly(c))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, rows)
+}
+
+func (h *Handler) createCity(c *gin.Context) {
+	var body struct {
+		Name string `json:"name" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	cl := middleware.GetClaims(c)
+	city, err := h.svc.CreateCity(strings.TrimSpace(body.Name), cl.UserID)
+	if err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+		return
+	}
+	h.audit.Log(auditlog.Entry{
+		UserID: &cl.UserID, UserRole: cl.Role,
+		Action: "create_city", ObjectType: "city", ObjectID: &city.ID,
+		Comment: city.Name,
+	})
+	c.JSON(http.StatusCreated, city)
+}
+
+// setCitySalaries заменяет оклады должности по городам целиком: город,
+// пропавший из списка, теряет свою ставку — иначе снятую строку было бы
+// нечем удалить.
+func (h *Handler) setCitySalaries(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
+	var body struct {
+		Salaries []CitySalary `json:"salaries"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	for _, cs := range body.Salaries {
+		if cs.Salary < 0 {
+			c.JSON(http.StatusUnprocessableEntity,
+				gin.H{"error": "оклад не может быть отрицательным"})
+			return
+		}
+	}
+
+	cl := middleware.GetClaims(c)
+	if err := h.svc.SetCitySalaries(id, body.Salaries, cl.UserID); err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+		return
+	}
+	h.audit.Log(auditlog.Entry{
+		UserID: &cl.UserID, UserRole: cl.Role,
+		Action: "update_position", ObjectType: "position", ObjectID: &id,
+		Comment: "оклады по городам",
+	})
+
+	rows, err := h.svc.ListPositions(false)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	for _, p := range rows {
+		if p.ID == id {
+			c.JSON(http.StatusOK, p)
+			return
+		}
+	}
+	c.JSON(http.StatusNotFound, gin.H{"error": "должность не найдена"})
 }

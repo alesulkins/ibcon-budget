@@ -163,6 +163,7 @@ export default function BudgetVersionPage() {
             duration={duration}
             startDate={project!.start_date}
             executor={project!.executor_name}
+            location={project!.location}
             readonly={isReadonly}
           />
         );

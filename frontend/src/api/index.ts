@@ -3,7 +3,7 @@ import type {
   AuthResponse, User,
   Project, ProjectListItem,
   BudgetVersion, CalcResult, BudgetReport,
-  Executor, Position, WorkMode, CostItem,
+  Executor, Position, WorkMode, CostItem, City, CitySalary,
   AuditEntry, PaginatedResponse, Profile,
 } from '../types';
 
@@ -109,6 +109,20 @@ export const refsApi = {
     client.post<WorkMode>('/references/work-modes', data).then(r => r.data),
   updateWorkMode: (id: number, data: { full_name?: string; active?: boolean }) =>
     client.put<WorkMode>(`/references/work-modes/${id}`, data).then(r => r.data),
+
+  /** Города для окладов должности. Пополняются прямо в форме должности. */
+  cities: (all?: boolean) =>
+    client.get<City[]>('/references/cities', allParams(all)).then(r => r.data),
+  createCity: (name: string) =>
+    client.post<City>('/references/cities', { name }).then(r => r.data),
+
+  /**
+   * Заменяет оклады должности по городам целиком: город, пропавший из
+   * списка, теряет ставку — иначе снятую строку нечем было бы удалить.
+   */
+  setCitySalaries: (positionId: number, salaries: CitySalary[]) =>
+    client.put<Position>(`/references/positions/${positionId}/salaries`, { salaries })
+      .then(r => r.data),
 
   createCostItem: (data: { name: string }) =>
     client.post<CostItem>('/references/cost-items', data).then(r => r.data),

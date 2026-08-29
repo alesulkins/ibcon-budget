@@ -7,12 +7,14 @@ import { PlusOutlined, EditOutlined, LockOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
 import { refsApi } from '../../api';
-import type { Executor, Position, WorkMode, CostItem } from '../../types';
+import type { Executor, Position, WorkMode, CostItem, CitySalary } from '../../types';
 import { PERM, usePermissions } from '../../store/permissions';
 import { extractError } from '../../api/client';
 import { fmtDateTime, fmtNum, thousandFormatter, thousandParser } from '../../utils/fmt';
 import { shortName } from '../../utils/names';
 import StatusTag from '../../components/StatusTag';
+import { TEXT_SOFT } from '../../theme';
+import CitySalaries from './CitySalaries';
 import { useFillToSiderFooter } from '../../hooks/useFillHeight';
 
 const { Text } = Typography;
@@ -304,9 +306,13 @@ function PositionsTab({ addSignal }: TabProps) {
   const qc = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Position | null>(null);
+  // Оклады по городам живут отдельно от формы: они не поле, а таблица, и
+  // сохраняются своим запросом.
+  const [citySalaries, setCitySalaries] = useState<CitySalary[]>([]);
   const [form] = Form.useForm();
 
   const openAdd = useCallback(() => {
+    setCitySalaries([]);
     setEditing(null);
     form.resetFields();
     setShowModal(true);
@@ -325,7 +331,11 @@ function PositionsTab({ addSignal }: TabProps) {
   };
 
   const createMutation = useMutation({
-    mutationFn: (vals: { name: string; salary?: number }) => refsApi.createPosition(vals),
+    mutationFn: async (vals: { name: string; salary?: number }) => {
+      const p = await refsApi.createPosition(vals);
+      if (citySalaries.length === 0) return p;
+      return refsApi.setCitySalaries(p.id, citySalaries);
+    },
     onSuccess: () => {
       invalidate();
       message.success('Должность добавлена');
@@ -336,8 +346,12 @@ function PositionsTab({ addSignal }: TabProps) {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (vals: { name?: string; salary?: number; active?: boolean }) =>
-      refsApi.updatePosition(editing!.id, vals),
+    mutationFn: async (vals: { name?: string; salary?: number; active?: boolean }) => {
+      const p = await refsApi.updatePosition(editing!.id, vals);
+      // Оклады по городам — отдельный запрос: они хранятся своей
+      // таблицей, а не полем должности.
+      return refsApi.setCitySalaries(p.id, citySalaries);
+    },
     onSuccess: () => {
       invalidate();
       message.success('Обновлено');
@@ -354,9 +368,26 @@ function PositionsTab({ addSignal }: TabProps) {
       title: 'Зарплата, ₽',
       dataIndex: 'salary',
       className: 'ibcon-num',
-      width: 160,
+      width: 220,
       sorter: activeFirst<Position>((a, b) => a.salary - b.salary),
-      render: (v: number) => fmtNum(v),
+      render: (v: number, r: Position) => {
+        const cities = r.city_salaries ?? [];
+        if (cities.length === 0) return fmtNum(v);
+        // Городские ставки важнее оклада по умолчанию: именно они
+        // подставляются в мастер, если город проекта совпал.
+        return (
+          <Tooltip
+            title={cities.map(cs => `${cs.city_name}: ${fmtNum(cs.salary)} ₽`).join('\n')}
+          >
+            <span>
+              {fmtNum(v)}
+              <span style={{ color: TEXT_SOFT, fontSize: 12 }}>
+                {' '}· {cities.length} гор.
+              </span>
+            </span>
+          </Tooltip>
+        );
+      },
     },
     statusColumn<Position>(),
     editorColumn<Position>(),
@@ -366,7 +397,12 @@ function PositionsTab({ addSignal }: TabProps) {
       title: '', key: 'edit', width: 60, fixed: 'right' as const,
       render: (_: unknown, r: Position) => (
         <Button size="small" icon={<EditOutlined />}
-          onClick={() => { setEditing(r); form.setFieldsValue(r); setShowModal(true); }} />
+          onClick={() => {
+            setEditing(r);
+            setCitySalaries(r.city_salaries ?? []);
+            form.setFieldsValue(r);
+            setShowModal(true);
+          }} />
       ),
     }] : []),
   ];
@@ -402,6 +438,12 @@ function PositionsTab({ addSignal }: TabProps) {
               formatter={thousandFormatter}
               parser={thousandParser}
             />
+          </Form.Item>
+          <Form.Item
+            label="Зарплата по городам"
+            extra="В разных городах за одну и ту же работу платят по-разному."
+          >
+            <CitySalaries value={citySalaries} onChange={setCitySalaries} />
           </Form.Item>
           {editing && (
             <Form.Item

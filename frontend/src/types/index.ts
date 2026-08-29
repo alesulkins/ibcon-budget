@@ -92,8 +92,46 @@ export interface Executor extends ReferenceRow {
 
 export interface Position extends ReferenceRow {
   name: string;
-  /** Оклад по умолчанию для шага «Сотрудники» мастера. */
+  /**
+   * Оклад ПО УМОЛЧАНИЮ: применяется там, где для города проекта своей
+   * ставки не задали.
+   */
   salary: number;
+  /**
+   * Оклад по городам: в разных городах за одну работу платят по-разному,
+   * и в мастер подставляется ставка города проекта.
+   */
+  city_salaries?: CitySalary[];
+}
+
+/** Город из справочника городов. Список пополняется в форме должности. */
+export interface City {
+  id: number;
+  name: string;
+  active: boolean;
+  updated_at: string;
+}
+
+/** Оклад должности в конкретном городе. */
+export interface CitySalary {
+  city_id: number;
+  city_name: string;
+  salary: number;
+}
+
+/**
+ * Оклад должности в городе проекта. Города сравниваем по имени и
+ * регистронезависимо: в карточке проекта город записан строкой, а не
+ * ссылкой на справочник. Своей ставки нет — берётся оклад по умолчанию.
+ *
+ * Тот же порядок независимо повторяет бэкенд (references.SalaryFor):
+ * там он нужен на случай, если оклад подставляется не из формы.
+ */
+export function salaryForCity(position: Position, location: string): number {
+  const key = location.trim().toLowerCase();
+  const hit = (position.city_salaries ?? [])
+    .find(cs => cs.city_name.trim().toLowerCase() === key);
+  return hit ? hit.salary : position.salary;
 }
 
 export interface WorkMode extends ReferenceRow {

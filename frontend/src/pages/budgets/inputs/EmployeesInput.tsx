@@ -8,7 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
 import { budgetsApi, refsApi } from '../../../api';
 import type { Employee, InputEmployees } from '../../../types';
-import { scheduleMultiplier } from '../../../types';
+import { scheduleMultiplier, salaryForCity } from '../../../types';
 import { monthLabel, thousandFormatter, thousandParser, fmtNum } from '../../../utils/fmt';
 import MonthGrid, {
   monthGridCell, monthGridHeadCell, LABEL_COL_WIDTH,
@@ -54,6 +54,11 @@ interface Props {
   startDate: string;
   /** Исполнитель проекта — от него зависит список доступных стран НО. */
   executor?: string;
+  /**
+   * Город проекта (projects.location). От него зависит оклад: в разных
+   * городах за одну и ту же должность платят по-разному.
+   */
+  location?: string;
   readonly?: boolean;
 }
 
@@ -81,7 +86,7 @@ const DEFAULT_EMP: InputEmployees = {
 };
 
 export default function EmployeesInput({
-  versionId, duration, startDate, executor, readonly,
+  versionId, duration, startDate, executor, location, readonly,
 }: Props) {
   /**
    * Страна НО «Киргизия» допустима только у киргизского исполнителя:
@@ -160,8 +165,11 @@ export default function EmployeesInput({
    * потом на неё не влияет.
    */
   function onPositionChange(name: string) {
-    const salary = (positions ?? []).find(p => p.name === name)?.salary;
-    if (salary !== undefined) empForm.setFieldValue('salary_net', salary);
+    const p = (positions ?? []).find(x => x.name === name);
+    if (!p) return;
+    // Оклад берём для ГОРОДА ПРОЕКТА: в разных городах ставки разные.
+    // Если для этого города ставки нет, подставится оклад по умолчанию.
+    empForm.setFieldValue('salary_net', salaryForCity(p, location ?? ''));
   }
 
   function addEmployee(vals: Record<string, unknown>) {
@@ -385,7 +393,9 @@ export default function EmployeesInput({
             name="position"
             label="Должность (Специалист)"
             rules={[{ required: true, message: 'Укажите должность' }]}
-            extra="Из справочника должностей. Оклад подставится автоматически — его можно изменить ниже."
+            extra={location
+              ? `Из справочника должностей. Оклад подставится по городу «${location}» — его можно изменить ниже.`
+              : 'Из справочника должностей. Оклад подставится автоматически — его можно изменить ниже.'}
           >
             <Select
               showSearch

@@ -94,7 +94,112 @@ const positionCols = `t.id, t.name, t.salary, t.active, t.updated_at, t.updated_
 func (s *Service) ListPositions(activeOnly bool) ([]Position, error) {
 	q := withEditor("positions", positionCols) + activeFilter(activeOnly) + ` ORDER BY t.name`
 	rows := []Position{}
+	if err := s.db.Select(&rows, q); err != nil {
+		return rows, err
+	}
+	return rows, s.attachCitySalaries(rows)
+}
+
+// attachCitySalaries добирает оклады по городам одним запросом на весь
+// список: по запросу на должность список из полусотни строк лёг бы.
+func (s *Service) attachCitySalaries(rows []Position) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	var flat []struct {
+		PositionID int     `db:"position_id"`
+		CityID     int     `db:"city_id"`
+		CityName   string  `db:"city_name"`
+		Salary     float64 `db:"salary"`
+	}
+	err := s.db.Select(&flat, `
+		SELECT pcs.position_id, pcs.city_id, c.name AS city_name, pcs.salary
+		FROM position_city_salaries pcs
+		JOIN cities c ON c.id = pcs.city_id
+		ORDER BY c.name`)
+	if err != nil {
+		return err
+	}
+
+	byPosition := make(map[int][]CitySalary, len(rows))
+	for _, f := range flat {
+		byPosition[f.PositionID] = append(byPosition[f.PositionID],
+			CitySalary{CityID: f.CityID, CityName: f.CityName, Salary: f.Salary})
+	}
+	for i := range rows {
+		rows[i].CitySalaries = byPosition[rows[i].ID]
+	}
+	return nil
+}
+
+// SalaryFor — оклад должности в городе location.
+//
+// Город берётся из карточки проекта строкой, поэтому сравниваем по
+// имени и регистронезависимо: «Санкт-Петербург» и «санкт-петербург» —
+// один и тот же город. Если для города ставки нет, возвращается оклад
+// по умолчанию (positions.salary).
+func (s *Service) SalaryFor(positionName, location string) (float64, error) {
+	var salary float64
+	err := s.db.Get(&salary, `
+		SELECT COALESCE(
+			(SELECT pcs.salary
+			   FROM position_city_salaries pcs
+			   JOIN cities c ON c.id = pcs.city_id
+			  WHERE pcs.position_id = p.id
+			    AND lower(btrim(c.name)) = lower(btrim($2))),
+			p.salary)
+		FROM positions p
+		WHERE lower(btrim(p.name)) = lower(btrim($1))`,
+		positionName, location)
+	return salary, err
+}
+
+// ---------- Cities ----------
+
+func (s *Service) ListCities(activeOnly bool) ([]City, error) {
+	q := `SELECT id, name, active, updated_at FROM cities`
+	if activeOnly {
+		q += ` WHERE active = TRUE`
+	}
+	q += ` ORDER BY name`
+	rows := []City{}
 	return rows, s.db.Select(&rows, q)
+}
+
+// CreateCity добавляет город. Повторное имя не ошибка: возвращаем
+// существующий — форма должности добавляет город на лету, и «уже есть»
+// там не отказ, а обычный исход.
+func (s *Service) CreateCity(name string, by int) (*City, error) {
+	var c City
+	err := s.db.QueryRowx(`
+		INSERT INTO cities (name, updated_by) VALUES ($1, $2)
+		ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+		RETURNING id, name, active, updated_at`, name, by).StructScan(&c)
+	return &c, err
+}
+
+// SetCitySalaries заменяет оклады должности по городам на переданные.
+// Город без ставки в списке — оклад для него снимается: иначе снятую
+// строку было бы нечем удалить.
+func (s *Service) SetCitySalaries(positionID int, salaries []CitySalary, by int) error {
+	tx, err := s.db.Beginx()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.Exec(
+		`DELETE FROM position_city_salaries WHERE position_id = $1`, positionID); err != nil {
+		return err
+	}
+	for _, cs := range salaries {
+		if _, err := tx.Exec(`
+			INSERT INTO position_city_salaries (position_id, city_id, salary, updated_by)
+			VALUES ($1, $2, $3, $4)`, positionID, cs.CityID, cs.Salary, by); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func (s *Service) CreatePosition(name string, salary float64, by int) (*Position, error) {

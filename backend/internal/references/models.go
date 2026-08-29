@@ -29,10 +29,17 @@ type Position struct {
 	ID   int    `db:"id"   json:"id"`
 	Name string `db:"name" json:"name"`
 
-	// Salary — оклад по умолчанию для шага «Сотрудники» мастера.
-	// Ручной ввод главного экономиста; экономист проекта может изменить
-	// подставленное значение в самой форме, подтверждения не требуется.
+	// Salary — оклад ПО УМОЛЧАНИЮ: применяется там, где для города
+	// проекта своей ставки не задали. Ручной ввод главного экономиста;
+	// экономист проекта может изменить подставленное значение в самой
+	// форме, подтверждения не требуется.
 	Salary float64 `db:"salary" json:"salary"`
+
+	// CitySalaries — оклад по городам: в разных городах за одну и ту же
+	// работу платят по-разному, и в мастер подставляется ставка города
+	// проекта (projects.location). Заполняется только в списке
+	// должностей — отдельным запросом на каждую строку список бы лёг.
+	CitySalaries []CitySalary `db:"-" json:"city_salaries,omitempty"`
 
 	Active        bool      `db:"active"          json:"active"`
 	UpdatedAt     time.Time `db:"updated_at"      json:"updated_at"`
@@ -64,4 +71,21 @@ type CostItem struct {
 	UpdatedAt     time.Time `db:"updated_at"      json:"updated_at"`
 	UpdatedBy     *int      `db:"updated_by"      json:"updated_by,omitempty"`
 	UpdatedByName *string   `db:"updated_by_name" json:"updated_by_name,omitempty"`
+}
+
+// City — город из справочника городов. Список пополняется прямо в форме
+// должности: держать город свободной строкой нельзя, опечатка создала бы
+// «второй Петербург» с отдельными окладами.
+type City struct {
+	ID        int       `db:"id"         json:"id"`
+	Name      string    `db:"name"       json:"name"`
+	Active    bool      `db:"active"     json:"active"`
+	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
+}
+
+// CitySalary — оклад должности в конкретном городе.
+type CitySalary struct {
+	CityID   int     `db:"city_id"   json:"city_id"`
+	CityName string  `db:"city_name" json:"city_name"`
+	Salary   float64 `db:"salary"    json:"salary"`
 }
