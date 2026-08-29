@@ -17,6 +17,7 @@ import { clearAuth, currentUser } from '../store/auth';
 import { PERM, usePermissions } from '../store/permissions';
 import { useScrollRestore, SCROLL_ROOT_ID } from '../hooks/useScrollRestore';
 import { SIDER_FOOTER_ID } from '../hooks/useFillHeight';
+import ReminderPopups from './ReminderPopups';
 import { BRAND } from '../theme';
 
 const { Header, Sider, Content } = Layout;
@@ -409,8 +410,11 @@ export default function AppLayout() {
       }}>
         {/* Шапка стоит вне прокручиваемой панели, поэтому не «липкая»:
             уезжать ей не от чего. */}
+        {/* Фон и линия шапки — переменными, а не литералами: в тёмной
+            теме белая полупрозрачная подложка оставляла тёмный текст на
+            почти белом стекле. Переменные подменяет ThemedApp. */}
         <Header style={{
-          background: 'rgba(255,255,255,0.86)',
+          background: 'var(--ibcon-header-bg)',
           backdropFilter: 'blur(12px)',
           padding: '0 24px',
           flexShrink: 0,
@@ -418,8 +422,8 @@ export default function AppLayout() {
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: 16,
-          borderBottom: '1px solid rgba(0,0,0,0.06)',
-          boxShadow: '0 2px 10px rgba(16, 30, 54, 0.035)',
+          borderBottom: '1px solid var(--ibcon-line)',
+          boxShadow: 'var(--ibcon-header-shadow)',
         }}>
           <div style={{
             display: 'flex',
@@ -443,7 +447,9 @@ export default function AppLayout() {
                   ? <a onClick={() => navigate(c.to!)}>{c.title || '…'}</a>
                   : (
                     <span style={{
-                      color: c.title ? '#262626' : 'transparent',
+                      // Цвет переменной, а не литералом: в тёмной теме
+                      // тёмно-серый заголовок пропадал на тёмной шапке.
+                      color: c.title ? 'var(--ibcon-text)' : 'transparent',
                       fontWeight: 500,
                     }}>
                       {c.title || '…'}
@@ -487,6 +493,10 @@ export default function AppLayout() {
             </div>
           </Dropdown>
         </Header>
+
+        {/* Напоминания догоняют человека на любой странице, поэтому
+            живут в каркасе, а не в личном кабинете. */}
+        <ReminderPopups />
 
         <Content
           id={SCROLL_ROOT_ID}

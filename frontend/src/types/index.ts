@@ -581,6 +581,14 @@ export interface Profile {
   /** Эмодзи или data:-URL загруженной картинки. Пусто — показываем инициалы. */
   avatar: string;
   notes: string;
+  /**
+   * Слать ли напоминания письмом. Тумблер общий на все напоминания: это
+   * настройка доставки, а не свойство записи. Выключен — напоминание
+   * только всплывает на экране.
+   */
+  email_reminders: boolean;
+  /** Размер шрифта, тема и цвета. Пустой объект — всё по умолчанию. */
+  ui_settings: UISettings;
   /** Что пользователь может хотя бы где-нибудь. Коды — store/permissions.ts. */
   permissions: string[];
 }
@@ -614,4 +622,58 @@ export interface BudgetReport {
   months: number;
   month_labels: string[];
   rows: ReportRow[];
+}
+
+// ─── Напоминания ────────────────────────────────────────────────────────────
+
+/**
+ * Напоминание — заметка со сроком: когда срок наступил, оно всплывает
+ * уведомлением, а при включённой почте ещё и уходит письмом.
+ */
+export interface Reminder {
+  id: number;
+  user_id: number;
+  text: string;
+  /** ISO-время срока. */
+  remind_at: string;
+  /** Заполнено — уведомление уже показывали, повторно оно не всплывёт. */
+  shown_at?: string;
+  /** Заполнено — письмо ушло. Пусто при выключенной почте. */
+  emailed_at?: string;
+  done: boolean;
+  created_at: string;
+}
+
+// ─── Настройки интерфейса ───────────────────────────────────────────────────
+
+export const FONT_SIZES = {
+  small: 'small',
+  normal: 'normal',
+  large: 'large',
+} as const;
+
+export type FontSize = (typeof FONT_SIZES)[keyof typeof FONT_SIZES];
+
+export const FONT_SIZE_LABELS: Record<FontSize, string> = {
+  small: 'Мелкий',
+  normal: 'Обычный',
+  large: 'Крупный',
+};
+
+export type ThemeMode = 'light' | 'dark';
+
+/**
+ * Персональные настройки интерфейса. Хранятся в учётной записи, а не в
+ * браузере, чтобы человек видел свой интерфейс на любом устройстве.
+ *
+ * Все поля необязательные: у давних учёток объект пустой, и каждая
+ * настройка падает на своё значение по умолчанию.
+ */
+export interface UISettings {
+  font_size?: FontSize;
+  theme?: ThemeMode;
+  /** Фирменный цвет: им красится всё, что раньше было синим. */
+  brand_color?: string;
+  /** Цвет всплывающих уведомлений. */
+  notice_color?: string;
 }

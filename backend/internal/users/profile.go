@@ -1,6 +1,7 @@
 package users
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -27,6 +28,17 @@ type Profile struct {
 	Avatar   string `db:"avatar"    json:"avatar"`
 	Notes    string `db:"notes"     json:"notes"`
 
+	// EmailReminders — слать ли напоминания письмом. Тумблер общий на
+	// все напоминания: это настройка доставки, а не свойство записи.
+	// Выключен — напоминание только всплывает на экране.
+	EmailReminders bool `db:"email_reminders" json:"email_reminders"`
+
+	// UISettings — размер шрифта, тема и цвета интерфейса. Хранятся в
+	// учётке, а не в браузере, чтобы человек видел свой интерфейс на
+	// любом устройстве. Формат свободный: набор настроек будет расти, и
+	// миграция на каждый переключатель — лишняя.
+	UISettings json.RawMessage `db:"ui_settings" json:"ui_settings"`
+
 	// Permissions — что пользователь может хотя бы где-нибудь.
 	// По этому списку фронт решает, показывать ли пункты меню и кнопки
 	// создания. Заполняется обработчиком, в таблице такой колонки нет.
@@ -34,11 +46,17 @@ type Profile struct {
 }
 
 type UpdateProfileRequest struct {
-	// Оба поля указательные: nil означает «не менять».
+	// Поля указательные: nil означает «не менять».
 	// ФИО через профиль не меняется — им управляет главный экономист.
-	Avatar *string `json:"avatar"`
-	Notes  *string `json:"notes"`
+	Avatar         *string          `json:"avatar"`
+	Notes          *string          `json:"notes"`
+	EmailReminders *bool            `json:"email_reminders"`
+	UISettings     *json.RawMessage `json:"ui_settings"`
 }
+
+// maxUISettingsLen — настройки интерфейса это горстка полей, а не
+// хранилище: ограничение отсекает попытку положить в профиль что-то ещё.
+const maxUISettingsLen = 4_000
 
 type ChangePasswordRequest struct {
 	CurrentPassword string `json:"current_password" binding:"required"`
@@ -49,7 +67,9 @@ type ChangePasswordRequest struct {
 func (s *Service) GetProfile(userID int) (*Profile, error) {
 	var p Profile
 	err := s.db.Get(&p,
-		`SELECT id, email, full_name, role, avatar, notes FROM users WHERE id=$1`,
+		`SELECT id, email, full_name, role, avatar, notes,
+		        email_reminders, ui_settings
+		 FROM users WHERE id=$1`,
 		userID)
 	if err != nil {
 		return nil, errors.New("пользователь не найден")
@@ -67,14 +87,32 @@ func (s *Service) UpdateProfile(userID int, req UpdateProfileRequest) (*Profile,
 	if req.Notes != nil && utf8.RuneCountInString(*req.Notes) > maxNotesLen {
 		return nil, fmt.Errorf("заметки слишком длинные (максимум %d символов)", maxNotesLen)
 	}
+	if req.UISettings != nil {
+		if len(*req.UISettings) > maxUISettingsLen {
+			return nil, fmt.Errorf("настройки интерфейса слишком велики (максимум %d байт)",
+				maxUISettingsLen)
+		}
+		if !json.Valid(*req.UISettings) {
+			return nil, errors.New("настройки интерфейса: некорректный JSON")
+		}
+	}
+
+	// UISettings в COALESCE не завернуть напрямую: json.RawMessage это
+	// []byte, и драйвер отдал бы его как строку, а колонка jsonb.
+	var ui any
+	if req.UISettings != nil {
+		ui = []byte(*req.UISettings)
+	}
 
 	_, err := s.db.Exec(`
 		UPDATE users
-		SET avatar     = COALESCE($1, avatar),
-		    notes      = COALESCE($2, notes),
-		    updated_at = NOW()
-		WHERE id=$3`,
-		req.Avatar, req.Notes, userID)
+		SET avatar          = COALESCE($1, avatar),
+		    notes           = COALESCE($2, notes),
+		    email_reminders = COALESCE($3, email_reminders),
+		    ui_settings     = COALESCE($4::jsonb, ui_settings),
+		    updated_at      = NOW()
+		WHERE id=$5`,
+		req.Avatar, req.Notes, req.EmailReminders, ui, userID)
 	if err != nil {
 		return nil, err
 	}

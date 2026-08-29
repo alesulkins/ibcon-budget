@@ -20,6 +20,15 @@ type Config struct {
 	JWTExpiryHours int
 
 	ServerPort string
+
+	// SMTP — почтовый сервер для напоминаний. Пустой хост означает, что
+	// отправка выключена: письма не уходят, напоминания продолжают
+	// всплывать на экране (см. internal/reminders/mailer.go).
+	SMTPHost string
+	SMTPPort string
+	SMTPUser string
+	SMTPPass string
+	SMTPFrom string
 }
 
 func Load() (*Config, error) {
@@ -37,6 +46,11 @@ func Load() (*Config, error) {
 		DBPassword:     getEnv("DB_PASSWORD", "ibcon_secret"),
 		DBName:         getEnv("DB_NAME", "ibcon_budget"),
 		DBSSLMode:      getEnv("DB_SSLMODE", "disable"),
+		SMTPHost:       getEnv("SMTP_HOST", ""),
+		SMTPPort:       getEnv("SMTP_PORT", "587"),
+		SMTPUser:       getEnv("SMTP_USER", ""),
+		SMTPPass:       getEnv("SMTP_PASSWORD", ""),
+		SMTPFrom:       getEnv("SMTP_FROM", ""),
 		JWTSecret:      getEnv("JWT_SECRET", "changeme"),
 		JWTExpiryHours: expiryHours,
 		ServerPort:     getEnv("SERVER_PORT", "8080"),

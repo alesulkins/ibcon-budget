@@ -1,6 +1,8 @@
 package main
 
 import (
+	"time"
+
 	"log/slog"
 	"os"
 
@@ -14,6 +16,7 @@ import (
 	"ibcon-budget/internal/middleware"
 	"ibcon-budget/internal/projects"
 	"ibcon-budget/internal/references"
+	"ibcon-budget/internal/reminders"
 	"ibcon-budget/internal/users"
 	"ibcon-budget/pkg/config"
 	"ibcon-budget/pkg/logger"
@@ -67,6 +70,20 @@ func main() {
 
 	refSvc := references.NewService(database)
 	references.NewHandler(refSvc, acl, auditSvc).Register(protected)
+
+	// Напоминания личного кабинета. Рассылка писем стартует только при
+	// настроенном SMTP; иначе напоминания всплывают на экране, а воркер
+	// не запускается вовсе.
+	remSvc := reminders.NewService(database)
+	reminders.NewHandler(remSvc).Register(protected)
+	reminders.NewWorker(
+		remSvc,
+		reminders.NewMailer(reminders.SMTPConfig{
+			Host: cfg.SMTPHost, Port: cfg.SMTPPort,
+			User: cfg.SMTPUser, Pass: cfg.SMTPPass, From: cfg.SMTPFrom,
+		}),
+		time.Minute,
+	).Start()
 
 	projectsSvc := projects.NewService(database)
 	projects.NewHandler(projectsSvc, usersSvc, acl, auditSvc).Register(protected)

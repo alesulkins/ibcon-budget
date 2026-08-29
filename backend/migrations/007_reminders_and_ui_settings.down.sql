@@ -1,0 +1,3 @@
+ALTER TABLE users DROP COLUMN IF EXISTS ui_settings;
+ALTER TABLE users DROP COLUMN IF EXISTS email_reminders;
+DROP TABLE IF EXISTS reminders;

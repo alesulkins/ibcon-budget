@@ -9,6 +9,8 @@ import {
 import type { UploadProps } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { profileApi } from '../../api';
+import Reminders from './Reminders';
+import InterfaceSettings from './InterfaceSettings';
 import { ROLE_LABELS } from '../../types';
 import type { Profile } from '../../types';
 import { initials } from '../../utils/names';
@@ -214,6 +216,20 @@ export default function ProfilePage() {
               rows={18}
               placeholder="Например: пересчитать бюджет по проекту №12 после уточнения ТКП…"
             />
+          </Card>
+        </Col>
+      </Row>
+
+      {/* ── Напоминания и настройки интерфейса ───────────────────── */}
+      <Row gutter={16} align="stretch" style={{ marginTop: 16 }}>
+        <Col xs={24} md={14}>
+          <Card size="small" title="Напоминания" style={{ height: '100%' }}>
+            <Reminders emailReminders={profile?.email_reminders ?? true} />
+          </Card>
+        </Col>
+        <Col xs={24} md={10}>
+          <Card size="small" title="Настройки интерфейса" style={{ height: '100%' }}>
+            <InterfaceSettings />
           </Card>
         </Col>
       </Row>

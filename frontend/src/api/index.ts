@@ -4,7 +4,7 @@ import type {
   Project, ProjectListItem,
   BudgetVersion, CalcResult, BudgetReport,
   Executor, Position, WorkMode, CostItem, City, CitySalary,
-  AuditEntry, PaginatedResponse, Profile,
+  AuditEntry, PaginatedResponse, Profile, Reminder, UISettings,
 } from '../types';
 
 // ─── Auth ──────────────────────────────────────────────────────────────────
@@ -19,14 +19,37 @@ export const authApi = {
 export const profileApi = {
   get: () => client.get<Profile>('/users/me').then(r => r.data),
 
-  update: (data: { avatar?: string; notes?: string }) =>
-    client.put<Profile>('/users/me', data).then(r => r.data),
+  update: (data: {
+    avatar?: string; notes?: string;
+    email_reminders?: boolean; ui_settings?: UISettings;
+  }) => client.put<Profile>('/users/me', data).then(r => r.data),
 
   changePassword: (currentPassword: string, newPassword: string) =>
     client.put<{ status: string }>('/users/me/password', {
       current_password: currentPassword,
       new_password: newPassword,
     }).then(r => r.data),
+};
+
+// ─── Напоминания ───────────────────────────────────────────────────────────
+// Напоминания личные: id владельца сервер берёт из токена, в запросах его
+// нет вовсе.
+export const remindersApi = {
+  list: () => client.get<Reminder[]>('/reminders').then(r => r.data),
+
+  create: (text: string, remindAt: string) =>
+    client.post<Reminder>('/reminders', { text, remind_at: remindAt }).then(r => r.data),
+
+  update: (id: number, data: { text?: string; remind_at?: string; done?: boolean }) =>
+    client.put<Reminder>(`/reminders/${id}`, data).then(r => r.data),
+
+  remove: (id: number) => client.delete(`/reminders/${id}`),
+
+  /** Наступившие и ещё не показанные. */
+  due: () => client.get<Reminder[]>('/reminders/due').then(r => r.data),
+
+  /** Подтвердить показ, чтобы уведомление не всплывало заново. */
+  markShown: (ids: number[]) => client.post('/reminders/shown', { ids }),
 };
 
 // ─── Users ─────────────────────────────────────────────────────────────────
