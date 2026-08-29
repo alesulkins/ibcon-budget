@@ -3,6 +3,7 @@ import { Tooltip } from 'antd';
 import type { BudgetVersion } from '../types';
 import { BUDGET_STATUS_LABELS } from '../types';
 import { LINE, BRAND, TEXT_SOFT, RADIUS } from '../theme';
+import { carryScrollTo } from '../hooks/useScrollRestore';
 
 interface Props {
   current: BudgetVersion;
@@ -59,7 +60,15 @@ export default function VersionSwitch({ current, versions }: Props) {
           >
             <button
               type="button"
-              onClick={() => { if (!active) navigate(`/budget-versions/${v.id}`); }}
+              onClick={() => {
+                if (active) return;
+                // Позицию прокрутки переносим на соседнюю версию: версии
+                // сравнивают, стоя на одном и том же месте длинной формы,
+                // и прыжок в начало сбивал бы сравнение.
+                const to = `/budget-versions/${v.id}`;
+                carryScrollTo(to);
+                navigate(to);
+              }}
               style={{
                 appearance: 'none',
                 border: 0,

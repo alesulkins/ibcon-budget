@@ -451,14 +451,37 @@ export default function BudgetVersionPage() {
       {isAP && (
         <Alert
           type="warning"
-          message="Роль Администратора проекта: доступен только раздел «Прочие расходы» (строки 178–214)"
+          message="Роль Администратора проекта: доступен только раздел «Прочие расходы» (строки 178–212)"
           showIcon style={{ marginBottom: 16 }}
         />
       )}
 
-      {/* Навигационные вкладки по шагам */}
+      {/* Навигационные вкладки по шагам.
+
+          Шапка карточки прилипает к верху рабочей области: версии
+          сравнивают, листая одни и те же длинные формы, и возвращаться
+          наверх ради переключателя каждый раз — лишний путь. Отрицательный
+          top гасит внутренний отступ рабочей области (padding: 24), иначе
+          между прилипшей полосой и краем оставалась бы щель, сквозь
+          которую видно уезжающий контент. */}
       <Card bodyStyle={{ padding: 0 }}>
-        <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--ibcon-line)' }}>
+        <div style={{
+          position: 'sticky',
+          top: -24,
+          zIndex: 5,
+          background: 'var(--ibcon-white)',
+          padding: '16px 24px',
+          borderBottom: '1px solid var(--ibcon-line)',
+          borderTopLeftRadius: 'inherit',
+          borderTopRightRadius: 'inherit',
+        }}>
+          {/* Переключатель пары версий — в прилипшей полосе, чтобы он был
+              под рукой на любой глубине прокрутки. */}
+          {siblings.length > 1 && (
+            <div style={{ marginBottom: 12 }}>
+              <VersionSwitch current={version} versions={siblings} />
+            </div>
+          )}
           <WizardSteps
             items={isAP ? [WIZARD_STEPS[apOnlyStepIdx]] : WIZARD_STEPS}
             current={isAP ? 0 : step}

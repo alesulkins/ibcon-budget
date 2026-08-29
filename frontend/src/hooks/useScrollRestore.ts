@@ -17,6 +17,23 @@ function scrollRoot(): HTMLElement | null {
 }
 
 /**
+ * Переносит запомненную позицию прокрутки на другой адрес.
+ *
+ * Нужно при переключении между версиями бюджета: адрес меняется, а формы
+ * под ним те же, и сравнивать их удобно только с одного и того же места.
+ * Позицию берём не из хранилища, а у живой панели — там она свежее: в
+ * хранилище значение попадает по событию прокрутки, а уйти со страницы
+ * можно и раньше.
+ */
+export function carryScrollTo(pathname: string) {
+  const el = scrollRoot();
+  if (!el) return;
+  try {
+    sessionStorage.setItem(KEY_PREFIX + pathname, String(el.scrollTop));
+  } catch { /* приватный режим — просто откроется сверху */ }
+}
+
+/**
  * Запоминает позицию прокрутки для каждого адреса и восстанавливает её
  * при возврате — чтобы уход в «Справочники» и обратно не выбрасывал
  * пользователя в начало длинной формы.
@@ -40,26 +57,58 @@ export function useScrollRestore() {
       saved = Number(sessionStorage.getItem(key) ?? '0');
     } catch { /* нет доступа к хранилищу — начнём сверху */ }
 
+    // Восстановление ждёт, пока панель дорастёт до нужной высоты.
+    //
+    // Сразу после навигации контента нет вовсе: версия бюджета грузится
+    // запросом, панель схлопывается, и браузер сам сбрасывает прокрутку
+    // в ноль. Пары кадров тут мало — ждём появления высоты наблюдателем
+    // за размером, с ограничением по времени, чтобы не держать его
+    // вечно на странице, которая так и осталась короткой.
+    let observer: ResizeObserver | undefined;
+    let giveUp: number | undefined;
+
     if (saved > 0) {
-      // Контент подгружается асинхронно, и сразу после монтирования
-      // панель ещё нулевой высоты — прокручивать некуда. Пробуем
-      // несколько кадров подряд, пока высота не позволит.
-      let attempts = 0;
       const tryScroll = () => {
-        if (el.scrollTop === saved) return;
         const reachable = el.scrollHeight - el.clientHeight;
-        if (reachable >= saved) {
-          el.scrollTop = saved;
-          return;
-        }
-        if (++attempts < 20) requestAnimationFrame(tryScroll);
+        if (reachable < saved) return false;
+        el.scrollTop = saved;
+        return true;
       };
-      requestAnimationFrame(tryScroll);
+
+      if (!tryScroll()) {
+        observer = new ResizeObserver(() => {
+          if (tryScroll()) stopWaiting();
+        });
+        observer.observe(el);
+        giveUp = window.setTimeout(() => {
+          // Страница оказалась короче, чем была: так бывает при
+          // переключении между версиями бюджета — у одной есть
+          // предупреждение в шапке, у другой нет. Докручиваем до конца:
+          // это ближе к искомому месту, чем прыжок в начало.
+          const reachable = el.scrollHeight - el.clientHeight;
+          if (reachable > 0 && el.scrollTop === 0) el.scrollTop = reachable;
+          stopWaiting();
+        }, 3000);
+      }
+    }
+
+    function stopWaiting() {
+      observer?.disconnect();
+      observer = undefined;
+      if (giveUp !== undefined) {
+        clearTimeout(giveUp);
+        giveUp = undefined;
+      }
     }
 
     el.addEventListener('scroll', save, { passive: true });
     return () => {
-      save();
+      // Сохраняем только осмысленную позицию: при уходе со страницы
+      // контент уже размонтирован, панель схлопнулась, и scrollTop
+      // сброшен браузером в ноль — записав его, мы бы затёрли
+      // настоящую позицию, которую пользователь оставил.
+      if (el.scrollTop > 0) save();
+      stopWaiting();
       el.removeEventListener('scroll', save);
     };
   }, [pathname]);
