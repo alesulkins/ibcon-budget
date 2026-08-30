@@ -227,9 +227,9 @@ export default function UsersPage() {
           проектов: одинаковая раскладка у всех списков. */}
       {/* Поля сжимаются, кнопка — нет: с жёсткими ширинами на крупном
           шрифте строка переставала помещаться и кнопка съезжала вниз. */}
-      <div style={{
+      <div className="ibcon-filters" style={{
         display: 'flex', gap: 12, alignItems: 'center',
-        flexWrap: 'nowrap', marginBottom: 12,
+        marginBottom: 12,
       }}>
         <Input.Search
           allowClear

@@ -162,7 +162,7 @@ export default function ProfilePage() {
                 на три строки по восемь при любом размере шрифта. */}
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(8, 38px)',
+              gridTemplateColumns: 'repeat(8, 36px)',
               gap: 6,
               marginBottom: 16,
             }}>
@@ -214,12 +214,11 @@ export default function ProfilePage() {
         <Col xs={24} md={8}>
           <Card
             size="small"
-            title="Рабочие заметки и напоминания"
+            title="Рабочие заметки"
             style={{ height: '100%'}}
           >
             <Paragraph type="secondary" style={{ fontSize: 12 }}>
-              Заметки видны только вам, хранятся в учётной записи и
-              сохраняются сами.
+              Заметки видны только вам.
             </Paragraph>
             <TextArea
               value={notes}

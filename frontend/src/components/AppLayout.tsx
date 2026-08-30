@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Layout, Menu, Avatar, Dropdown, Typography, Breadcrumb } from 'antd';
+import { Layout, Menu, Avatar, Dropdown, Typography, Breadcrumb, Drawer, Grid } from 'antd';
 import {
   UserOutlined, LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
   RightOutlined,
@@ -21,6 +21,15 @@ import ReminderPopups from './ReminderPopups';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
+
+/**
+ * Оформление панели — общее для обычного сайдбара и выдвижной панели на
+ * телефоне: панель одна и та же, меняется только способ её показать.
+ */
+const SIDER_BACKGROUND = {
+  background: 'var(--ibcon-sider-gradient)',
+  backdropFilter: 'blur(14px)',
+} as const;
 
 
 /** Заголовок раздела в шапке — для экранов без своей цепочки крошек. */
@@ -87,6 +96,22 @@ export default function AppLayout() {
   const location = useLocation();
   const user = currentUser();
   const [collapsed, setCollapsed] = useState(false);
+
+  /**
+   * Вид экрана. Телефон — уже 768 точек (antd md): на такой ширине
+   * сайдбар отнимал бы половину экрана, поэтому там он выезжает поверх
+   * страницы. Планшет (768–992) обходится свёрнутым сайдбаром — это
+   * делает сам Sider по breakpoint="lg".
+   */
+  const screens = Grid.useBreakpoint();
+  const mobile = !screens.md;
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // Смена страницы закрывает выдвижную панель: на телефоне она
+  // перекрывает содержимое, и оставлять её открытой поверх нового
+  // раздела незачем.
+  const { pathname } = location;
+  React.useEffect(() => { setDrawerOpen(false); }, [pathname]);
 
   // Возврат из «Справочников» не должен выбрасывать в начало страницы
   useScrollRestore();
@@ -224,6 +249,9 @@ export default function AppLayout() {
    * момент ухода — при возврате он уже потерян.
    */
   function onMenuClick(key: string) {
+    // Выбрали раздел — панель уходит, даже если это текущий раздел и
+    // адрес не сменится.
+    setDrawerOpen(false);
     const from = location.pathname + location.search;
     const inService = SERVICE_SECTIONS.includes(selectedKey);
 
@@ -258,39 +286,15 @@ export default function AppLayout() {
     navigate(key);
   }
 
-  return (
-    <Layout style={{ height: '100vh', overflow: 'hidden' }}>
-      <Sider
-        collapsible
-        collapsed={collapsed}
-        onCollapse={setCollapsed}
-        // На узком экране сайдбар сворачивается сам — ровно так же, как
-        // от кнопки в шапке: содержимое страницы получает всю ширину и
-        // таблицы не выдавливают вёрстку.
-        breakpoint="lg"
-        onBreakpoint={setCollapsed}
-        theme="dark"
-        // Сайдбар стоит во всю высоту окна. Липким он был, пока
-        // прокручивался документ; теперь прокручивается только рабочая
-        // область, и двигать сайдбар нечему.
-        //
-        // Матовое стекло (выбор владельца 2026-08-27): полупрозрачная
-        // растяжка фирменного цвета с размытием, светлая грань справа и
-        // внутренний блик. Панель читается как стеклянная пластина над
-        // страницей, а не как вырезанный из бумаги прямоугольник.
-        style={{
-          // Растяжку собирает ThemedApp из выбранного фирменного цвета:
-          // литералами она не реагировала бы на смену цвета в настройках.
-          background: 'var(--ibcon-sider-gradient)',
-          backdropFilter: 'blur(14px)',
-          height: '100%',
-          borderRight: '1px solid rgba(253, 249, 248, 0.14)',
-          boxShadow: 'inset -1px 0 0 rgba(253, 249, 248, 0.06),'
-            + ' 4px 0 24px rgba(12, 26, 51, 0.07)',
-          zIndex: 30,
-        }}
-        trigger={null}
-      >
+  // Содержимое панели одно и то же во всех трёх видах экрана —
+  // отличается только способ её показать (см. ниже).
+  // narrow — панель свёрнута в иконки. На телефоне такого вида нет:
+  // выдвижная панель всегда развёрнута, иначе в ней остались бы одни
+  // значки без подписей.
+  const narrow = !mobile && collapsed;
+
+  const panelBody = (
+    <>
         {/* Логотип: развёрнутый знак, в свёрнутом виде — последняя буква.
             Оба файла залиты фирменным белым, поэтому читаются на панели
             без дополнительной обработки. */}
@@ -300,19 +304,19 @@ export default function AppLayout() {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: collapsed ? '0 12px' : '0 20px',
+          padding: narrow ? '0 12px' : '0 20px',
           // Разделитель в две грани: тёмная линия и светлый блик под ней —
           // так край читается как рельеф, а не как нарисованная черта.
           borderBottom: '1px solid rgba(0,0,0,0.18)',
           boxShadow: '0 1px 0 rgba(255,255,255,0.06)',
         }}>
           <img
-            src={collapsed ? '/logo-last-letter.svg' : '/logo.svg'}
+            src={narrow ? '/logo-last-letter.svg' : '/logo.svg'}
             alt="IBCON"
             // Высота фиксирована, ширина считается по пропорции: знак
             // широкий (270×60), обрезанная буква почти квадратная.
             style={{
-              height: collapsed ? 28 : 24,
+              height: narrow ? 28 : 24,
               width: 'auto',
               maxWidth: '100%',
               display: 'block',
@@ -320,7 +324,7 @@ export default function AppLayout() {
           />
           {/* Название продукта под знаком: сам знак — марка компании,
               а систем у неё несколько. В свёрнутой панели не помещается. */}
-          {!collapsed && (
+          {!narrow && (
             <span style={{
               marginTop: 4,
               fontSize: 8,
@@ -359,7 +363,7 @@ export default function AppLayout() {
             bottom: 0,
             left: 0,
             right: 0,
-            padding: collapsed ? '12px 8px' : '12px 16px',
+            padding: narrow ? '12px 8px' : '12px 16px',
             borderTop: '1px solid rgba(255,255,255,0.10)',
             // Матовая полка: подсветка сверху вниз плюс размытие того,
             // что за ней, — блок отделяется от панели, не разрезая её.
@@ -368,8 +372,8 @@ export default function AppLayout() {
             alignItems: 'center',
             // В свёрнутом виде остаётся один аватар — ставим его по центру
             // колонки, иначе он прижимается к левому краю.
-            justifyContent: collapsed ? 'center' : 'flex-start',
-            gap: collapsed ? 0 : 10,
+            justifyContent: narrow ? 'center' : 'flex-start',
+            gap: narrow ? 0 : 10,
             cursor: 'pointer',
             transition: 'background 0.2s ease',
             background: location.pathname === '/profile'
@@ -380,10 +384,10 @@ export default function AppLayout() {
           <ProfileAvatar
             profile={profile}
             fullName={user?.full_name}
-            size={collapsed ? 'small' : 'default'}
+            size={narrow ? 'small' : 'default'}
             on="sider"
           />
-          {!collapsed && (
+          {!narrow && (
             <>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{
@@ -403,7 +407,67 @@ export default function AppLayout() {
             </>
           )}
         </div>
+    </>
+  );
+
+  return (
+    <Layout style={{ height: '100vh', overflow: 'hidden' }}>
+      {/* Панель навигации.
+
+          На телефоне сайдбар не помещается: он съедал бы половину узкого
+          экрана, а свёрнутый в иконки — оставлял бы человека без подписей.
+          Поэтому там та же панель выезжает поверх страницы по кнопке в
+          шапке и закрывается сразу после выбора раздела. На планшете
+          сайдбар остаётся, но свёрнутым (breakpoint="lg"). */}
+      {mobile ? (
+        <Drawer
+          placement="left"
+          open={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          width={240}
+          closable={false}
+          styles={{
+            body: { padding: 0, position: 'relative', ...SIDER_BACKGROUND },
+            header: { display: 'none' },
+          }}
+        >
+          {panelBody}
+        </Drawer>
+      ) : (
+      <Sider
+        collapsible
+        collapsed={collapsed}
+        onCollapse={setCollapsed}
+        // На узком экране сайдбар сворачивается сам — ровно так же, как
+        // от кнопки в шапке: содержимое страницы получает всю ширину и
+        // таблицы не выдавливают вёрстку.
+        breakpoint="lg"
+        onBreakpoint={setCollapsed}
+        theme="dark"
+        // Сайдбар стоит во всю высоту окна. Липким он был, пока
+        // прокручивался документ; теперь прокручивается только рабочая
+        // область, и двигать сайдбар нечему.
+        //
+        // Матовое стекло (выбор владельца 2026-08-27): полупрозрачная
+        // растяжка фирменного цвета с размытием, светлая грань справа и
+        // внутренний блик. Панель читается как стеклянная пластина над
+        // страницей, а не как вырезанный из бумаги прямоугольник.
+        style={{
+          // Растяжку собирает ThemedApp из выбранного фирменного цвета:
+          // литералами она не реагировала бы на смену цвета в настройках.
+          background: 'var(--ibcon-sider-gradient)',
+          backdropFilter: 'blur(14px)',
+          height: '100%',
+          borderRight: '1px solid rgba(253, 249, 248, 0.14)',
+          boxShadow: 'inset -1px 0 0 rgba(253, 249, 248, 0.06),'
+            + ' 4px 0 24px rgba(12, 26, 51, 0.07)',
+          zIndex: 30,
+        }}
+        trigger={null}
+      >
+        {panelBody}
       </Sider>
+      )}
 
       {/* minWidth: 0 — иначе широкая таблица растягивает колонку целиком
           и «выталкивает» сайдбар вместо того, чтобы прокручиваться. */}
@@ -422,7 +486,7 @@ export default function AppLayout() {
         <Header style={{
           background: 'var(--ibcon-header-bg)',
           backdropFilter: 'blur(12px)',
-          padding: '0 24px',
+          padding: mobile ? '0 12px' : '0 24px',
           flexShrink: 0,
           display: 'flex',
           alignItems: 'center',
@@ -439,9 +503,13 @@ export default function AppLayout() {
           }}>
             <span
               style={{ cursor: 'pointer', fontSize: 18, flexShrink: 0 }}
-              onClick={() => setCollapsed(!collapsed)}
+              // На телефоне та же кнопка выдвигает панель, а не
+              // сворачивает сайдбар — сворачивать там нечего.
+              onClick={() => (mobile ? setDrawerOpen(o => !o) : setCollapsed(!collapsed))}
             >
-              {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+              {(mobile ? drawerOpen : !collapsed)
+                ? <MenuFoldOutlined />
+                : <MenuUnfoldOutlined />}
             </span>
             <Breadcrumb
               style={{ fontSize: 14, minWidth: 0 }}
@@ -494,8 +562,12 @@ export default function AppLayout() {
                 size="small"
                 on="header"
               />
-              {/* В шапке — сокращённое ФИО, полное живёт в ЛК */}
-              <Text style={{ fontSize: 13 }}>{shortName(user?.full_name)}</Text>
+              {/* В шапке — сокращённое ФИО, полное живёт в ЛК. На
+                  телефоне остаётся только кружок: имя вытесняло бы
+                  цепочку крошек, а она нужнее — по ней возвращаются. */}
+              {!mobile && (
+                <Text style={{ fontSize: 13 }}>{shortName(user?.full_name)}</Text>
+              )}
             </div>
           </Dropdown>
         </Header>
@@ -507,7 +579,9 @@ export default function AppLayout() {
         <Content
           id={SCROLL_ROOT_ID}
           className="ibcon-scroll-root ibcon-scroll"
-          style={{ padding: 24, minWidth: 0 }}
+          // На узком экране отступ рабочей области меньше: 24 точки с
+          // каждой стороны съедали бы восьмую часть ширины телефона.
+          style={{ padding: mobile ? 12 : 24, minWidth: 0 }}
         >
           <Outlet />
         </Content>

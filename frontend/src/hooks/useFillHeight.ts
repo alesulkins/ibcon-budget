@@ -53,11 +53,20 @@ export function useFillToSiderFooter<T extends HTMLElement>(reserveBottom = 0) {
   useLayoutEffect(() => {
     function recompute() {
       const el = ref.current;
+      if (!el) return;
+
+      // На телефоне панель выезжает поверх страницы и, пока закрыта, её
+      // блока «Личный кабинет» в разметке нет вовсе. Ориентир тогда —
+      // нижний край окна: линии, ниже которой нельзя, просто не
+      // существует. Закрытая панель даёт нулевую высоту — на неё
+      // ориентироваться тоже нельзя, иначе таблица схлопнется.
       const footer = document.getElementById(SIDER_FOOTER_ID);
-      if (!el || !footer) return;
+      const footerBox = footer?.getBoundingClientRect();
+      const footerTop = footerBox && footerBox.height > 0
+        ? footerBox.top
+        : window.innerHeight;
 
       const top = el.getBoundingClientRect().top;
-      const footerTop = footer.getBoundingClientRect().top;
       let available = footerTop - top - BOTTOM_GAP - reserveBottom;
 
       // Если страница уже прокручена, верх таблицы оказывается ВЫШЕ окна,

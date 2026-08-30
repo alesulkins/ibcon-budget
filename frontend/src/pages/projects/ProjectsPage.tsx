@@ -243,11 +243,10 @@ export default function ProjectsPage() {
           Поля сжимаются, кнопки — нет. С жёсткими ширинами на крупном
           шрифте строка переставала помещаться, и кнопка «Создать
           проект» съезжала на вторую строку. */}
-      <div style={{
+      <div className="ibcon-filters" style={{
         display: 'flex',
         alignItems: 'center',
         gap: 8,
-        flexWrap: 'nowrap',
         marginBottom: 16,
       }}>
         <Input

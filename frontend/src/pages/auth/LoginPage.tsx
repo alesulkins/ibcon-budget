@@ -88,7 +88,9 @@ export default function LoginPage() {
           собственной поверхности ей не на чем держаться. */}
       <Card
         className="ibcon-panel"
-        style={{ width: 400, overflow: 'hidden' }}
+        // На телефоне карточка занимает всю доступную ширину: жёсткие
+        // 400 точек не помещались и вылезали за край экрана.
+        style={{ width: '100%', maxWidth: 400, overflow: 'hidden' }}
         styles={{ body: { padding: 0 } }}
       >
         {/* Знак компании залит фирменным белым, поэтому стоит на

@@ -94,11 +94,13 @@ function useRefFilter<T extends { active: boolean }>(
   }, [rows, search, status]);
 
   const controls = (
-    <Space style={{ marginBottom: 12 }}>
+    // wrap — на узком экране поиск и фильтр переносятся на свои строки,
+    // а не сжимаются до нечитаемого.
+    <Space style={{ marginBottom: 12 }} wrap>
       <Input.Search
         allowClear
         placeholder="Поиск по названию"
-        style={{ width: 280 }}
+        style={{ width: 280, maxWidth: '100%' }}
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />
