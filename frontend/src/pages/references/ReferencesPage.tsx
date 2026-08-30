@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Tabs, Table, Button, Modal, Form, Input, InputNumber, Select, Switch,
+  Tabs, Table, Button, Modal, Form, Input, InputNumber, Select, Switch, Grid,
   Space, Tooltip, Typography, message,
 } from 'antd';
 import { PlusOutlined, EditOutlined, LockOutlined } from '@ant-design/icons';
@@ -710,6 +710,7 @@ function CostItemsTab({ addSignal }: TabProps) {
 
 export default function ReferencesPage() {
   const canEdit = useCanEdit();
+  const mobile = !Grid.useBreakpoint().md;
   const [tab, setTab] = useState('executors');
   const [addSignal, setAddSignal] = useState(0);
 
@@ -720,24 +721,34 @@ export default function ReferencesPage() {
     'cost-items': 'Добавить статью затрат',
   };
 
+  const addButton = canEdit && (
+    <Button
+      type="primary"
+      icon={<PlusOutlined />}
+      onClick={() => setAddSignal(s => s + 1)}
+      // На телефоне кнопка стоит своей строкой во всю ширину.
+      block={mobile}
+    >
+      {ADD_LABELS[tab]}
+    </Button>
+  );
+
   return (
     <div>
       {/* Название раздела живёт в шапке (AppLayout). */}
+      {/* На телефоне кнопка добавления уходит из полосы вкладок под неё:
+          в полосе она наезжала на сами вкладки, и до них было не
+          добраться — оставалось многоточие. */}
+      {mobile && addButton && (
+        <div style={{ marginBottom: 12 }}>{addButton}</div>
+      )}
       <Tabs
         activeKey={tab}
         onChange={setTab}
         // Неактивные вкладки размонтируются: тогда сигнал «добавить»
         // получает ровно одна вкладка — та, что на экране.
         destroyOnHidden
-        tabBarExtraContent={canEdit && (
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => setAddSignal(s => s + 1)}
-          >
-            {ADD_LABELS[tab]}
-          </Button>
-        )}
+        tabBarExtraContent={!mobile && addButton}
         items={[
           { key: 'executors', label: 'Исполнители', children: <ExecutorsTab addSignal={addSignal} /> },
           { key: 'positions', label: 'Должности', children: <PositionsTab addSignal={addSignal} /> },

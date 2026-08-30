@@ -375,6 +375,12 @@ export default function EmployeesInput({
           // Пока строк нет, шапка таблицы не нужна — только подсказка.
           showHeader={data.employees.length > 0}
           locale={{ emptyText: <EmptyBlock /> }}
+          // Должность и ФИО не рвутся по словам, а таблица прокручивается
+          // вбок: на телефоне «Заместитель начальника отдела ПТО»
+          // разъезжался на три строки, и строки таблицы переставали
+          // читаться как строки.
+          className="nowrap-table"
+          scroll={{ x: 'max-content' }}
         />
       </Card>
 

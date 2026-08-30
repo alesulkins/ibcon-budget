@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Card, Descriptions, Button, Space, Modal, Form, Select,
-  Input, Table, Typography, message, DatePicker, InputNumber,
+  Input, Table, Typography, message, DatePicker, InputNumber, Grid,
 } from 'antd';
 import {
   EditOutlined, PlusOutlined, DownloadOutlined,
@@ -147,6 +147,9 @@ export default function ProjectDetailPage() {
 
   // Права приходят вместе с карточкой проекта: сервер посчитал их для
   // ЭТОГО проекта с учётом роли, назначения и индивидуальных прав.
+  // Телефон — до 768 точек (antd md), тот же порог, что и в каркасе.
+  const mobile = !Grid.useBreakpoint().md;
+
   const perms = project?.permissions;
   const canEdit = canIn(perms, PERM.projectEdit);
   const canChangeProjectStatus = canIn(perms, PERM.projectStatus);
@@ -321,16 +324,21 @@ export default function ProjectDetailPage() {
     <div>
       {/* Возврат к реестру — по хлебным крошкам в шапке. */}
       <Card
+        // На телефоне название проекта из шапки карточки убрано: оно и
+        // так стоит в хлебных крошках, а рядом с двумя кнопками
+        // наезжало на них.
         title={
           <Space>
-            <Title level={4} style={{ margin: 0 }}>{project.name}</Title>
+            {!mobile && (
+              <Title level={4} style={{ margin: 0 }}>{project.name}</Title>
+            )}
             <StatusTag color={PROJECT_STATUS_COLORS[project.status]}>
               {PROJECT_STATUS_LABELS[project.status]}
             </StatusTag>
           </Space>
         }
         extra={
-          <Space>
+          <Space wrap>
             {canChangeProjectStatus && (
               <Button
                 onClick={() => setShowStatusModal(true)}
@@ -356,7 +364,9 @@ export default function ProjectDetailPage() {
         }
         style={{ marginBottom: 24 }}
       >
-        <Descriptions column={2} size="small">
+        {/* На узком экране карточка идёт в один столбец: в двух
+            значения ломались по буквам — «К и р г и з и я» столбиком. */}
+        <Descriptions column={{ xs: 1, sm: 1, md: 2 }} size="small">
           <Descriptions.Item label="Заказчик">{project.customer}</Descriptions.Item>
           <Descriptions.Item label="Исполнитель">{project.executor_name}</Descriptions.Item>
           <Descriptions.Item label="Местонахождение">{project.location}</Descriptions.Item>

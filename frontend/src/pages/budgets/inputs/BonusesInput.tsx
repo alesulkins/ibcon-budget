@@ -188,6 +188,10 @@ export default function BonusesInput({ versionId, readonly }: Props) {
           // Пока строк нет, шапка таблицы не нужна — только подсказка.
           showHeader={bonusTypes.length > 0}
           locale={{ emptyText: <EmptyBlock /> }}
+          // Как и у сотрудников: названия премий не рвутся по словам,
+          // таблица прокручивается вбок.
+          className="nowrap-table"
+          scroll={{ x: 'max-content' }}
         />
         <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
           Если две премии выпадают одному сотруднику на один месяц, они суммируются —
