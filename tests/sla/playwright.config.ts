@@ -1,5 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// Minimal typing for `process.env` to satisfy TypeScript without
+// requiring @types/node in this repo.
+declare const process: { env: { [key: string]: string | undefined } };
+
 /**
  * Браузерная проверка нормативов времени отклика.
  *

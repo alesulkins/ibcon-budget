@@ -45,6 +45,7 @@ func (h *Handler) login(c *gin.Context) {
 
 	resp, err := h.svc.Login(req)
 	if err != nil {
+		h.limit.Fail(keys...)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}

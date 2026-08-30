@@ -6,3 +6,5 @@ CLAUDE.md
 .env
 node_modules/
 ~$*
+playwright-report/
+test-results/

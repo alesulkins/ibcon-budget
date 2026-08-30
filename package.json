@@ -1,0 +1,12 @@
+{
+  "name": "ibcon-budget-tests",
+  "private": true,
+  "description": "Проверки нормативов времени отклика (tests/sla). Приложение живёт в backend/ и frontend/; этот пакет нужен только для запуска Playwright из корня — конфигурация лежит вне frontend/ и его node_modules не видит.",
+  "scripts": {
+    "sla:api": "python3 tests/sla/load_sla.py --users 10",
+    "sla:browser": "playwright test -c tests/sla/playwright.config.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1"
+  }
+}

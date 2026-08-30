@@ -27,7 +27,10 @@ test.beforeEach(async ({ page }) => {
   await page.getByPlaceholder('admin@ibcon.ru').fill(EMAIL);
   await page.locator('input[type="password"]').fill(PASSWORD);
   await page.getByRole('button', { name: 'Войти' }).click();
-  await expect(page.getByRole('heading', { name: 'Проекты' })).toBeVisible();
+  // Название раздела живёт в шапке обычным текстом, а не заголовком —
+  // ждём сам список проектов: он и означает, что вход состоялся.
+  await page.waitForURL('**/projects');
+  await page.locator('.ant-table').first().waitFor();
 });
 
 test('Реестр проектов открывается за норматив', async ({ page }) => {
@@ -42,7 +45,8 @@ test('Реестр проектов открывается за норматив
 
 test('Карточка проекта открывается за норматив', async ({ page }) => {
   await page.goto('/projects');
-  const firstRow = page.locator('.ant-table-row').first();
+  // Переход открывает ссылка на названии проекта, не строка целиком.
+  const firstRow = page.locator('.ant-table-row a.ibcon-link-plain').first();
   await firstRow.waitFor();
 
   const took = await seconds(async () => {
@@ -57,13 +61,14 @@ test('Версия бюджета, расчёт и выгрузка уклады
   await page.locator('.ant-table-row').first().waitFor();
 
   // Ищем проект, у которого версия бюджета есть: без неё мерить нечего.
-  const rows = await page.locator('.ant-table-row').all();
+  const names = await page.locator('.ant-table-row a.ibcon-link-plain').all();
   let opened = false;
   let openTook = 0;
-  for (const row of rows) {
+  for (const row of names) {
     await row.click();
     await expect(page.getByText('Версии бюджета')).toBeVisible();
-    const version = page.locator('a[href^="/budget-versions/"]').first();
+    // Версия открывается ссылкой с её номером («16.2») в первой колонке.
+    const version = page.locator('.ant-table-row a').first();
     if (await version.count()) {
       openTook = await seconds(async () => {
         await version.click();
@@ -89,7 +94,11 @@ test('Версия бюджета, расчёт и выгрузка уклады
   expect.soft(calcTook, `расчёт бюджета: ${calcTook.toFixed(2)} с`)
     .toBeLessThanOrEqual(SLA.calculation);
 
-  // Выгрузка: меряем до момента, когда браузер получил файл целиком.
+  // Выгрузка живёт на последнем шаге: книга одна на всё — «Бюджет»,
+  // БДР и БДДС тремя листами.
+  await page.getByText('БДР и БДДС', { exact: true }).first().click();
+
+  // Меряем до момента, когда браузер получил файл целиком.
   const exportTook = await seconds(async () => {
     const download = page.waitForEvent('download', { timeout: SLA.export * 1000 });
     await page.getByRole('button', { name: /Выгрузить/ }).first().click();
