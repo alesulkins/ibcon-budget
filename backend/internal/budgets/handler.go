@@ -376,6 +376,12 @@ func (h *Handler) getInput(c *gin.Context) {
 		return
 	}
 	inputType := c.Param("type")
+	// Администратору проекта — только статьи прочих расходов
+	// (см. limited.go).
+	if auth.LimitedExport(claims.Role) && !limitedInputKeys[inputType] {
+		access.Deny(c, auth.PermBudgetView)
+		return
+	}
 	data, err := h.svc.GetInput(vid, inputType)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -393,6 +399,13 @@ func (h *Handler) calculate(c *gin.Context) {
 	}
 	claims := middleware.GetClaims(c)
 	if !h.acl.Can(claims, auth.PermBudgetView, v.ProjectID) {
+		access.Deny(c, auth.PermBudgetView)
+		return
+	}
+
+	// Расчёт — это ФОТ, выручка и прибыль целиком; администратору
+	// проекта они закрыты (см. limited.go).
+	if auth.LimitedExport(claims.Role) {
 		access.Deny(c, auth.PermBudgetView)
 		return
 	}
@@ -444,7 +457,13 @@ func (h *Handler) getAllInputs(c *gin.Context) {
 	}
 	// Собираем в map[string]json.RawMessage для нормального JSON-ответа
 	result := make(map[string]json.RawMessage, len(data))
+	limited := auth.LimitedExport(claims.Role)
 	for k, v := range data {
+		// Администратору проекта отдаём только статьи прочих расходов:
+		// его экран берёт из общего ответа именно их (см. limited.go).
+		if limited && !limitedInputKeys[k] {
+			continue
+		}
 		result[k] = json.RawMessage(v)
 	}
 	c.JSON(http.StatusOK, result)
@@ -588,6 +607,13 @@ func (h *Handler) reportContext(c *gin.Context, perm string) (
 	}
 	claims := middleware.GetClaims(c)
 	if !h.acl.Can(claims, perm, v.ProjectID) {
+		access.Deny(c, perm)
+		return nil, reports.Params{}, nil, nil, false
+	}
+	// БДР и БДДС — весь бюджет целиком; в выгрузке администратора
+	// проекта этих листов нет, значит и здесь их быть не должно
+	// (см. limited.go).
+	if auth.LimitedExport(claims.Role) {
 		access.Deny(c, perm)
 		return nil, reports.Params{}, nil, nil, false
 	}

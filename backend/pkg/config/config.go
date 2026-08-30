@@ -8,6 +8,10 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// Минимальная длина ключа подписи токенов. 32 символа — та же длина,
+// что у ключа в .env: короче подбирается перебором.
+const minJWTSecretLen = 32
+
 type Config struct {
 	DBHost     string
 	DBPort     string
@@ -30,6 +34,19 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("invalid JWT_EXPIRY_HOURS: %w", err)
 	}
 
+	// Ключ подписи токенов обязателен и не имеет значения по умолчанию.
+	//
+	// Раньше здесь стояло «changeme»: сервер, поднятый без JWT_SECRET,
+	// молча подписывал токены общеизвестной строкой — кто угодно мог
+	// подписать себе токен главного экономиста и получить все проекты.
+	// Отсутствие ключа должно ронять запуск, а не проходить незаметно.
+	secret := os.Getenv("JWT_SECRET")
+	if len(secret) < minJWTSecretLen {
+		return nil, fmt.Errorf(
+			"JWT_SECRET не задан или короче %d символов: сервер с предсказуемым "+
+				"ключом подписи запускать нельзя", minJWTSecretLen)
+	}
+
 	return &Config{
 		DBHost:         getEnv("DB_HOST", "localhost"),
 		DBPort:         getEnv("DB_PORT", "5432"),
@@ -37,7 +54,7 @@ func Load() (*Config, error) {
 		DBPassword:     getEnv("DB_PASSWORD", "ibcon_secret"),
 		DBName:         getEnv("DB_NAME", "ibcon_budget"),
 		DBSSLMode:      getEnv("DB_SSLMODE", "disable"),
-		JWTSecret:      getEnv("JWT_SECRET", "changeme"),
+		JWTSecret:      secret,
 		JWTExpiryHours: expiryHours,
 		ServerPort:     getEnv("SERVER_PORT", "8080"),
 	}, nil
