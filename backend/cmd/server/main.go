@@ -44,7 +44,7 @@ func main() {
 	gin.SetMode(os.Getenv("GIN_MODE"))
 	r := gin.New()
 	r.Use(gin.Recovery())
-	r.Use(middleware.CORS())
+	r.Use(middleware.CORS(cfg.AllowedOrigins))
 
 	// Публичные маршруты
 	api := r.Group("/api/v1")

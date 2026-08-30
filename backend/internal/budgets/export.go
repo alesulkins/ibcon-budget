@@ -236,7 +236,26 @@ func BuildExport(m ExportMeta, r *calc.CalcResult, reps ...*reports.Report) ([]b
 	}
 
 	// monthlyLine — строка помесячной таблицы: итог слева, месяцы правее.
+	//
+	// Статья, у которой не заполнен ни один месяц, в книгу не попадает:
+	// иначе выгрузка на треть состоит из строк нулей, а искать в ней
+	// приходится те несколько статей, которые в проекте есть. Правило
+	// общее для всех, включая урезанную книгу администратора проекта.
 	monthlyLine := func(label string, bold bool, value func(calc.MonthlyResult) float64) {
+		values := make([]float64, len(r.Monthly))
+		var sum float64
+		empty := true
+		for i, mr := range r.Monthly {
+			values[i] = value(mr)
+			sum += values[i]
+			if values[i] != 0 {
+				empty = false
+			}
+		}
+		if empty {
+			return
+		}
+
 		set(cellAt(colLabel, row), label)
 		nameStyle, numStyle := text, money
 		if bold {
@@ -244,10 +263,7 @@ func BuildExport(m ExportMeta, r *calc.CalcResult, reps ...*reports.Report) ([]b
 		}
 		styleRow(cellAt(colLabel, row), cellAt(colLabel, row), nameStyle)
 
-		var sum float64
-		for i, mr := range r.Monthly {
-			v := value(mr)
-			sum += v
+		for i, v := range values {
 			set(cellAt(colFirst+i, row), v)
 		}
 		set(cellAt(colTotal, row), sum)
@@ -441,24 +457,24 @@ func BuildExport(m ExportMeta, r *calc.CalcResult, reps ...*reports.Report) ([]b
 	// Суммы БГ уже стоят в помесячной разбивке, но по одной сумме не
 	// понять, из чего она вышла: процент от договора, ставка, режим
 	// ставки и срок задаются отдельно и в книге были не видны.
+	//
+	// Незаполненная гарантия в книгу не идёт, а если не заполнена ни
+	// одна — не пишем и сам раздел: пустая таблица из трёх нулевых
+	// строк только сбивает с толку.
+	bgFilled := func(b calc.BankGuarantee, total func(calc.MonthlyResult) float64) bool {
+		if b.Pct != 0 || b.RatePct != 0 || b.DurationMos != 0 {
+			return true
+		}
+		for _, mr := range r.Monthly {
+			if total(mr) != 0 {
+				return true
+			}
+		}
+		return false
+	}
+
 	if m.Params != nil {
-		row++
-		set(fmt.Sprintf("A%d", row), "БАНКОВСКИЕ ГАРАНТИИ")
-		styleRow(fmt.Sprintf("A%d", row), fmt.Sprintf("F%d", row), head)
-		row++
-
-		bgHeader := []string{
-			"Вид гарантии", "% от договора", "Ставка, %",
-			"Режим ставки", "Срок, мес.", "Сумма за проект",
-		}
-		for i, h := range bgHeader {
-			col, _ := excelize.ColumnNumberToName(i + 1)
-			set(fmt.Sprintf("%s%d", col, row), h)
-		}
-		styleRow(fmt.Sprintf("A%d", row), fmt.Sprintf("F%d", row), head)
-		row++
-
-		bgs := []struct {
+		all := []struct {
 			label string
 			bg    calc.BankGuarantee
 			total func(calc.MonthlyResult) float64
@@ -470,6 +486,31 @@ func BuildExport(m ExportMeta, r *calc.CalcResult, reps ...*reports.Report) ([]b
 			{"На аванс", m.Params.BGAdvance,
 				func(x calc.MonthlyResult) float64 { return x.BGAdvance }},
 		}
+		bgs := all[:0:0]
+		for _, b := range all {
+			if bgFilled(b.bg, b.total) {
+				bgs = append(bgs, b)
+			}
+		}
+
+		if len(bgs) > 0 {
+			row++
+			set(fmt.Sprintf("A%d", row), "БАНКОВСКИЕ ГАРАНТИИ")
+			styleRow(fmt.Sprintf("A%d", row), fmt.Sprintf("F%d", row), head)
+			row++
+
+			bgHeader := []string{
+				"Вид гарантии", "% от договора", "Ставка, %",
+				"Режим ставки", "Срок, мес.", "Сумма за проект",
+			}
+			for i, h := range bgHeader {
+				col, _ := excelize.ColumnNumberToName(i + 1)
+				set(fmt.Sprintf("%s%d", col, row), h)
+			}
+			styleRow(fmt.Sprintf("A%d", row), fmt.Sprintf("F%d", row), head)
+			row++
+		}
+
 		for _, b := range bgs {
 			var sum float64
 			for _, mr := range r.Monthly {

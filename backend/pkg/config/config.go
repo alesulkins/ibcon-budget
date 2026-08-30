@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -24,6 +25,11 @@ type Config struct {
 	JWTExpiryHours int
 
 	ServerPort string
+
+	// AllowedOrigins — адреса, которым разрешены запросы из браузера
+	// (ALLOWED_ORIGINS через запятую). Пусто — запросы только со своего
+	// адреса, обычный рабочий случай; см. middleware.CORS.
+	AllowedOrigins []string
 }
 
 func Load() (*Config, error) {
@@ -54,6 +60,7 @@ func Load() (*Config, error) {
 		DBPassword:     getEnv("DB_PASSWORD", "ibcon_secret"),
 		DBName:         getEnv("DB_NAME", "ibcon_budget"),
 		DBSSLMode:      getEnv("DB_SSLMODE", "disable"),
+		AllowedOrigins: splitList(getEnv("ALLOWED_ORIGINS", "")),
 		JWTSecret:      secret,
 		JWTExpiryHours: expiryHours,
 		ServerPort:     getEnv("SERVER_PORT", "8080"),
@@ -65,6 +72,18 @@ func (c *Config) DSN() string {
 		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 		c.DBHost, c.DBPort, c.DBUser, c.DBPassword, c.DBName, c.DBSSLMode,
 	)
+}
+
+// splitList разбирает список через запятую, отбрасывая пробелы и пустые
+// значения: «a, b,» — это два адреса, а не три.
+func splitList(v string) []string {
+	var out []string
+	for _, part := range strings.Split(v, ",") {
+		if p := strings.TrimSpace(part); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func getEnv(key, fallback string) string {

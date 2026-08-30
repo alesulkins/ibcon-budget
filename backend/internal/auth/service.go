@@ -20,6 +20,19 @@ const (
 	rememberExpiryHours = 90 * 24
 )
 
+// errInvalidLogin — единственный ответ на любую неудачу входа.
+//
+// Раньше «нет такой почты», «учётная запись отключена» и «заблокирована
+// на 15 минут» отвечали по-разному, и по ответу можно было перебором
+// узнать, какие адреса заведены в системе и какие из них живые. Человеку
+// эти три случая различать незачем — он в любом из них идёт к
+// администратору; нападающему различие даёт список целей.
+//
+// Правило блокировки после пяти попыток из ТЗ не отменяется: она
+// работает по-прежнему, просто не объявляет о себе. Подсказка про
+// блокировку осталась на экране входа постоянным текстом.
+var errInvalidLogin = errors.New("неверный email или пароль")
+
 type LoginRequest struct {
 	Email      string `json:"email" binding:"required,email"`
 	Password   string `json:"password" binding:"required"`
@@ -59,17 +72,15 @@ func (s *Service) Login(req LoginRequest) (*LoginResponse, error) {
 	var u userRow
 	err := s.db.Get(&u, `SELECT id, email, password_hash, full_name, role, active, failed_attempts, locked_until, last_activity FROM users WHERE email=$1`, req.Email)
 	if err != nil {
-		return nil, errors.New("неверный email или пароль")
+		return nil, errInvalidLogin
 	}
 
 	if !u.Active {
-		return nil, errors.New("учётная запись отключена")
+		return nil, errInvalidLogin
 	}
 
 	if u.LockedUntil != nil && time.Now().Before(*u.LockedUntil) {
-		return nil, fmt.Errorf(
-			"учётная запись заблокирована после %d неуспешных попыток входа. Повторите через %s",
-			maxFailedAttempts, humanMinutes(time.Until(*u.LockedUntil)))
+		return nil, errInvalidLogin
 	}
 
 	// Блокировка истекла — счётчик обнуляется, иначе следующая же ошибка
@@ -84,12 +95,10 @@ func (s *Service) Login(req LoginRequest) (*LoginResponse, error) {
 		if newFailed >= maxFailedAttempts {
 			locked := time.Now().Add(lockDuration)
 			_, _ = s.db.Exec(`UPDATE users SET failed_attempts=$1, locked_until=$2 WHERE id=$3`, newFailed, locked, u.ID)
-			return nil, fmt.Errorf(
-				"учётная запись заблокирована на %s после %d неуспешных попыток входа",
-				humanMinutes(lockDuration), maxFailedAttempts)
+			return nil, errInvalidLogin
 		}
 		_, _ = s.db.Exec(`UPDATE users SET failed_attempts=$1, locked_until=NULL WHERE id=$2`, newFailed, u.ID)
-		return nil, errors.New("неверный email или пароль")
+		return nil, errInvalidLogin
 	}
 
 	now := time.Now()
