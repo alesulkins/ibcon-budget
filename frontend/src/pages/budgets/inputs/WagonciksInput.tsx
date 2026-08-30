@@ -124,7 +124,7 @@ export default function WagonciksInput({ versionId, duration, startDate, readonl
           Итого {fmtNum(rentalTotal)} ₽
         </Text>}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <div className="ibcon-field-row" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
           <Text style={{ fontSize: 12 }}>Цена аренды одного вагончика в месяц:</Text>
           {readonly ? (
             <Text strong>{fmtNum(rental.price)} ₽</Text>

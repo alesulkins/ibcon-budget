@@ -83,7 +83,9 @@ export default function ReminderPopups() {
     for (const r of due) {
       notification.open({
         key: `reminder-${r.id}`,
-        message: 'Напоминание',
+        // title, а не message: в antd v6 message у уведомления объявлен
+        // устаревшим и ругается в консоли.
+        title: 'Напоминание',
         description: (
           <div>
             <div style={{ marginBottom: 4 }}>{r.text}</div>

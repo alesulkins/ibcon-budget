@@ -115,13 +115,15 @@ export default function BudgetParamsInput({ versionId, executor, readonly }: Pro
       onValuesChange={(_, all) => setValues(prev => ({ ...prev, ...(all as InputBudgetParams) }))}
     >
       <Card title="Накладные коэффициенты" size="small" style={{ marginBottom: 16 }}>
+        {/* xs/md вместо жёсткого span: на телефоне поля становятся друг
+            под другом — в треть ширины подписи обрезались. */}
         <Row gutter={24}>
-          <Col span={8}>
+          <Col xs={24} md={8}>
             <Form.Item name="unpredictables_pct" label="Непредвиденные, %">
               <InputNumber min={0} max={100} style={{ width: '100%' }} addonAfter="%" />
             </Form.Item>
           </Col>
-          <Col span={8}>
+          <Col xs={24} md={8}>
             <Form.Item name="aup_pct" label="АУП, %">
               <InputNumber min={0} max={100} style={{ width: '100%' }} addonAfter="%" />
             </Form.Item>
@@ -135,7 +137,7 @@ export default function BudgetParamsInput({ versionId, executor, readonly }: Pro
         style={{ marginBottom: 16 }}
       >
         <Row gutter={24}>
-          <Col span={8}>
+          <Col xs={24} md={8}>
             <Form.Item
               name="profit_tax_pct"
               label="Налог на прибыль, %"
@@ -148,7 +150,7 @@ export default function BudgetParamsInput({ versionId, executor, readonly }: Pro
               <InputNumber min={0} max={100} step={0.5} style={{ width: '100%' }} addonAfter="%" />
             </Form.Item>
           </Col>
-          <Col span={8}>
+          <Col xs={24} md={8}>
             <Form.Item
               name="refinancing_pct"
               label="Ставка рефинансирования, %"
@@ -166,12 +168,12 @@ export default function BudgetParamsInput({ versionId, executor, readonly }: Pro
 
       <Card title="Прочие расходы (строка 218)" size="small" style={{ marginBottom: 16 }}>
         <Row gutter={16} align="bottom">
-          <Col span={8}>
+          <Col xs={24} md={8}>
             <Form.Item name="other_expense_mode" label="Режим">
               <Select options={[{ value: 'млн', label: 'Сумма в млн руб' }, { value: '%', label: '% от стоимости договора' }]} />
             </Form.Item>
           </Col>
-          <Col span={8}>
+          <Col xs={24} md={8}>
             <Form.Item name="other_expense_value" label="Значение">
               <InputNumber style={{ width: '100%' }} min={0} />
             </Form.Item>
@@ -192,17 +194,17 @@ export default function BudgetParamsInput({ versionId, executor, readonly }: Pro
           <div key={prefix}>
             <Divider style={{ fontSize: 13, margin: '12px 0 8px' }}>{label}</Divider>
             <Row gutter={16}>
-              <Col span={6}>
+              <Col xs={12} md={6}>
                 <Form.Item name={[prefix, 'pct']} label="% от стоимости договора">
                   <InputNumber min={0} max={100} style={{ width: '100%' }} addonAfter="%" />
                 </Form.Item>
               </Col>
-              <Col span={6}>
+              <Col xs={12} md={6}>
                 <Form.Item name={[prefix, 'rate_pct']} label="Ставка, %">
                   <InputNumber min={0} style={{ width: '100%' }} addonAfter="%" />
                 </Form.Item>
               </Col>
-              <Col span={6}>
+              <Col xs={12} md={6}>
                 <Form.Item name={[prefix, 'rate_type']} label="Тип ставки">
                   <Select options={[
                     { value: '%/год', label: '% в год' },
@@ -210,7 +212,7 @@ export default function BudgetParamsInput({ versionId, executor, readonly }: Pro
                   ]} />
                 </Form.Item>
               </Col>
-              <Col span={6}>
+              <Col xs={12} md={6}>
                 <Form.Item name={[prefix, 'duration_mos']} label="Срок, мес.">
                   <InputNumber min={0} style={{ width: '100%' }} />
                 </Form.Item>
@@ -223,7 +225,7 @@ export default function BudgetParamsInput({ versionId, executor, readonly }: Pro
 
       <Card title="Выручка и рентабельность" size="small" style={{ marginBottom: 16 }}>
         <Row gutter={24}>
-          <Col span={8}>
+          <Col xs={24} md={8}>
             <Form.Item
               name="contract_value"
               label={vatLabel}
@@ -240,7 +242,7 @@ export default function BudgetParamsInput({ versionId, executor, readonly }: Pro
 
           {/* Наценка работает только без ТКП: режимы взаимоисключающие. */}
           {!hasTKP && (
-            <Col span={8}>
+            <Col xs={24} md={8}>
               <Form.Item
                 name="target_rent_pct"
                 label="Целевая рентабельность без НП, %"

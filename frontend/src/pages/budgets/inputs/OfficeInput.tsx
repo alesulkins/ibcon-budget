@@ -123,7 +123,7 @@ export default function OfficeInput({
           Итого {fmtNum(cleaningTotal)} ₽
         </Text>}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="ibcon-field-row" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Text style={{ fontSize: 12 }}>Стоимость уборки одного офиса в месяц:</Text>
           {readonly ? (
             <Text strong>{fmtNum(cleaningPrice)} ₽</Text>

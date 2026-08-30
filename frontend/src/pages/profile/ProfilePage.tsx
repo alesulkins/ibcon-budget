@@ -121,10 +121,12 @@ export default function ProfilePage() {
 
   return (
     // Заголовок «Личный кабинет» живёт в шапке (AppLayout), здесь его нет.
-    <div style={{ maxWidth: 980 }}>
+    // Ширину не ограничиваем: заметки и напоминания занимают всё место
+    // правее блока с аватаром и стикерами.
+    <div>
       <Row gutter={16} align="stretch">
         {/* ── Аватар и реквизиты ─────────────────────────────────── */}
-        <Col xs={24} md={9}>
+        <Col xs={24} md={8} lg={7} xl={6}>
           <Card size="small" style={{ height: '100%' }}>
             <div style={{ textAlign: 'center', marginBottom: 16 }}>
               <Avatar
@@ -145,7 +147,6 @@ export default function ProfilePage() {
                       title="Убрать аватар?"
                       okText="Да"
                       cancelText="Нет"
-                      okButtonProps={{ danger: true }}
                       onConfirm={() => updateMutation.mutate({ avatar: '' })}
                     >
                       <Button size="small" icon={<DeleteOutlined />}>Убрать</Button>
@@ -159,10 +160,13 @@ export default function ProfilePage() {
               Или выберите стикер:
             </Text>
             {/* Сетка, а не перенос по ширине: 24 стикера ложатся ровно
-                на три строки по восемь при любом размере шрифта. */}
+                на три строки по восемь при любом размере шрифта.
+                Колонки долевые, а не по 36 точек: иначе сетка была уже
+                таблицы под ней и блок выглядел собранным из кусков
+                разной ширины. */}
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(8, 36px)',
+              gridTemplateColumns: 'repeat(8, minmax(0, 1fr))',
               gap: 6,
               marginBottom: 16,
             }}>
@@ -173,7 +177,7 @@ export default function ProfilePage() {
                   type={avatar === s ? 'primary' : 'default'}
                   style={{
                     fontSize: 18,
-                    width: 38,
+                    width: '100%',
                     height: 38,
                     padding: 0,
                     background: avatar === s ? 'var(--ibcon-brand)' : undefined,
@@ -211,7 +215,7 @@ export default function ProfilePage() {
         {/* ── Рабочие заметки ──────────────────────────────────────
             Правая часть делится на три доли: две под заметки, одна под
             напоминания — их пишут коротко, а заметки длинные. */}
-        <Col xs={24} md={8}>
+        <Col xs={24} md={9} lg={10} xl={11}>
           <Card
             size="small"
             title="Рабочие заметки"
@@ -230,7 +234,7 @@ export default function ProfilePage() {
         </Col>
 
         {/* ── Напоминания ──────────────────────────────────────────── */}
-        <Col xs={24} md={7}>
+        <Col xs={24} md={7} lg={7} xl={7}>
           <Card size="small" title="Напоминания" style={{ height: '100%' }}>
             <Reminders />
           </Card>

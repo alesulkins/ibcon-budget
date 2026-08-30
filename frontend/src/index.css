@@ -72,6 +72,8 @@ html {
  * пачкают края, поэтому убираем их.
  */
 :root[data-theme='dark'] {
+  /* Подложку шапки подставляет ThemedApp из выбранного цвета; здесь —
+     умолчание на случай, если он ещё не отработал. */
   --ibcon-header-bg: rgba(20, 33, 39, 0.86);
   /* Тень на тёмном фоне не читается и лишь пачкает край. */
   --ibcon-header-shadow: none;
@@ -444,7 +446,7 @@ html body {
  * читаемость текста не должна зависеть от выбранного цвета.
  *
  * Ошибки не трогаем: красный у них смысловой, а не оформительский. */
-.ant-message-notice-content {
+.ant-message-notice-wrapper {
   border-left: 3px solid var(--ibcon-notice);
 }
 
@@ -454,11 +456,11 @@ html body {
   color: var(--ibcon-notice);
 }
 
-.ant-notification-notice {
+.ant-notification-notice-wrapper {
   border-left: 3px solid var(--ibcon-notice);
 }
 
-.ant-notification-notice-message {
+.ant-notification-notice-title {
   color: var(--ibcon-notice);
 }
 
@@ -503,6 +505,21 @@ html body {
     padding: 8px;
   }
 
+  /* Прокрутка страницы пальцем не должна упираться в таблицу.
+     На настольном экране цепочку прокрутки мы намеренно рвём (см.
+     overscroll-behavior выше), но на телефоне палец чаще всего попадает
+     как раз в таблицу, и страница переставала листаться вовсе. */
+  .ant-table-body,
+  .ant-table-content {
+    overscroll-behavior-y: auto;
+  }
+
+  /* Подпись и поле рядом: на телефоне подпись сжималась в столбик из
+     одного слова в строке. Ставим друг под другом. */
+  .ibcon-field-row {
+    flex-wrap: wrap;
+  }
+
   /* Шапка карточки: заголовок и кнопки становятся друг под другом.
      В одну строку кнопки наезжали на заголовок и закрывали статус. */
   .ant-card-head-wrapper {
@@ -544,4 +561,26 @@ html body {
   .ant-card-body {
     padding: 20px;
   }
+}
+
+/* Свёрнутый сайдбар: у знака нет подписи, и отступ до неё сдвигал бы
+   иконку из центра колонки (сам отступ — в SidebarIcons.tsx). */
+.ant-menu-inline-collapsed .ibcon-menu-icon {
+  margin-inline-end: 0;
+}
+
+/* Предупреждение фирменным цветом вместо жёлтой плашки: подложка и
+   рамка — тот же выбранный цвет, взятый прозрачным. Цвет приходит
+   переменной, поэтому меняется вместе с настройками. */
+.ibcon-alert-brand.ant-alert {
+  background: color-mix(in srgb, var(--ibcon-brand) 10%, transparent);
+  border-color: color-mix(in srgb, var(--ibcon-brand) 28%, transparent);
+}
+
+.ibcon-alert-brand.ant-alert .ant-alert-icon {
+  color: var(--ibcon-brand);
+}
+
+.ibcon-alert-brand.ant-alert .ant-alert-message {
+  color: var(--ibcon-brand);
 }

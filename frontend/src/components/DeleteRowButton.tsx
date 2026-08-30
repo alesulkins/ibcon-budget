@@ -25,10 +25,17 @@ export default function DeleteRowButton({
       title={title}
       okText="Да"
       cancelText="Нет"
-      okButtonProps={{ danger: true }}
       onConfirm={onConfirm}
     >
-      <Button size="small" type={variant} danger icon={<DeleteOutlined />} />
+      {/* Красный убран: удаление строки формы — обычное действие, а не
+          поломка. Знак и кнопка подтверждения идут выбранным в
+          настройках цветом, как и остальное оформление. */}
+      <Button
+        size="small"
+        type={variant}
+        icon={<DeleteOutlined />}
+        style={{ color: 'var(--ibcon-brand)' }}
+      />
     </Popconfirm>
   );
 }

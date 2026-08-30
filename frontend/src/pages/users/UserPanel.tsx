@@ -263,6 +263,39 @@ export default function UserPanel({ user, projects, onClose }: Props) {
           filterOption={(inp, opt) => String(opt?.label).toLowerCase().includes(inp.toLowerCase())}
         />
 
+        {/* Выбрать все разом: проектов в реестре десятки, и отмечать их
+            по одному ради «доступ ко всему» — отдельная работа. Права на
+            каждом проекте остаются прежними, новым ставится просмотр. */}
+        <div style={{ marginTop: 8 }}>
+          <Button
+            size="small"
+            type="link"
+            style={{ padding: 0 }}
+            disabled={selected.length === projects.length}
+            onClick={() => {
+              const ids = projects.map(x => x.id);
+              setSelected(ids);
+              setPermByProject(prev => {
+                const next = { ...prev };
+                for (const id of ids) if (!(id in next)) next[id] = PERM.projectView;
+                return next;
+              });
+            }}
+          >
+            Выбрать все проекты
+          </Button>
+          {selected.length > 0 && (
+            <Button
+              size="small"
+              type="link"
+              style={{ padding: 0, marginLeft: 16 }}
+              onClick={() => { setSelected([]); setPermByProject({}); }}
+            >
+              Снять все
+            </Button>
+          )}
+        </div>
+
         {selected.length > 0 && (
           <div style={{ marginTop: 12, border: `1px solid ${LINE}`, borderRadius: 8 }}>
             {selected.map((id, i) => {

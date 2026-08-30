@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   Card, Table, Button, Modal, Form, Input, Select, InputNumber,
-  Space, Typography, Tooltip,
+  Space, Typography, Tooltip, Grid,
 } from 'antd';
-import { PlusOutlined, EditOutlined, ScheduleOutlined } from '@ant-design/icons';
+import {
+  PlusOutlined, EditOutlined, ScheduleOutlined, QuestionCircleOutlined,
+} from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
 import { budgetsApi, refsApi } from '../../../api';
 import type { Employee, InputEmployees } from '../../../types';
 import { scheduleMultiplier, salaryForCity } from '../../../types';
 import { monthLabel, thousandFormatter, thousandParser, fmtNum } from '../../../utils/fmt';
+import { normalizeFullName } from '../../../utils/names';
 import MonthGrid, {
   monthGridCell, monthGridHeadCell, LABEL_COL_WIDTH,
 } from '../../../components/MonthGrid';
@@ -104,6 +107,8 @@ export default function EmployeesInput({
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [schedEmpIdx, setSchedEmpIdx] = useState<number | null>(null);
   const [empForm] = Form.useForm();
+  // Телефон — до 768 точек (antd md), тот же порог, что и в каркасе.
+  const mobile = !Grid.useBreakpoint().md;
 
   /**
    * Должности из справочника — только активные: деактивированную выбрать
@@ -412,7 +417,16 @@ export default function EmployeesInput({
             />
           </Form.Item>
           <Form.Item name="full_name" label="ФИО">
-            <Input placeholder="Иванов И.И." />
+            {/* Приводим к общему для системы виду «Фамилия И.О.» при
+                потере фокуса: «иванов а.б.» → «Иванов А.Б.». Так же
+                показываются ФИО в шапке, сайдбаре и таблицах. */}
+            <Input
+              placeholder="Иванов И.И."
+              onBlur={(e) => {
+                const v = normalizeFullName(e.target.value);
+                if (v !== e.target.value) empForm.setFieldValue('full_name', v);
+              }}
+            />
           </Form.Item>
           <Form.Item
             name="country"
@@ -447,7 +461,9 @@ export default function EmployeesInput({
         open={showScheduleModal}
         onCancel={() => setShowScheduleModal(false)}
         onOk={saveSchedule}
-        width={1100}
+        // На телефоне окно занимает всю ширину: при 1100 точках оно
+        // упиралось в край экрана, и таблица графика уезжала за него.
+        width={mobile ? '100%' : 1100}
         okText="Сохранить"
         cancelText="Отмена"
       >
@@ -490,11 +506,39 @@ export default function EmployeesInput({
             </tr>
           );
 
+          // Строки расшифровки нужны и в колонке, и в подсказке —
+          // держим их одним куском разметки.
+          const legendRows = MODE_LEGEND.map(({ code, text }) => (
+            <div key={code} style={{ display: 'flex', gap: 8, marginBottom: 6, fontSize: 12 }}>
+              <span style={{
+                flex: '0 0 62px',
+                fontWeight: 600,
+                whiteSpace: 'nowrap',
+              }}>
+                {code}
+              </span>
+              <span style={{ lineHeight: 1.4 }}>{text}</span>
+            </div>
+          ));
+
           return (
-            <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+            <div style={{
+              display: 'flex',
+              gap: 16,
+              alignItems: 'flex-start',
+              // На телефоне колонки становятся друг под другом.
+              flexWrap: 'wrap',
+            }}>
               {/* Левая колонка: график и командировки */}
               <div style={{ flex: '1 1 auto', minWidth: 0 }}>
                 <Text strong>График релокации / условий работы по месяцам:</Text>
+                {mobile && (
+                  <Tooltip title={legendRows} styles={{ container: { maxWidth: 280 } }}>
+                    <QuestionCircleOutlined
+                      style={{ marginLeft: 6, color: 'var(--ibcon-muted)' }}
+                    />
+                  </Tooltip>
+                )}
                 <div style={{ margin: '6px 0' }}>
                   <Text type="secondary" style={{ fontSize: 12 }}>Применить ко всем месяцам: </Text>
                   <Select
@@ -629,33 +673,26 @@ export default function EmployeesInput({
                 )}
               </div>
 
-              {/* Правая колонка: расшифровка кодов графика */}
-              <div
-                style={{
-                  flex: '0 0 240px',
-                  background: '#fafafa',
-                  border: '1px solid var(--ibcon-line)',
-                  borderRadius: 6,
-                  padding: '10px 12px',
-                }}
-              >
-                <Text strong style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
-                  Обозначения
-                </Text>
-                {MODE_LEGEND.map(({ code, text }) => (
-                  <div key={code} style={{ display: 'flex', gap: 8, marginBottom: 6, fontSize: 12 }}>
-                    <span style={{
-                      flex: '0 0 62px',
-                      fontWeight: 600,
-                      color: 'var(--ibcon-muted)',
-                      whiteSpace: 'nowrap',
-                    }}>
-                      {code}
-                    </span>
-                    <span style={{ color: '#8c8c8c', lineHeight: 1.4 }}>{text}</span>
-                  </div>
-                ))}
-              </div>
+              {/* Расшифровка кодов графика. На телефоне колонка в 240
+                  точек не оставляла места самой таблице, поэтому там она
+                  спрятана в подсказку у знака вопроса рядом с заголовком
+                  (см. legendHint выше). */}
+              {!mobile && (
+                <div
+                  style={{
+                    flex: '0 0 240px',
+                    background: 'var(--ibcon-hover)',
+                    border: '1px solid var(--ibcon-line)',
+                    borderRadius: 6,
+                    padding: '10px 12px',
+                  }}
+                >
+                  <Text strong style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                    Обозначения
+                  </Text>
+                  {legendRows}
+                </div>
+              )}
             </div>
           );
         })()}

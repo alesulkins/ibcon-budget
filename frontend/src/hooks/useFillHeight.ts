@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useState } from 'react';
 import { SCROLL_ROOT_ID } from './useScrollRestore';
 
 /**
@@ -18,6 +18,9 @@ const BOTTOM_GAP = 24;
 
 /** Ниже этой высоты таблице сжиматься не даём — пары строк не видно. */
 const MIN_HEIGHT = 220;
+
+/** Порог телефона — тот же, что у antd (md) и в каркасе приложения. */
+const MOBILE_MAX = 768;
 
 /**
  * Высота, которую нужно отдать `Table.scroll.y`, чтобы вся таблица —
@@ -47,13 +50,29 @@ const MIN_HEIGHT = 220;
  * шапки почему-то не совпала, это самокорректируется без миганий.
  */
 export function useFillToSiderFooter<T extends HTMLElement>(reserveBottom = 0) {
-  const ref = useRef<T>(null);
+  /**
+   * Элемент держим состоянием, а не обычным ref: страница сначала
+   * показывает загрузку, и до прихода данных этого блока в разметке нет
+   * вовсе. Обычный ref заполняется молча, эффект бы не перезапустился —
+   * высота оставалась бы неопределённой, и таблица рисовалась целиком,
+   * без собственной прокрутки (так и было на экране БДР/БДДС).
+   */
+  const [el, setEl] = useState<T | null>(null);
+  const ref = useCallback((node: T | null) => setEl(node), []);
   const [height, setHeight] = useState<number>();
 
   useLayoutEffect(() => {
     function recompute() {
-      const el = ref.current;
       if (!el) return;
+
+      // На телефоне высоту не ограничиваем вовсе: линии ЛК там нет, а
+      // окошко в четверть экрана с собственной прокруткой внутри
+      // страницы — худшее из решений. Таблица растёт во всю длину, и
+      // прокручивается сама страница.
+      if (window.innerWidth < MOBILE_MAX) {
+        setHeight(undefined);
+        return;
+      }
 
       // На телефоне панель выезжает поверх страницы и, пока закрыта, её
       // блока «Личный кабинет» в разметке нет вовсе. Ориентир тогда —
@@ -88,11 +107,16 @@ export function useFillToSiderFooter<T extends HTMLElement>(reserveBottom = 0) {
     recompute();
     const raf = requestAnimationFrame(recompute);
     window.addEventListener('resize', recompute);
+    // Высота шапки таблицы меняется, когда приходят данные и подписи
+    // колонок переносятся на две строки, — следим и за ней.
+    const observer = new ResizeObserver(() => recompute());
+    if (el) observer.observe(el);
     return () => {
       cancelAnimationFrame(raf);
+      observer?.disconnect();
       window.removeEventListener('resize', recompute);
     };
-  }, [reserveBottom]);
+  }, [el, reserveBottom]);
 
   return [ref, height] as const;
 }

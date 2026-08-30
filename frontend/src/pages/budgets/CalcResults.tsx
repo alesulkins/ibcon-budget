@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   Card, Button, Table, Space,
-  message, Spin,
+  message, Spin, Grid,
 } from 'antd';
 import { CalculatorOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -28,6 +28,8 @@ interface Props {
 export default function CalcResults({
   versionId, projectId, startDate, calculated,
 }: Props) {
+  // Телефон — до 768 точек (antd md), тот же порог, что и в каркасе.
+  const mobile = !Grid.useBreakpoint().md;
   const qc = useQueryClient();
 
   /**
@@ -173,8 +175,11 @@ export default function CalcResults({
               <div
                 key={s.title}
                 style={{
-                  flex: '1 1 0',
-                  minWidth: 180,
+                  // Ширина карточки — по самому длинному числу: сумма в
+                  // восемь разрядов не помещалась в 180 точек и вылезала
+                  // за рамку. Строка при нехватке места прокручивается.
+                  flex: '1 0 auto',
+                  minWidth: 220,
                   padding: '14px 16px',
                   // Та же линия, что разлиновывает таблицы.
                   border: `1px solid ${LINE}`,
@@ -206,6 +211,36 @@ export default function CalcResults({
 
           {/* Сводная таблица */}
           <Card title="Итоги расчёта" size="small" style={{ marginBottom: 24 }}>
+            {/* На телефоне подпись статьи и сумма в одну строку не
+                помещаются, а сумма, перенесённая по разрядам, читается
+                как две разные суммы. Поэтому там сумма встаёт под
+                подписью, а не рядом. */}
+            {mobile ? (
+              <div>
+                {summaryRows.map((row, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      padding: '8px 4px',
+                      borderTop: `1px solid ${LINE}`,
+                      background: row.highlight ? 'var(--ibcon-hover)' : undefined,
+                    }}
+                  >
+                    <div style={{ fontSize: 12, color: TEXT_SOFT, marginBottom: 2 }}>
+                      {row.label}
+                    </div>
+                    <div style={{
+                      fontFamily: FONT_NUM,
+                      fontSize: row.highlight ? 16 : 14,
+                      fontWeight: row.highlight ? 700 : 400,
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {row.value}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <tbody>
                 {summaryRows.map((row, i) => (
@@ -220,6 +255,7 @@ export default function CalcResults({
                       fontWeight: row.highlight ? 700 : 400,
                       fontSize: row.highlight ? 15 : 13,
                       fontFamily: FONT_NUM,
+                      whiteSpace: 'nowrap',
                     }}>
                       {row.value}
                     </td>
@@ -227,6 +263,7 @@ export default function CalcResults({
                 ))}
               </tbody>
             </table>
+            )}
           </Card>
 
           {/* Помесячная разбивка */}

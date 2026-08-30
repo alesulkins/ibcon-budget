@@ -11,6 +11,10 @@ const { Text } = Typography;
 const DEL_COL = 40;
 const COUNT_COL = 70;
 const TOTAL_COL = 110;
+const MONTH_COL = 180;
+const PRICE_COL = 160;
+/** Наименьшая ширина колонки описания — по ней считается минимум таблицы. */
+const NAME_COL = 200;
 
 const table: React.CSSProperties = {
   width: '100%',
@@ -90,15 +94,22 @@ export default function PurchaseTable({
     );
   }
 
+  // Ширина, ниже которой таблица не сжимается: на телефоне колонки
+  // схлопывались, поля ввода превращались в полоски, а «Итого» налезало
+  // на количество. Ниже минимума таблица прокручивается вбок.
+  const minWidth = (withName ? NAME_COL : 0) + MONTH_COL + PRICE_COL
+    + COUNT_COL + TOTAL_COL + (readonly ? 0 : DEL_COL);
+
   return (
     <div>
-      <table style={table} className="ibcon-grid">
+      <div style={{ overflowX: 'auto' }} className="ibcon-scroll">
+      <table style={{ ...table, minWidth }} className="ibcon-grid">
         <colgroup>
           {withName && <col />}
           {/* Без колонки описания тянется колонка месяца, иначе таблица
               схлопывается по содержимому и не занимает белую область. */}
-          <col style={withName ? { width: 180 } : undefined} />
-          <col style={{ width: 160 }} />
+          <col style={withName ? { width: MONTH_COL } : undefined} />
+          <col style={{ width: PRICE_COL }} />
           <col style={{ width: COUNT_COL }} />
           <col style={{ width: TOTAL_COL }} />
           {!readonly && <col style={{ width: DEL_COL }} />}
@@ -201,6 +212,7 @@ export default function PurchaseTable({
           ))}
         </tbody>
       </table>
+      </div>
       {!readonly && (
         <Button
           size="small"

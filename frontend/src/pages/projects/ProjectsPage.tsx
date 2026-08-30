@@ -111,7 +111,8 @@ export default function ProjectsPage() {
       content: 'Введённые данные не сохранятся.',
       okText: 'Да, отменить',
       cancelText: 'Продолжить заполнение',
-      okButtonProps: { danger: true },
+      // Без красного: отмена ввода — не авария. Кнопка идёт
+      // выбранным цветом, как остальное оформление.
       onOk: () => { setShowCreate(false); form.resetFields(); },
     });
   }

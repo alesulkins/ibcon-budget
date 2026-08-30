@@ -134,6 +134,12 @@ export default function ThemedApp() {
     // светлый тон той же гаммы.
     root.setProperty('--ibcon-step-active-label',
       dark ? shade(brandColor, 0.62) : brandColor);
+    // Шапка страницы. В тёмной теме её подложка выводится из выбранного
+    // цвета тем же способом, что фон и карточки (коэффициент чуть
+    // светлее фона, чтобы шапка читалась как отдельный слой). В светлой
+    // теме шапка остаётся белой — решение владельца.
+    root.setProperty('--ibcon-header-bg',
+      dark ? alpha(shade(brandColor, -0.56), 0.86) : 'rgba(255, 255, 255, 0.86)');
     root.setProperty('--ibcon-scrollbar',
       dark ? 'rgba(230, 237, 240, 0.24)' : alpha(brandColor, 0.28));
     // Базовый кегль: от него antd считает свои размеры, а наши
