@@ -5,6 +5,9 @@ import dayjs from 'dayjs';
 import 'dayjs/locale/ru';
 import ThemedApp from './components/ThemedApp';
 import { UISettingsProvider } from './store/uiSettings';
+// Шрифты подключаются первыми: правила @font-face должны быть известны
+// браузеру до того, как он начнёт рисовать текст.
+import './fonts.css';
 import './index.css';
 
 dayjs.locale('ru');

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 
 const KEY_PREFIX = 'scroll:';
@@ -31,6 +31,76 @@ export function carryScrollTo(pathname: string) {
   try {
     sessionStorage.setItem(KEY_PREFIX + pathname, String(el.scrollTop));
   } catch { /* приватный режим — просто откроется сверху */ }
+}
+
+/**
+ * Удерживает уровень прокрутки при смене шага мастера.
+ *
+ * Полоса шагов прилипшая, а формы под ней разной высоты. При переходе на
+ * шаг с более короткой формой панель мгновенно становится ниже, браузер
+ * упирает прокрутку в новый конец, и человека выбрасывает вверх; пока
+ * форма догружается запросом, высота проседает почти до нуля — отсюда и
+ * прыжок туда-обратно. Поэтому уровень запоминаем ДО переключения
+ * (обработчиком `hold`) и возвращаем, как только страница дорастёт.
+ *
+ * Ждём наблюдателем за размером, а не парой кадров: между переключением
+ * и появлением формы проходит целый запрос к серверу.
+ */
+export function useHoldScroll(dep: unknown) {
+  const kept = useRef<number | null>(null);
+
+  // Уровень снимаем в обработчике клика, а не в эффекте: к моменту
+  // эффекта содержимое уже сменилось, а прокрутка — уже сбита.
+  const hold = useCallback(() => {
+    const el = scrollRoot();
+    kept.current = el ? el.scrollTop : null;
+  }, []);
+
+  useLayoutEffect(() => {
+    const want = kept.current;
+    kept.current = null;
+    const el = scrollRoot();
+    if (!el || want === null || want <= 0) return;
+
+    let observer: ResizeObserver | undefined;
+    let giveUp: number | undefined;
+
+    const stopWaiting = () => {
+      observer?.disconnect();
+      observer = undefined;
+      if (giveUp !== undefined) {
+        clearTimeout(giveUp);
+        giveUp = undefined;
+      }
+    };
+
+    const tryScroll = () => {
+      if (el.scrollHeight - el.clientHeight < want) return false;
+      el.scrollTop = want;
+      return true;
+    };
+
+    if (!tryScroll()) {
+      observer = new ResizeObserver(() => {
+        if (tryScroll()) stopWaiting();
+      });
+      observer.observe(el);
+      // Наблюдаем и за содержимым: у самой панели размер задан
+      // раскладкой и не меняется — растёт то, что внутри неё.
+      if (el.firstElementChild) observer.observe(el.firstElementChild);
+      giveUp = window.setTimeout(() => {
+        // Форма на новом шаге просто короче прежней — докручиваем до
+        // конца: это ближе к прежнему месту, чем начало страницы.
+        const reachable = el.scrollHeight - el.clientHeight;
+        if (reachable > 0) el.scrollTop = Math.min(want, reachable);
+        stopWaiting();
+      }, 1500);
+    }
+
+    return stopWaiting;
+  }, [dep]);
+
+  return hold;
 }
 
 /**

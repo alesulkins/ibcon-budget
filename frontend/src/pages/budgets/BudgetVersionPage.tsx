@@ -15,6 +15,7 @@ import Profitability from '../../components/Profitability';
 import { extractError } from '../../api/client';
 import WizardSteps from '../../components/WizardSteps';
 import { useStickyState } from '../../hooks/useStickyState';
+import { useHoldScroll } from '../../hooks/useScrollRestore';
 import SaveIndicator from '../../components/SaveIndicator';
 import { useUnsavedWarning } from '../../hooks/useUnsavedWarning';
 import EmployeesInput from './inputs/EmployeesInput';
@@ -69,6 +70,13 @@ export default function BudgetVersionPage() {
   const qc = useQueryClient();
   // Открытый шаг мастера переживает переход в справочники и обратно
   const [step, setStep] = useStickyState(`wizard-step:${vid}`, 0);
+  // Переключение шага не должно сдвигать человека по вертикали:
+  // уровень снимаем перед сменой и возвращаем, когда форма догрузилась.
+  const holdScroll = useHoldScroll(step);
+  const goStep = React.useCallback((next: number | ((s: number) => number)) => {
+    holdScroll();
+    setStep(next);
+  }, [holdScroll, setStep]);
   const [statusForm] = Form.useForm();
   const [showStatus, setShowStatus] = useState(false);
   // Неудаляемый префикс комментария при согласовании
@@ -488,7 +496,7 @@ export default function BudgetVersionPage() {
           <WizardSteps
             items={isAP ? [WIZARD_STEPS[apOnlyStepIdx]] : WIZARD_STEPS}
             current={isAP ? 0 : step}
-            onChange={isAP ? undefined : setStep}
+            onChange={isAP ? undefined : goStep}
           />
         </div>
         <div style={{ padding: 24 }}>
@@ -511,14 +519,14 @@ export default function BudgetVersionPage() {
         }}>
           <Button
             disabled={step === 0 || isAP}
-            onClick={() => setStep(s => s - 1)}
+            onClick={() => goStep(s => s - 1)}
           >
             ← Назад
           </Button>
           <Button
             type="primary"
             disabled={step === WIZARD_STEPS.length - 1 || isAP}
-            onClick={() => setStep(s => s + 1)}
+            onClick={() => goStep(s => s + 1)}
           >
             Далее →
           </Button>
