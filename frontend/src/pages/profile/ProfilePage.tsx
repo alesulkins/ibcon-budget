@@ -126,7 +126,17 @@ export default function ProfilePage() {
     <div>
       <Row gutter={16} align="stretch">
         {/* ── Аватар и реквизиты ─────────────────────────────────── */}
-        <Col xs={24} md={8} lg={7} xl={6}>
+        {/* Три колонки — только на широком экране (lg и выше). На
+            планшете в трёх колонках подписи ломались по словам, а кнопки
+            под аватаром обрезались; там их две. На телефоне порядок
+            меняется: сначала напоминания — с ними работают чаще, — потом
+            длинные заметки. */}
+        <Col
+          xs={{ span: 24, order: 1 }}
+          md={{ span: 12, order: 1 }}
+          lg={{ span: 7, order: 1 }}
+          xl={{ span: 6, order: 1 }}
+        >
           <Card size="small" style={{ height: '100%' }}>
             <div style={{ textAlign: 'center', marginBottom: 16 }}>
               <Avatar
@@ -138,7 +148,8 @@ export default function ProfilePage() {
               </Avatar>
 
               <div style={{ marginTop: 12 }}>
-                <Space>
+                {/* wrap: на узкой колонке вторая кнопка обрезалась. */}
+                <Space wrap>
                   <Upload {...uploadProps}>
                     <Button size="small" icon={<UploadOutlined />}>Загрузить фото</Button>
                   </Upload>
@@ -215,7 +226,12 @@ export default function ProfilePage() {
         {/* ── Рабочие заметки ──────────────────────────────────────
             Правая часть делится на три доли: две под заметки, одна под
             напоминания — их пишут коротко, а заметки длинные. */}
-        <Col xs={24} md={9} lg={10} xl={11}>
+        <Col
+          xs={{ span: 24, order: 3 }}
+          md={{ span: 12, order: 2 }}
+          lg={{ span: 10, order: 2 }}
+          xl={{ span: 11, order: 2 }}
+        >
           <Card
             size="small"
             title="Рабочие заметки"
@@ -234,7 +250,12 @@ export default function ProfilePage() {
         </Col>
 
         {/* ── Напоминания ──────────────────────────────────────────── */}
-        <Col xs={24} md={7} lg={7} xl={7}>
+        <Col
+          xs={{ span: 24, order: 2 }}
+          md={{ span: 24, order: 3 }}
+          lg={{ span: 7, order: 3 }}
+          xl={{ span: 7, order: 3 }}
+        >
           <Card size="small" title="Напоминания" style={{ height: '100%' }}>
             <Reminders />
           </Card>

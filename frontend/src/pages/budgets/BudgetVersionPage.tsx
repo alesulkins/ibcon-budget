@@ -527,13 +527,17 @@ export default function BudgetVersionPage() {
           >
             ← Назад
           </Button>
-          <Button
-            type="primary"
-            disabled={step === WIZARD_STEPS.length - 1 || isAP}
-            onClick={() => goStep(s => s + 1)}
-          >
-            Далее →
-          </Button>
+          {/* На последнем шаге кнопки «Далее» нет вовсе: дальше идти
+              некуда, а серая неактивная кнопка выглядела как поломка. */}
+          {step < WIZARD_STEPS.length - 1 && (
+            <Button
+              type="primary"
+              disabled={isAP}
+              onClick={() => goStep(s => s + 1)}
+            >
+              Далее →
+            </Button>
+          )}
         </div>
       </Card>
 

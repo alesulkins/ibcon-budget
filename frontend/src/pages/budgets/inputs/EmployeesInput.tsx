@@ -4,7 +4,7 @@ import {
   Space, Typography, Tooltip, Grid,
 } from 'antd';
 import {
-  PlusOutlined, EditOutlined, ScheduleOutlined, QuestionCircleOutlined,
+  PlusOutlined, EditOutlined, QuestionCircleOutlined,
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
@@ -280,14 +280,11 @@ export default function EmployeesInput({
     {
       title: '',
       key: 'actions',
-      width: 140,
+      width: 90,
       render: (_, emp, idx) => (
-        <Space size={4}>
-          <Tooltip title="График работы и командировки">
-            <Button size="small" icon={<ScheduleOutlined />} onClick={() => openSchedule(idx)}>
-              График
-            </Button>
-          </Tooltip>
+        // Нажатие на кнопки не должно открывать ещё и график: событие
+        // всплывает до строки, поэтому гасим его здесь.
+        <Space size={4} onClick={(e) => e.stopPropagation()}>
           {!readonly && (
             <>
               <Button
@@ -380,6 +377,14 @@ export default function EmployeesInput({
           // Пока строк нет, шапка таблицы не нужна — только подсказка.
           showHeader={data.employees.length > 0}
           locale={{ emptyText: <EmptyBlock /> }}
+          // Нажатие на строку открывает график: отдельная кнопка
+          // «График» занимала место в каждой строке, а нужна она была
+          // ровно за тем же. Кнопки правки и удаления нажатие строки не
+          // перехватывают — они выше по дереву событий.
+          onRow={(_, idx) => ({
+            onClick: () => openSchedule(idx!),
+            style: { cursor: 'pointer' },
+          })}
           // Должность и ФИО не рвутся по словам, а таблица прокручивается
           // вбок: на телефоне «Заместитель начальника отдела ПТО»
           // разъезжался на три строки, и строки таблицы переставали
@@ -387,6 +392,12 @@ export default function EmployeesInput({
           className="nowrap-table"
           scroll={{ x: 'max-content' }}
         />
+        {data.employees.length > 0 && (
+          <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
+            Нажмите на строку сотрудника, чтобы открыть график работы и
+            командировки.
+          </Text>
+        )}
       </Card>
 
       {/* Модал добавления / редактирования */}

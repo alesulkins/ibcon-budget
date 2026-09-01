@@ -25,6 +25,8 @@
      переопределяются персональными настройками пользователя — их
      подставляет ThemedApp, здесь только значения по умолчанию. */
   --ibcon-notice: #183e4d;
+  --ibcon-notice-bg: rgba(24, 62, 77, 0.88);
+  --ibcon-notice-fg: #fff;
   --ibcon-font-size: 14px;
 
   /* Шапка страницы: матовое стекло поверх рабочей области. В тёмной
@@ -456,12 +458,28 @@ html body {
   color: var(--ibcon-notice);
 }
 
-.ant-notification-notice-wrapper {
-  border-left: 3px solid var(--ibcon-notice);
+/* Всплывающее напоминание — плашка выбранного цвета, полупрозрачная и
+   с размытием под собой, а не белая карточка с цветными деталями.
+   Цвет текста подбирает ThemedApp под яркость выбранного цвета.
+
+   Селекторы с запасом по весу: свои стили antd подмешивает в <head> во
+   время работы, и правило равного веса проигрывает по порядку. */
+.ant-notification .ant-notification-notice {
+  background: var(--ibcon-notice-bg);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 6px 24px rgba(12, 26, 51, 0.18);
 }
 
-.ant-notification-notice-title {
-  color: var(--ibcon-notice);
+.ant-notification .ant-notification-notice-wrapper {
+  background: transparent;
+}
+
+.ant-notification .ant-notification-notice,
+.ant-notification .ant-notification-notice-title,
+.ant-notification .ant-notification-notice-description,
+.ant-notification .ant-notification-notice-close,
+.ant-notification .ant-notification-notice .anticon {
+  color: var(--ibcon-notice-fg);
 }
 
 /* ── Узкие экраны: телефон и планшет ───────────────────────────────

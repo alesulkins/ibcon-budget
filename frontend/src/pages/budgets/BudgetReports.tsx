@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Button, InputNumber, Segmented, Space, Spin, Switch, Table, Typography, message,
+  Button, InputNumber, Segmented, Space, Spin, Switch, Table, Typography, message, Grid,
 } from 'antd';
 import { FileExcelOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -56,6 +56,8 @@ export default function BudgetReports({ versionId, permissions, readonly }: Prop
    * в длинном отчёте становилось непонятно, какой месяц перед глазами.
    */
   const [fillRef, fillHeight] = useFillToSiderFooter<HTMLDivElement>();
+  // Телефон — до 768 точек (antd md), тот же порог, что и в каркасе.
+  const mobile = !Grid.useBreakpoint().md;
   const [hydrated, setHydrated] = useState(false);
 
   const { data, isLoading, error } = useQuery({
@@ -129,25 +131,35 @@ export default function BudgetReports({ versionId, permissions, readonly }: Prop
   const columns: ColumnsType<ReportRow> = useMemo(() => {
     if (!report) return [];
     return [
-      {
+      // Кодификатор на телефоне не показываем: две закреплённые колонки
+      // съедали почти всю ширину экрана, и месяцев было не видно. Номер
+      // статьи есть в выгрузке, а на экране статью узнают по названию.
+      ...(mobile ? [] : [{
         title: 'Кодификатор',
         dataIndex: 'code',
         width: 110,
-        fixed: 'left',
+        fixed: 'left' as const,
         className: 'ibcon-num',
-        render: (v: string, r) => (
+        render: (v: string, r: ReportRow) => (
           <span style={{ color: TEXT_SOFT, fontWeight: r.group ? 600 : 400 }}>{v}</span>
         ),
-      },
+      }]),
       {
         title: 'Статья оборотов',
         dataIndex: 'name',
-        width: 320,
+        // На телефоне колонка уже и переносится по словам: закреплённая
+        // колонка в 320 точек не оставила бы места месяцам.
+        width: mobile ? 150 : 320,
         fixed: 'left',
         render: (v: string, r) => (
           // Уровень показываем отступом: иерархия в кодификаторе, а не в
           // структуре данных — список статей плоский, как в форме.
-          <span style={{ paddingLeft: r.level * 14, fontWeight: r.group ? 600 : 400 }}>
+          <span style={{
+            paddingLeft: r.level * (mobile ? 8 : 14),
+            fontWeight: r.group ? 600 : 400,
+            whiteSpace: mobile ? 'normal' : undefined,
+            display: 'inline-block',
+          }}>
             {v}
           </span>
         ),
@@ -188,7 +200,7 @@ export default function BudgetReports({ versionId, permissions, readonly }: Prop
     // manual входит в зависимости: без него ячейки ввода не
     // перерисовывались бы при наборе.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [report, canEdit, manual, kind]);
+  }, [report, canEdit, manual, kind, mobile]);
 
   if (isLoading) {
     return <div style={{ textAlign: 'center', padding: 48 }}><Spin size="large" /></div>;

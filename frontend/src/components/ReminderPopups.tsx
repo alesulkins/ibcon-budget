@@ -94,7 +94,9 @@ export default function ReminderPopups() {
             </div>
           </div>
         ),
-        icon: <BellOutlined style={{ color: noticeColor }} />,
+        // Знак на цветной подложке — цветом текста, а не цветом
+        // подложки: иначе он на ней пропадал.
+        icon: <BellOutlined style={{ color: 'var(--ibcon-notice-fg)' }} />,
         // Не закрываем сами: напоминание можно пропустить, отойдя от
         // экрана, — пусть висит, пока его не закроют.
         duration: 0,
