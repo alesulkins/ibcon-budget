@@ -434,7 +434,33 @@ html body {
    помесячной разбивки: иерархия кодификатора читается без рамок.
    Подложка от фирменного цвета, поэтому меняется вместе с ним. */
 .ibcon-report-group > td {
-  background: var(--ibcon-hover);
+  /* Сплошной цвет, а не полупрозрачная подсветка: закреплённая колонка
+     «Статья оборотов» стоит поверх месяцев, и сквозь прозрачную заливку
+     под ней ехали бы суммы. */
+  background: var(--ibcon-row-accent);
+}
+
+/**
+ * Закреплённые колонки — со своей сплошной заливкой.
+ *
+ * У antd закреплённая ячейка наследует фон строки, а строка у нас
+ * прозрачная (таблица лежит прямо на рабочей области). При боковой
+ * прокрутке из-под закреплённой «Статьи» просвечивали уезжающие суммы.
+ *
+ * Класс `ant-table-cell-fix` — общий для колонок, закреплённых слева и
+ * справа (в antd v6 они `-fix-start` и `-fix-end`, а не `-left`/`-right`).
+ */
+.ant-table-tbody > tr > td.ant-table-cell-fix,
+.ant-table-thead > tr > th.ant-table-cell-fix,
+.ant-table-summary td.ant-table-cell-fix {
+  background: var(--ibcon-bg);
+}
+
+.ibcon-report-group > td.ant-table-cell-fix,
+/* Подсветка строки под курсором — тем же сплошным цветом: правило выше
+   перебивает по весу заливку наведения от antd. */
+.ant-table-tbody > tr.ant-table-row:hover > td.ant-table-cell-fix {
+  background: var(--ibcon-row-accent);
 }
 
 /* ── Всплывающие сообщения и уведомления ───────────────────────────
@@ -448,14 +474,27 @@ html body {
  * читаемость текста не должна зависеть от выбранного цвета.
  *
  * Ошибки не трогаем: красный у них смысловой, а не оформительский. */
-.ant-message-notice-wrapper {
-  border-left: 3px solid var(--ibcon-notice);
+/* Плашка сообщения — того же вида, что всплывающее напоминание:
+   выбранный цвет, полупрозрачно и с размытием под собой. Карточка —
+   .ant-message-notice, обёртка вокруг неё фона не несёт.
+
+   Ошибки не трогаем: красный у них смысловой, а не оформительский. */
+.ant-message .ant-message-notice:not(:has(.ant-message-error)) {
+  background: var(--ibcon-notice-bg);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 6px 24px rgba(12, 26, 51, 0.18);
 }
 
-.ant-message-success .anticon,
-.ant-message-info .anticon,
-.ant-message-loading .anticon {
-  color: var(--ibcon-notice);
+.ant-message .ant-message-notice-wrapper {
+  background: transparent;
+}
+
+.ant-message .ant-message-notice:not(:has(.ant-message-error)),
+.ant-message .ant-message-notice:not(:has(.ant-message-error)) .ant-message-notice-content,
+.ant-message .ant-message-success .anticon,
+.ant-message .ant-message-info .anticon,
+.ant-message .ant-message-loading .anticon {
+  color: var(--ibcon-notice-fg);
 }
 
 /* Всплывающее напоминание — плашка выбранного цвета, полупрозрачная и

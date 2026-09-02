@@ -13,6 +13,7 @@ import { LINE, TEXT_SOFT } from '../../theme';
 import { canIn, PERM } from '../../store/permissions';
 import { useAutosave } from '../../hooks/useAutosave';
 import { useFillToSiderFooter } from '../../hooks/useFillHeight';
+import { SCROLL_ROOT_ID } from '../../hooks/useScrollRestore';
 
 interface Props {
   versionId: number;
@@ -192,7 +193,10 @@ export default function BudgetReports({ versionId, permissions, readonly }: Prop
         dataIndex: 'total',
         width: 140,
         align: 'right' as const,
-        fixed: 'right',
+        // На телефоне итог не закрепляем: закреплённая слева статья и
+        // закреплённый справа итог вдвоём съедали почти всю ширину
+        // экрана — месяцев оставалось на полстолбца.
+        fixed: mobile ? undefined : 'right',
         className: 'ibcon-num',
         render: (v: number, r: ReportRow) => cellValue(v, r.group, true),
       },
@@ -262,7 +266,21 @@ export default function BudgetReports({ versionId, permissions, readonly }: Prop
           size="small"
           pagination={false}
           tableLayout="fixed"
-          scroll={{ x: 'max-content', y: fillHeight }}
+          /**
+           * На телефоне у таблицы нет своей вертикальной прокрутки:
+           * сначала листается страница — уезжают переключатель и
+           * пояснение, — а дальше вниз идёт сама таблица. Отчёт в
+           * маленьком окне посреди экрана читать нельзя.
+           *
+           * Шапку при этом держим липкой к странице, иначе к середине
+           * отчёта непонятно, какой месяц перед глазами. Контейнер
+           * указываем явно: страница прокручивается не в окне, а в
+           * #ibcon-scroll-root.
+           */
+          sticky={mobile
+            ? { getContainer: () => document.getElementById(SCROLL_ROOT_ID) ?? window }
+            : false}
+          scroll={{ x: 'max-content', y: mobile ? undefined : fillHeight }}
           rowClassName={(r) => (r.group ? 'ibcon-report-group' : '')}
           locale={{ emptyText: 'Нет заполненных статей — версию ещё не считали.' }}
         />

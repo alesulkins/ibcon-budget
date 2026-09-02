@@ -21,6 +21,8 @@ const DARK = {
   textSoft: '#9FB3BC',
   line: 'rgba(230, 237, 240, 0.12)',
   hover: 'rgba(230, 237, 240, 0.06)',
+  /** Тот же оттенок, что hover, но сплошным цветом — см. blend(). */
+  hoverOver: '#E6EDF0',
 };
 
 /**
@@ -59,6 +61,25 @@ function alpha(hex: string, a: number): string {
   if (!m) return hex;
   const n = parseInt(m[1], 16);
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+}
+
+/**
+ * Непрозрачный аналог полупрозрачной подсветки: цвет `over`, наложенный
+ * с прозрачностью `a` на сплошной `base`.
+ *
+ * Нужен закреплённым колонкам таблицы. Закреплённая ячейка стоит поверх
+ * прокручиваемых: если её заливка полупрозрачна, сквозь статью
+ * просвечивают уезжающие под неё суммы.
+ */
+function blend(base: string, over: string, a: number): string {
+  const hex = (v: string) => /^#?([0-9a-f]{6})$/i.exec(v.trim());
+  const mb = hex(base); const mo = hex(over);
+  if (!mb || !mo) return base;
+  const b = parseInt(mb[1], 16); const o = parseInt(mo[1], 16);
+  const ch = (sh: number) => Math.round(
+    ((b >> sh) & 255) + (((o >> sh) & 255) - ((b >> sh) & 255)) * a,
+  );
+  return `#${((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, '0')}`;
 }
 
 /**
@@ -118,12 +139,19 @@ export default function ThemedApp() {
     root.setProperty('--ibcon-muted', textSoft);
     root.setProperty('--ibcon-text', text);
     root.setProperty('--ibcon-hover', hover);
+    // Непрозрачная пара к --ibcon-hover: подсветка групповых строк
+    // отчёта. Полупрозрачной её брать нельзя — закреплённая колонка
+    // «Статья» пропускала бы под собой суммы месяцев.
+    root.setProperty(
+      '--ibcon-row-accent',
+      dark ? blend(bg, DARK.hoverOver, 0.06) : blend(bg, brandColor, 0.055),
+    );
     root.setProperty('--ibcon-notice', noticeColor);
     // Всплывающее уведомление красится целиком: подложка — выбранный
     // цвет, взятый полупрозрачным, поверх размытия. Цвет текста
     // подбирается под неё, иначе на светлом цвете белые подписи
     // пропадали.
-    root.setProperty('--ibcon-notice-bg', alpha(noticeColor, 0.88));
+    root.setProperty('--ibcon-notice-bg', alpha(noticeColor, 0.72));
     root.setProperty('--ibcon-notice-fg', readableOn(noticeColor));
 
     // Оттенки фирменного цвета: растяжка сайдбара и шапка входа. Раньше
