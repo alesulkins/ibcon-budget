@@ -121,9 +121,9 @@ func (s *Service) collect(ctx context.Context, q RentQuery) ([]Observation, []So
 // расширяется, если объявлений такого размера почти нет: пустая выборка
 // хуже, чем выборка по соседним площадям, — но человек должен видеть,
 // что диапазон расширили.
-const areaBandStart = 0.25
+const areaBandStart = 0.10
 
-var areaBands = []float64{areaBandStart, 0.4, 0.6}
+var areaBands = []float64{areaBandStart, 0.2, 0.35}
 
 // Сколько объявлений считаем достаточным, чтобы не расширять отбор.
 const minMatched = 8
@@ -364,11 +364,6 @@ func round2(v float64) float64 {
 }
 
 func cacheKey(q RentQuery) string {
-	lift := "?"
-	if q.Elevator != nil {
-		lift = fmt.Sprint(*q.Elevator)
-	}
-	return fmt.Sprintf("%s|%s|%d|%.1f|%d|%s|%d",
-		strings.ToLower(q.City), strings.ToLower(q.District),
-		q.Rooms, q.Area, q.Floor, lift, q.MetroMinutes)
+	return fmt.Sprintf("%s|%s|%d|%.1f",
+		strings.ToLower(q.City), strings.ToLower(q.District), q.Rooms, q.Area)
 }

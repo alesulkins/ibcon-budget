@@ -680,14 +680,13 @@ export interface UISettings {
 // Платформа опрашивает площадки объявлений и считает по ним оценку.
 // Обязателен только город; остальные поля уточняют её.
 
+// Этажа, лифта и расстояния до метро в запросе нет: у большинства
+// объявлений этих полей не бывает, и отбор по ним схлопывал выборку.
 export interface RentMarketQuery {
   city: string;
   district?: string;
   rooms?: number;
   area?: number;
-  floor?: number;
-  elevator?: boolean | null;
-  metro_minutes?: number;
 }
 
 export interface RentMarketSource {

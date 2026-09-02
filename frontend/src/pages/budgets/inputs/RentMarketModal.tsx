@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  Alert, Button, Divider, Form, Input, InputNumber, Modal, Select,
+  Alert, Button, Divider, Form, Input, InputNumber, Modal,
   Space, Table, Tooltip, Typography,
 } from 'antd';
 import { useMutation } from '@tanstack/react-query';
@@ -29,7 +29,7 @@ interface Props {
  * считала прогноз. Цифра без этого — гадание, а её ставят в бюджет.
  */
 export default function RentMarketModal({ open, onClose, defaultCity, onApply }: Props) {
-  const [form] = Form.useForm<RentMarketQuery & { elevator?: string }>();
+  const [form] = Form.useForm<RentMarketQuery>();
   const [result, setResult] = useState<RentMarketEstimate | null>(null);
 
   const ask = useMutation({
@@ -37,18 +37,13 @@ export default function RentMarketModal({ open, onClose, defaultCity, onApply }:
     onSuccess: setResult,
   });
 
-  function submit(values: RentMarketQuery & { elevator?: string }) {
+  function submit(values: RentMarketQuery) {
     setResult(null);
     ask.mutate({
       city: values.city,
       district: values.district || undefined,
       rooms: values.rooms || undefined,
       area: values.area || undefined,
-      floor: values.floor || undefined,
-      // «Не важно» — не то же самое, что «лифта нет»: пустое значение
-      // означает, что признак не задан и объявления по нему не делятся.
-      elevator: values.elevator === 'yes' ? true : values.elevator === 'no' ? false : null,
-      metro_minutes: values.metro_minutes || undefined,
     });
   }
 
@@ -85,23 +80,6 @@ export default function RentMarketModal({ open, onClose, defaultCity, onApply }:
         </Form.Item>
         <Form.Item name="area" label="Площадь, м²">
           <InputNumber min={10} max={400} style={{ width: 100 }} />
-        </Form.Item>
-        <Form.Item name="floor" label="Этаж">
-          <InputNumber min={1} max={80} style={{ width: 80 }} />
-        </Form.Item>
-        <Form.Item name="elevator" label="Лифт">
-          <Select
-            style={{ width: 130 }}
-            placeholder="не важно"
-            allowClear
-            options={[
-              { value: 'yes', label: 'есть' },
-              { value: 'no', label: 'нет' },
-            ]}
-          />
-        </Form.Item>
-        <Form.Item name="metro_minutes" label="До метро, мин">
-          <InputNumber min={1} max={90} style={{ width: 90 }} />
         </Form.Item>
         <Form.Item>
           <Button type="primary" htmlType="submit" loading={ask.isPending}>

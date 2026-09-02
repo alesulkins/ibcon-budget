@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -127,42 +128,88 @@ func (y yandexSource) Fetch(ctx context.Context, q RentQuery) ([]Observation, er
 		query.Set("areaMin", strconv.Itoa(int(lo)))
 		query.Set("areaMax", strconv.Itoa(int(hi)+1))
 	}
-	// Две страницы выдачи: на одной около полусотни объявлений, а
-	// линейная регрессия начинает уступать лесу уже с сорока. Больше не
-	// берём — площадку незачем обходить целиком ради оценки уровня цен.
-	var out []Observation
-	var lastErr error
-	for page := 1; page <= 2; page++ {
-		params := url.Values{}
-		for k, v := range query {
-			params[k] = v
-		}
-		if page > 1 {
-			params.Set("page", strconv.Itoa(page))
-		}
-		addr := addr
-		if len(params) > 0 {
-			addr += "?" + params.Encode()
-		}
-		data, err := fetchBody(ctx, http.MethodGet, addr, nil)
-		if err != nil {
-			lastErr = err
-			break
-		}
-		obs, err := parseYandex(y.Name(), data)
-		if err != nil {
-			lastErr = err
-			break
-		}
-		out = append(out, obs...)
+	// Выдача берётся вширь: чем больше подходящих квартир, тем устойчивее
+	// медиана. Страницы запрашиваются одновременно — последовательный
+	// обход шести страниц не уложился бы в отведённое на запрос время.
+	type pageResult struct {
+		obs []Observation
+		err error
 	}
+	results := make([]pageResult, yaPages)
+	var wg sync.WaitGroup
+	for page := 1; page <= yaPages; page++ {
+		wg.Add(1)
+		go func(page int) {
+			defer wg.Done()
+			params := url.Values{}
+			for k, v := range query {
+				params[k] = v
+			}
+			if page > 1 {
+				params.Set("page", strconv.Itoa(page))
+			}
+			addr := addr
+			if len(params) > 0 {
+				addr += "?" + params.Encode()
+			}
+			data, err := fetchBody(ctx, http.MethodGet, addr, nil)
+			if err != nil {
+				results[page-1] = pageResult{err: err}
+				return
+			}
+			obs, err := parseYandex(y.Name(), data)
+			results[page-1] = pageResult{obs: obs, err: err}
+		}(page)
+	}
+	wg.Wait()
+
+	var out []Observation
+	var firstErr error
+	for _, r := range results {
+		if r.err != nil {
+			if firstErr == nil {
+				firstErr = r.err
+			}
+			continue
+		}
+		out = append(out, r.obs...)
+	}
+	out = dedupe(out)
 	if len(out) == 0 {
-		if lastErr != nil {
-			return nil, lastErr
+		if firstErr != nil {
+			return nil, firstErr
 		}
 		return nil, errUnparsed
 	}
 	return out, nil
+}
+
+// Сколько страниц выдачи берём. Шесть — около трёхсот объявлений: этого
+// хватает и после отбора по площади, а дальше площадка начинает отдавать
+// всё более далёкие от запроса варианты.
+const yaPages = 6
+
+// dedupe убирает повторы. Страницы запрашиваются одновременно, и если
+// площадка когда-нибудь перестанет понимать номер страницы, одно и то же
+// объявление попало бы в выборку шесть раз и перекосило медиану.
+func dedupe(obs []Observation) []Observation {
+	type key struct {
+		price float64
+		area  float64
+		rooms int
+		floor int
+	}
+	seen := map[key]bool{}
+	out := make([]Observation, 0, len(obs))
+	for _, o := range obs {
+		k := key{o.PriceMonth, o.Area, o.Rooms, o.Floor}
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		out = append(out, o)
+	}
+	return out
 }
 
 // parseYandex разбирает объявления из состояния приложения, вшитого в

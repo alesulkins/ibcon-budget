@@ -9,10 +9,10 @@ import (
 )
 
 // Цена придуманного рынка: 20 000 базы, 900 за метр, 6 000 за комнату,
-// минус 500 за минуту до метро. По ней проверяем, что модели ловят
-// зависимость, а не запоминают выборку.
-func syntheticPrice(rooms int, area float64, metro int) float64 {
-	return 20000 + 900*area + 6000*float64(rooms) - 500*float64(metro)
+// минус 300 за этаж. По ней проверяем, что модели ловят зависимость, а
+// не запоминают выборку.
+func syntheticPrice(rooms int, area float64, floor int) float64 {
+	return 20000 + 900*area + 6000*float64(rooms) - 300*float64(floor)
 }
 
 func syntheticSample(n int, noise float64, seed int64) []Observation {
@@ -21,13 +21,13 @@ func syntheticSample(n int, noise float64, seed int64) []Observation {
 	for i := range out {
 		rooms := 1 + rnd.Intn(3)
 		area := 30 + float64(rooms)*10 + rnd.Float64()*15
-		metro := 3 + rnd.Intn(20)
+		floor := 1 + rnd.Intn(20)
 		out[i] = Observation{
-			Source:       "тест",
-			Rooms:        rooms,
-			Area:         area,
-			MetroMinutes: metro,
-			PriceMonth:   syntheticPrice(rooms, area, metro) * (1 + (rnd.Float64()-0.5)*noise),
+			Source:     "тест",
+			Rooms:      rooms,
+			Area:       area,
+			Floor:      floor,
+			PriceMonth: syntheticPrice(rooms, area, floor) * (1 + (rnd.Float64()-0.5)*noise),
 		}
 	}
 	return out
@@ -57,7 +57,9 @@ func TestChooseModelBySampleSize(t *testing.T) {
 }
 
 func TestModelsRecoverPriceLevel(t *testing.T) {
-	q := RentQuery{City: "Тестбург", Rooms: 2, Area: 55, MetroMinutes: 10}
+	q := RentQuery{City: "Тестбург", Rooms: 2, Area: 55}
+	// Этажа в запросе нет — модель подставит средний по выборке, около
+	// десятого.
 	want := syntheticPrice(2, 55, 10)
 
 	for _, n := range []int{30, 120, 400} {

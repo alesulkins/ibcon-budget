@@ -6,15 +6,17 @@ import (
 	"sort"
 )
 
-// Признаки объявления: комнаты, площадь, этаж, лифт, минуты до метро и
-// признак посуточной площадки. Порядок фиксирован — на него опирается и
-// обучение, и прогноз.
+// Признаки объявления: комнаты, площадь, этаж и признак посуточной
+// площадки. Порядок фиксирован — на него опирается и обучение, и
+// прогноз.
+//
+// Лифта и расстояния до метро здесь нет: спрашивать их перестали, а у
+// объявлений эти поля почти всегда пусты — признак из одних пропусков
+// модели ничего не даёт.
 const (
 	fRooms = iota
 	fArea
 	fFloor
-	fElevator
-	fMetro
 	fDaily
 	featureCount
 )
@@ -30,11 +32,6 @@ func features(o Observation) []float64 {
 	v[fRooms] = optF(float64(o.Rooms), o.Rooms > 0)
 	v[fArea] = optF(o.Area, o.Area > 0)
 	v[fFloor] = optF(float64(o.Floor), o.Floor > 0)
-	v[fElevator] = nan
-	if o.Elevator != nil {
-		v[fElevator] = boolF(*o.Elevator)
-	}
-	v[fMetro] = optF(float64(o.MetroMinutes), o.MetroMinutes > 0)
 	v[fDaily] = boolF(o.Daily)
 	return v
 }
@@ -43,12 +40,9 @@ func features(o Observation) []float64 {
 // признак нулевой: спрашивают месячную аренду.
 func queryFeatures(q RentQuery) []float64 {
 	return features(Observation{
-		Rooms:        q.Rooms,
-		Area:         q.Area,
-		Floor:        q.Floor,
-		Elevator:     q.Elevator,
-		MetroMinutes: q.MetroMinutes,
-		Daily:        false,
+		Rooms: q.Rooms,
+		Area:  q.Area,
+		Daily: false,
 	})
 }
 

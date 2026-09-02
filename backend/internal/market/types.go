@@ -23,13 +23,11 @@ type RentQuery struct {
 	Rooms int `json:"rooms"`
 	// Площадь, м². 0 — не задано.
 	Area float64 `json:"area"`
-	// Этаж. 0 — не задано.
-	Floor int `json:"floor"`
-	// Лифт: nil — не задано, иначе есть/нет.
-	Elevator *bool `json:"elevator"`
-	// Пешком до метро, минут. 0 — не задано.
-	MetroMinutes int `json:"metro_minutes"`
 }
+
+// Этажа, лифта и расстояния до метро в запросе нет: у большинства
+// объявлений этих полей не бывает, отбор по ним схлопывал выборку до
+// единиц, а оценку строить не на чем (решение владельца 2026-09-03).
 
 // Observation — одно объявление, приведённое к рублям за месяц.
 type Observation struct {
@@ -41,14 +39,12 @@ type Observation struct {
 	PriceMonth float64 `json:"price_month"`
 	Daily      bool    `json:"daily"`
 
-	Rooms        int     `json:"rooms,omitempty"`
-	Area         float64 `json:"area,omitempty"`
-	Floor        int     `json:"floor,omitempty"`
-	Elevator     *bool   `json:"elevator,omitempty"`
-	MetroMinutes int     `json:"metro_minutes,omitempty"`
-	District     string  `json:"district,omitempty"`
-	Title        string  `json:"title,omitempty"`
-	URL          string  `json:"url,omitempty"`
+	Rooms    int     `json:"rooms,omitempty"`
+	Area     float64 `json:"area,omitempty"`
+	Floor    int     `json:"floor,omitempty"`
+	District string  `json:"district,omitempty"`
+	Title    string  `json:"title,omitempty"`
+	URL      string  `json:"url,omitempty"`
 }
 
 // Bin — столбик гистограммы: сколько объявлений попало в диапазон цен.
