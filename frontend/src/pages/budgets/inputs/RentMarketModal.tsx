@@ -253,16 +253,25 @@ function Histogram({ est }: { est: RentMarketEstimate }) {
   const max = Math.max(...bins.map(b => b.count));
   const lo = bins[0].from;
   const hi = bins[bins.length - 1].to;
-  // Доля ширины графика, на которой стоит отметка.
-  const at = (v: number) => (hi > lo ? ((v - lo) / (hi - lo)) * 100 : 0);
+  // Доля ширины графика, на которой стоит значение. Столбики идут
+  // вплотную, без промежутков, — иначе отметка съезжала бы относительно
+  // своего столбика на суммарную ширину зазоров.
+  const at = (v: number) => (hi > lo
+    ? Math.min(Math.max(((v - lo) / (hi - lo)) * 100, 0), 100)
+    : 0);
+
+  const marks = [
+    { v: est.recommended, label: 'в бюджет', strong: true },
+    { v: est.p95, label: 'верх рынка', strong: false },
+  ];
 
   return (
     <div style={{ marginBottom: 12 }}>
       <div style={{ fontSize: 12, color: 'var(--ibcon-muted)', marginBottom: 4 }}>
-        Распределение цен, ₽/мес
+        Распределение цен, ₽/мес — {est.sample} объявлений
       </div>
       <div style={{ position: 'relative' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 90 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', height: 90 }}>
           {bins.map((b, i) => (
             <Tooltip
               key={i}
@@ -275,41 +284,52 @@ function Histogram({ est }: { est: RentMarketEstimate }) {
                 height: `${max > 0 ? Math.max((b.count / max) * 100, 2) : 2}%`,
                 background: 'var(--ibcon-brand)',
                 opacity: b.count === 0 ? 0.15 : 0.75,
-                borderRadius: '2px 2px 0 0',
+                // Разделитель внутри столбика, а не зазором между ними:
+                // ширина столбиков должна ровно покрывать шкалу.
+                boxShadow: 'inset -1px 0 0 var(--ibcon-white)',
               }} />
             </Tooltip>
           ))}
         </div>
-        {/* Отметки медианы и цены для бюджета. Подписи не на графике, а
-            под ним: обе цены близки друг к другу, и надписи налезали
-            одна на другую поверх столбиков. */}
-        {[est.recommended, est.p95].map((v, i) => (
+        {marks.map(m => (
           <div
-            key={i}
+            key={m.label}
             style={{
               position: 'absolute',
-              left: `${Math.min(Math.max(at(v), 0), 100)}%`,
+              left: `${at(m.v)}%`,
               top: 0,
               bottom: 0,
-              borderLeft: `1px dashed var(--ibcon-text)`,
-              opacity: i === 0 ? 0.7 : 0.35,
+              borderLeft: '1px dashed var(--ibcon-text)',
+              opacity: m.strong ? 0.7 : 0.4,
             }}
           />
         ))}
       </div>
+
+      {/* Шкала: края диапазона по бокам, отметки — на своих местах под
+          линиями. Подпись под линией, а не в стороне: только так видно,
+          что отметка стоит там, где ей положено. */}
       <div style={{
-        display: 'flex', gap: 12, flexWrap: 'wrap',
-        fontSize: 11, color: 'var(--ibcon-muted)', marginTop: 4,
+        position: 'relative', height: 30, marginTop: 2,
+        fontSize: 11, color: 'var(--ibcon-muted)',
       }}>
-        <span>┆ в бюджет {fmtNum(est.recommended)} ₽</span>
-        <span>┆ верх рынка {fmtNum(est.p95)} ₽</span>
-      </div>
-      <div style={{
-        display: 'flex', justifyContent: 'space-between',
-        fontSize: 11, color: 'var(--ibcon-muted)', marginTop: 2,
-      }}>
-        <span>{fmtNum(lo)}</span>
-        <span>{fmtNum(hi)}</span>
+        <span style={{ position: 'absolute', left: 0, top: 0 }}>{fmtNum(lo)}</span>
+        <span style={{ position: 'absolute', right: 0, top: 0 }}>{fmtNum(hi)}</span>
+        {marks.map(m => (
+          <span
+            key={m.label}
+            style={{
+              position: 'absolute',
+              left: `${at(m.v)}%`,
+              top: 14,
+              transform: 'translateX(-50%)',
+              whiteSpace: 'nowrap',
+              color: m.strong ? 'var(--ibcon-text)' : undefined,
+            }}
+          >
+            {m.label} {fmtNum(m.v)}
+          </span>
+        ))}
       </div>
     </div>
   );

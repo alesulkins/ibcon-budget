@@ -311,6 +311,18 @@ func TestHistogramCoversSample(t *testing.T) {
 	if total != est.Sample {
 		t.Errorf("в столбиках %d объявлений, в выборке %d", total, est.Sample)
 	}
+	// Шкала графика — ровно от самого дешёвого объявления до самого
+	// дорогого: по ней на экране расставляются отметки, и сдвиг границ
+	// увёл бы «в бюджет» и «верх рынка» не на свои места.
+	first, last := est.Histogram[0], est.Histogram[len(est.Histogram)-1]
+	if first.From != 30000 || last.To != 79000 {
+		t.Errorf("шкала графика %v–%v, ожидалась 30000–79000", first.From, last.To)
+	}
+	// Отметки должны попадать внутрь шкалы, иначе линия прижмётся к краю.
+	if est.Recommended < first.From || est.P95 > last.To {
+		t.Errorf("отметки вне шкалы: в бюджет %v, верх рынка %v, шкала %v–%v",
+			est.Recommended, est.P95, first.From, last.To)
+	}
 }
 
 // В примерах — только объявления, где заполнено всё, что в них выведено.
