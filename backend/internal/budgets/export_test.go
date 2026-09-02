@@ -504,7 +504,7 @@ func TestBuildExport_OverheadAndSalaries(t *testing.T) {
 	}
 
 	for _, want := range []string{
-		"НАКЛАДНЫЕ РАСХОДЫ ПО СТАТЬЯМ", "ЗАРПЛАТЫ СОТРУДНИКОВ",
+		"НАКЛАДНЫЕ РАСХОДЫ ПО СТАТЬЯМ", "ЗАРПЛАТЫ СОТРУДНИКОВ И ВЗНОСЫ",
 		"Аренда офиса", "Итого накладные расходы",
 	} {
 		if !sections[want] {
@@ -525,5 +525,74 @@ func TestBuildExport_OverheadAndSalaries(t *testing.T) {
 		if got := safeAt(salary, i); got != want[i] {
 			t.Errorf("колонка %d: got %q, want %q", i, got, want[i])
 		}
+	}
+}
+
+// Порядок блоков листа «Бюджет» и отступы между ними — решение
+// владельца: карточка со всем, что в ней, сводка по ИТР, помесячная
+// разбивка, зарплаты со взносами, накладные по статьям. Между блоками
+// ровно одна пустая строка — ни слипшихся, ни двойных.
+func TestBuildExport_BlockOrderAndSpacing(t *testing.T) {
+	res := testResult()
+	meta := testMeta(false)
+	meta.Employees = []calc.Employee{{
+		Position: "Инженер ПТО", FullName: "Тестов Т.Т.",
+		Country: calc.CountryRF, SalaryNet: 200_000,
+		MonthlySchedule: []string{calc.ScheduleOF, calc.ScheduleMV, calc.ScheduleOF},
+	}}
+	meta.ITRPositions = map[string]bool{"инженер пто": true}
+	meta.Params = &calc.InputBudgetParams{
+		BGExecution: calc.BankGuarantee{Pct: 5, RatePct: 3, DurationMos: 12},
+	}
+
+	data, err := BuildExport(meta, res)
+	if err != nil {
+		t.Fatalf("сборка книги: %v", err)
+	}
+	f := openBook(t, data)
+	defer f.Close()
+
+	rows, err := f.GetRows("Бюджет")
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := func(i int) string {
+		if i < 0 || i >= len(rows) || len(rows[i]) == 0 {
+			return ""
+		}
+		return rows[i][0]
+	}
+
+	want := []string{
+		"ИТОГОВЫЕ ПОКАЗАТЕЛИ",
+		"БАНКОВСКИЕ ГАРАНТИИ",
+		"СВОДКА ПО ИТР",
+		"ПОМЕСЯЧНАЯ РАЗБИВКА",
+		"ЗАРПЛАТЫ СОТРУДНИКОВ И ВЗНОСЫ",
+		"НАКЛАДНЫЕ РАСХОДЫ ПО СТАТЬЯМ",
+	}
+	prev := -1
+	for _, title := range want {
+		idx := -1
+		for i := range rows {
+			if at(i) == title {
+				idx = i
+				break
+			}
+		}
+		if idx < 0 {
+			t.Fatalf("в книге нет блока %q", title)
+		}
+		if idx <= prev {
+			t.Errorf("блок %q стоит выше предыдущего (строка %d, предыдущий %d)",
+				title, idx+1, prev+1)
+		}
+		if at(idx-1) != "" {
+			t.Errorf("перед блоком %q нет пустой строки", title)
+		}
+		if at(idx-2) == "" {
+			t.Errorf("перед блоком %q две пустые строки подряд", title)
+		}
+		prev = idx
 	}
 }

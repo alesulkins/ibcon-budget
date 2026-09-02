@@ -313,12 +313,14 @@ func BuildExport(m ExportMeta, r *calc.CalcResult, reps ...*reports.Report) ([]b
 	put("Дата начала", m.StartDate.Format("02.01.2006"))
 	put("Продолжительность, мес.", m.DurationMonths)
 	put("Выгружено", time.Now().Format("02.01.2006 15:04"))
-	row++
+	// Пустую строку после карточки ставит следующий блок — здесь её
+	// добавлять нельзя, иначе перед ним окажутся две подряд.
 
 	// ── Урезанная выгрузка администратора проекта ────────────────────
 	// Только карточка проекта и строки 178-214: накладные расходы по
 	// статьям, их итог и непредвиденные.
 	if m.Limited {
+		row++
 		set(fmt.Sprintf("A%d", row), "НАКЛАДНЫЕ РАСХОДЫ (строки 178-212 листа «2.Бюджет»)")
 		_ = f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("A%d", row), head)
 		row++
@@ -341,46 +343,136 @@ func BuildExport(m ExportMeta, r *calc.CalcResult, reps ...*reports.Report) ([]b
 		return buf.Bytes(), nil
 	}
 
-	// ── Итоговые показатели ──────────────────────────────────────────
-	set(fmt.Sprintf("A%d", row), "ИТОГОВЫЕ ПОКАЗАТЕЛИ")
-	_ = f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("B%d", row), head)
-	row++
+	// Между блоками — ровно одна пустая строка. Отступ ставит сам блок,
+	// а не тот, кто его вызывает: блоки условные (гарантий, ИТР или
+	// сотрудников может не быть вовсе), и отступ снаружи оставлял бы на
+	// их месте двойные пустые строки.
+	blank := func() { row++ }
 
-	// bold — показатели, которые владелец просил выделить: по ним читают
-	// бюджет, остальные строки блока справочные.
-	totals := []struct {
-		label string
-		value float64
-		bold  bool
-	}{
-		{"ФОТ (вкл. взносы и НДФЛ)", r.TotalFOT, true},
-		{"Итого расходы без НДС", r.TotalCosts, false},
-		{"Итого стоимость работ без НДС", r.TotalRevenue, true},
-		{"Выручка с НДС", r.TotalRevenueWithVAT, false},
-		{"Операционная маржинальность", r.OperatingMargin, false},
-		{"Операционная прибыль", r.OperatingProfit, false},
-		{"Налог на прибыль", r.Tax, true},
-		{"Чистая прибыль", r.NetProfit, true},
-		// Справочный показатель: начисляется только за первые четыре
-		// месяца и ни на что в расчёте не влияет.
-		{"Стоимость + ставка рефинансирования", r.RefRateAmount, false},
+	// ── Итоговые показатели ──────────────────────────────────────────
+	// Часть карточки: это то же, что видно в карточке версии на экране.
+	writeTotals := func() {
+		blank()
+		set(fmt.Sprintf("A%d", row), "ИТОГОВЫЕ ПОКАЗАТЕЛИ")
+		_ = f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("B%d", row), head)
+		row++
+
+		// bold — показатели, которые владелец просил выделить: по ним
+		// читают бюджет, остальные строки блока справочные.
+		totals := []struct {
+			label string
+			value float64
+			bold  bool
+		}{
+			{"ФОТ (вкл. взносы и НДФЛ)", r.TotalFOT, true},
+			{"Итого расходы без НДС", r.TotalCosts, false},
+			{"Итого стоимость работ без НДС", r.TotalRevenue, true},
+			{"Выручка с НДС", r.TotalRevenueWithVAT, false},
+			{"Операционная маржинальность", r.OperatingMargin, false},
+			{"Операционная прибыль", r.OperatingProfit, false},
+			{"Налог на прибыль", r.Tax, true},
+			{"Чистая прибыль", r.NetProfit, true},
+			// Справочный показатель: начисляется только за первые четыре
+			// месяца и ни на что в расчёте не влияет.
+			{"Стоимость + ставка рефинансирования", r.RefRateAmount, false},
+		}
+		for _, t := range totals {
+			labelCell := fmt.Sprintf("A%d", row)
+			valueCell := fmt.Sprintf("B%d", row)
+			put(t.label, t.value)
+			if t.bold {
+				styleRow(labelCell, labelCell, textBold)
+				styleRow(valueCell, valueCell, moneyBold)
+			} else {
+				styleRow(valueCell, valueCell, money)
+			}
+		}
+		rentLabel, rentValue := fmt.Sprintf("A%d", row), fmt.Sprintf("B%d", row)
+		put("Рентабельность, %", r.Profitability)
+		styleRow(rentLabel, rentLabel, textBold)
+		styleRow(rentValue, rentValue, moneyBold)
 	}
-	for _, t := range totals {
-		labelCell := fmt.Sprintf("A%d", row)
-		valueCell := fmt.Sprintf("B%d", row)
-		put(t.label, t.value)
-		if t.bold {
-			styleRow(labelCell, labelCell, textBold)
-			styleRow(valueCell, valueCell, moneyBold)
-		} else {
-			styleRow(valueCell, valueCell, money)
+
+	// ── Банковские гарантии ──────────────────────────────────────────
+	// Тоже часть карточки: суммы БГ стоят в помесячной разбивке, но по
+	// одной сумме не понять, из чего она вышла: процент от договора,
+	// ставка, режим ставки и срок задаются отдельно.
+	//
+	// Незаполненная гарантия в книгу не идёт, а если не заполнена ни
+	// одна — не пишем и сам раздел: пустая таблица из трёх нулевых
+	// строк только сбивает с толку.
+	bgFilled := func(b calc.BankGuarantee, total func(calc.MonthlyResult) float64) bool {
+		if b.Pct != 0 || b.RatePct != 0 || b.DurationMos != 0 {
+			return true
+		}
+		for _, mr := range r.Monthly {
+			if total(mr) != 0 {
+				return true
+			}
+		}
+		return false
+	}
+
+	writeBG := func() {
+		if m.Params == nil {
+			return
+		}
+		all := []struct {
+			label string
+			bg    calc.BankGuarantee
+			total func(calc.MonthlyResult) float64
+		}{
+			{"На исполнение обязательств", m.Params.BGExecution,
+				func(x calc.MonthlyResult) float64 { return x.BGExecution }},
+			{"На гарантийный период", m.Params.BGWarranty,
+				func(x calc.MonthlyResult) float64 { return x.BGWarranty }},
+			{"На аванс", m.Params.BGAdvance,
+				func(x calc.MonthlyResult) float64 { return x.BGAdvance }},
+		}
+		bgs := all[:0:0]
+		for _, b := range all {
+			if bgFilled(b.bg, b.total) {
+				bgs = append(bgs, b)
+			}
+		}
+		if len(bgs) == 0 {
+			return
+		}
+
+		blank()
+		set(fmt.Sprintf("A%d", row), "БАНКОВСКИЕ ГАРАНТИИ")
+		styleRow(fmt.Sprintf("A%d", row), fmt.Sprintf("F%d", row), head)
+		row++
+
+		bgHeader := []string{
+			"Вид гарантии", "% от договора", "Ставка, %",
+			"Режим ставки", "Срок, мес.", "Сумма за проект",
+		}
+		for i, h := range bgHeader {
+			col, _ := excelize.ColumnNumberToName(i + 1)
+			set(fmt.Sprintf("%s%d", col, row), h)
+		}
+		styleRow(fmt.Sprintf("A%d", row), fmt.Sprintf("F%d", row), head)
+		row++
+
+		for _, b := range bgs {
+			var sum float64
+			for _, mr := range r.Monthly {
+				sum += b.total(mr)
+			}
+			set(fmt.Sprintf("A%d", row), b.label)
+			set(fmt.Sprintf("B%d", row), b.bg.Pct)
+			set(fmt.Sprintf("C%d", row), b.bg.RatePct)
+			// Режим ставки пустой у незаполненной гарантии — не пишем
+			// «%/год» там, где гарантии нет вовсе.
+			set(fmt.Sprintf("D%d", row), b.bg.RateType)
+			set(fmt.Sprintf("E%d", row), b.bg.DurationMos)
+			set(fmt.Sprintf("F%d", row), sum)
+			styleRow(fmt.Sprintf("A%d", row), fmt.Sprintf("E%d", row), text)
+			styleRow(fmt.Sprintf("F%d", row), fmt.Sprintf("F%d", row), money)
+			row++
 		}
 	}
-	rentLabel, rentValue := fmt.Sprintf("A%d", row), fmt.Sprintf("B%d", row)
-	put("Рентабельность, %", r.Profitability)
-	styleRow(rentLabel, rentLabel, textBold)
-	styleRow(rentValue, rentValue, moneyBold)
-	row++
 
 	// ── Сводка по ИТР ────────────────────────────────────────────────
 	//
@@ -392,7 +484,10 @@ func BuildExport(m ExportMeta, r *calc.CalcResult, reps ...*reports.Report) ([]b
 	// «В среднем в месяц» — количество человеко-месяцев, делённое на
 	// длительность проекта: если инженер отработал половину срока, он
 	// добавляет половину человека.
-	if len(m.Employees) > 0 && len(r.Monthly) > 0 {
+	writeITR := func() {
+		if len(m.Employees) == 0 || len(r.Monthly) == 0 {
+			return
+		}
 		const attendedThreshold = 30_001 // выше выплаты за межвахтовый отдых
 
 		var attended, listed float64
@@ -426,7 +521,7 @@ func BuildExport(m ExportMeta, r *calc.CalcResult, reps ...*reports.Report) ([]b
 			return revenuePerMonth / avg
 		}
 
-		row++
+		blank()
 		set(cellAt(colLabel, row), "СВОДКА ПО ИТР")
 		styleRow(cellAt(colLabel, row), cellAt(3, row), head)
 		row++
@@ -453,182 +548,138 @@ func BuildExport(m ExportMeta, r *calc.CalcResult, reps ...*reports.Report) ([]b
 		}
 	}
 
-	// ── Банковские гарантии ──────────────────────────────────────────
-	// Суммы БГ уже стоят в помесячной разбивке, но по одной сумме не
-	// понять, из чего она вышла: процент от договора, ставка, режим
-	// ставки и срок задаются отдельно и в книге были не видны.
-	//
-	// Незаполненная гарантия в книгу не идёт, а если не заполнена ни
-	// одна — не пишем и сам раздел: пустая таблица из трёх нулевых
-	// строк только сбивает с толку.
-	bgFilled := func(b calc.BankGuarantee, total func(calc.MonthlyResult) float64) bool {
-		if b.Pct != 0 || b.RatePct != 0 || b.DurationMos != 0 {
-			return true
+	// ── Помесячная разбивка ──────────────────────────────────────────
+	// Общие статьи проекта по месяцам. Зарплатная часть вынесена в свой
+	// блок ниже, накладные по статьям — в следующий за ним: здесь они
+	// стоят одной строкой, как в форме.
+	writeMonthly := func() {
+		blank()
+		set(fmt.Sprintf("A%d", row), "ПОМЕСЯЧНАЯ РАЗБИВКА")
+		_ = f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("A%d", row), head)
+		row++
+
+		monthlyHeader()
+
+		lines := []struct {
+			label string
+			bold  bool
+			pick  func(calc.MonthlyResult) float64
+		}{
+			{"ФОТ вкл. взносы", true, func(x calc.MonthlyResult) float64 { return x.TotalFOT }},
+			{"Накладные расходы", false, func(x calc.MonthlyResult) float64 { return x.ProjectCostsExFOT }},
+			{"Непредвиденные", false, func(x calc.MonthlyResult) float64 { return x.Unpredictables }},
+			{"АУП", false, func(x calc.MonthlyResult) float64 { return x.AUP }},
+			{"БГ на исполнение", false, func(x calc.MonthlyResult) float64 { return x.BGExecution }},
+			{"БГ на гарантийный период", false, func(x calc.MonthlyResult) float64 { return x.BGWarranty }},
+			{"БГ на аванс", false, func(x calc.MonthlyResult) float64 { return x.BGAdvance }},
+			{"Итого расходы", false, func(x calc.MonthlyResult) float64 { return x.TotalCosts }},
+			{"Выручка", false, func(x calc.MonthlyResult) float64 { return x.Revenue }},
 		}
-		for _, mr := range r.Monthly {
-			if total(mr) != 0 {
-				return true
-			}
+		for _, l := range lines {
+			monthlyLine(l.label, l.bold, l.pick)
 		}
-		return false
 	}
 
-	if m.Params != nil {
-		all := []struct {
+	// ── Зарплаты сотрудников и взносы ────────────────────────────────
+	// Сначала помесячный ФОТ по каждому человеку — зарплатную часть
+	// сверяют пофамильно, — затем итоговые строки зарплатного блока
+	// формы (строки 168-176): премии, переработки, НДФЛ и взносы. Они
+	// стоят здесь, а не в помесячной разбивке: это один разговор про
+	// зарплату, и листать между двумя концами книги ради него не нужно.
+	writeSalaries := func() {
+		blank()
+		set(cellAt(colLabel, row), "ЗАРПЛАТЫ СОТРУДНИКОВ И ВЗНОСЫ")
+		styleRow(cellAt(colLabel, row), cellAt(colTotal, row), head)
+		row++
+
+		if len(m.Employees) > 0 {
+			// У этой таблицы своя шапка: перед месяцами идут четыре
+			// колонки описания сотрудника, а не одна «Статья».
+			const (
+				empPosition = 1
+				empName     = 2
+				empCountry  = 3
+				empSalary   = 4
+				empTotal    = 5
+				empFirst    = 6
+			)
+			empLastCol := empFirst + len(r.Monthly) - 1
+
+			set(cellAt(empPosition, row), "Должность")
+			set(cellAt(empName, row), "ФИО")
+			set(cellAt(empCountry, row), "Страна НО")
+			set(cellAt(empSalary, row), "План ФОТ на руки, ₽")
+			set(cellAt(empTotal, row), "Итого за проект")
+			for i := range r.Monthly {
+				set(cellAt(empFirst+i, row), monthLabel(i))
+			}
+			styleRow(cellAt(empPosition, row), cellAt(empLastCol, row), head)
+			row++
+
+			for i := range m.Employees {
+				emp := &m.Employees[i]
+				set(cellAt(empPosition, row), emp.Position)
+				set(cellAt(empName, row), emp.FullName)
+				set(cellAt(empCountry, row), emp.Country)
+				set(cellAt(empSalary, row), emp.SalaryNet)
+				styleRow(cellAt(empPosition, row), cellAt(empCountry, row), text)
+
+				var sum float64
+				for month := 1; month <= len(r.Monthly); month++ {
+					v := calc.EmployeeFOTAt(emp, month, m.StartDate)
+					sum += v
+					set(cellAt(empFirst+month-1, row), v)
+				}
+				set(cellAt(empTotal, row), sum)
+				styleRow(cellAt(empSalary, row), cellAt(empLastCol, row), money)
+				row++
+			}
+			row++
+		}
+
+		monthlyHeader()
+		fotLines := []struct {
 			label string
-			bg    calc.BankGuarantee
-			total func(calc.MonthlyResult) float64
+			pick  func(calc.MonthlyResult) float64
 		}{
-			{"На исполнение обязательств", m.Params.BGExecution,
-				func(x calc.MonthlyResult) float64 { return x.BGExecution }},
-			{"На гарантийный период", m.Params.BGWarranty,
-				func(x calc.MonthlyResult) float64 { return x.BGWarranty }},
-			{"На аванс", m.Params.BGAdvance,
-				func(x calc.MonthlyResult) float64 { return x.BGAdvance }},
+			{"ФОТ", func(x calc.MonthlyResult) float64 { return x.FOT }},
+			{"Премии и компенсации", func(x calc.MonthlyResult) float64 { return x.Bonuses }},
+			{"Переработки", func(x calc.MonthlyResult) float64 { return x.OvertimeRF + x.OvertimeKG }},
+			{"НДФЛ", func(x calc.MonthlyResult) float64 { return x.NDFL }},
+			{"Взносы", func(x calc.MonthlyResult) float64 { return x.InsuranceRF + x.InsuranceKG }},
+			{"ФОТ вкл. взносы", func(x calc.MonthlyResult) float64 { return x.TotalFOT }},
 		}
-		bgs := all[:0:0]
-		for _, b := range all {
-			if bgFilled(b.bg, b.total) {
-				bgs = append(bgs, b)
-			}
-		}
-
-		if len(bgs) > 0 {
-			row++
-			set(fmt.Sprintf("A%d", row), "БАНКОВСКИЕ ГАРАНТИИ")
-			styleRow(fmt.Sprintf("A%d", row), fmt.Sprintf("F%d", row), head)
-			row++
-
-			bgHeader := []string{
-				"Вид гарантии", "% от договора", "Ставка, %",
-				"Режим ставки", "Срок, мес.", "Сумма за проект",
-			}
-			for i, h := range bgHeader {
-				col, _ := excelize.ColumnNumberToName(i + 1)
-				set(fmt.Sprintf("%s%d", col, row), h)
-			}
-			styleRow(fmt.Sprintf("A%d", row), fmt.Sprintf("F%d", row), head)
-			row++
-		}
-
-		for _, b := range bgs {
-			var sum float64
-			for _, mr := range r.Monthly {
-				sum += b.total(mr)
-			}
-			set(fmt.Sprintf("A%d", row), b.label)
-			set(fmt.Sprintf("B%d", row), b.bg.Pct)
-			set(fmt.Sprintf("C%d", row), b.bg.RatePct)
-			// Режим ставки пустой у незаполненной гарантии — не пишем
-			// «%/год» там, где гарантии нет вовсе.
-			set(fmt.Sprintf("D%d", row), b.bg.RateType)
-			set(fmt.Sprintf("E%d", row), b.bg.DurationMos)
-			set(fmt.Sprintf("F%d", row), sum)
-			styleRow(fmt.Sprintf("A%d", row), fmt.Sprintf("E%d", row), text)
-			styleRow(fmt.Sprintf("F%d", row), fmt.Sprintf("F%d", row), money)
-			row++
+		for _, l := range fotLines {
+			monthlyLine(l.label, true, l.pick)
 		}
 	}
 
 	// ── Накладные расходы по статьям ─────────────────────────────────
 	// Тот же разрез, что видит администратор проекта: в помесячной
 	// разбивке накладные идут одной строкой, а сверяют их по статьям.
-	row++
-	set(cellAt(colLabel, row), "НАКЛАДНЫЕ РАСХОДЫ ПО СТАТЬЯМ")
-	styleRow(cellAt(colLabel, row), cellAt(colTotal, row), head)
-	row++
-
-	monthlyHeader()
-	for i, label := range overheadTitles {
-		monthlyLine(label, false, func(mr calc.MonthlyResult) float64 { return mr.Overhead[i] })
-	}
-	monthlyLine("Итого накладные расходы", true,
-		func(mr calc.MonthlyResult) float64 { return mr.ProjectCostsExFOT })
-
-	// ── Зарплаты сотрудников ─────────────────────────────────────────
-	// Помесячный ФОТ по каждому человеку: в остальной книге он только
-	// суммой, а зарплатную часть сверяют пофамильно.
-	if len(m.Employees) > 0 {
-		row++
-		set(cellAt(colLabel, row), "ЗАРПЛАТЫ СОТРУДНИКОВ")
+	writeOverhead := func() {
+		blank()
+		set(cellAt(colLabel, row), "НАКЛАДНЫЕ РАСХОДЫ ПО СТАТЬЯМ")
 		styleRow(cellAt(colLabel, row), cellAt(colTotal, row), head)
 		row++
 
-		// У этой таблицы своя шапка: перед месяцами идут четыре колонки
-		// описания сотрудника, а не одна «Статья».
-		const (
-			empPosition = 1
-			empName     = 2
-			empCountry  = 3
-			empSalary   = 4
-			empTotal    = 5
-			empFirst    = 6
-		)
-		empLastCol := empFirst + len(r.Monthly) - 1
-
-		set(cellAt(empPosition, row), "Должность")
-		set(cellAt(empName, row), "ФИО")
-		set(cellAt(empCountry, row), "Страна НО")
-		set(cellAt(empSalary, row), "План ФОТ на руки, ₽")
-		set(cellAt(empTotal, row), "Итого за проект")
-		for i := range r.Monthly {
-			set(cellAt(empFirst+i, row), monthLabel(i))
+		monthlyHeader()
+		for i, label := range overheadTitles {
+			monthlyLine(label, false, func(mr calc.MonthlyResult) float64 { return mr.Overhead[i] })
 		}
-		styleRow(cellAt(empPosition, row), cellAt(empLastCol, row), head)
-		row++
-
-		for i := range m.Employees {
-			emp := &m.Employees[i]
-			set(cellAt(empPosition, row), emp.Position)
-			set(cellAt(empName, row), emp.FullName)
-			set(cellAt(empCountry, row), emp.Country)
-			set(cellAt(empSalary, row), emp.SalaryNet)
-			styleRow(cellAt(empPosition, row), cellAt(empCountry, row), text)
-
-			var sum float64
-			for month := 1; month <= len(r.Monthly); month++ {
-				v := calc.EmployeeFOTAt(emp, month, m.StartDate)
-				sum += v
-				set(cellAt(empFirst+month-1, row), v)
-			}
-			set(cellAt(empTotal, row), sum)
-			styleRow(cellAt(empSalary, row), cellAt(empLastCol, row), money)
-			row++
-		}
+		monthlyLine("Итого накладные расходы", true,
+			func(mr calc.MonthlyResult) float64 { return mr.ProjectCostsExFOT })
 	}
 
-	// ── Помесячная разбивка ──────────────────────────────────────────
-	set(fmt.Sprintf("A%d", row), "ПОМЕСЯЧНАЯ РАЗБИВКА")
-	_ = f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("A%d", row), head)
-	row++
-
-	monthlyHeader()
-
-	// Блок ФОТ (строки 168-176 формы) выделен целиком: по нему сверяют
-	// зарплатную часть.
-	lines := []struct {
-		label string
-		bold  bool
-		pick  func(calc.MonthlyResult) float64
-	}{
-		{"ФОТ", true, func(x calc.MonthlyResult) float64 { return x.FOT }},
-		{"Премии и компенсации", true, func(x calc.MonthlyResult) float64 { return x.Bonuses }},
-		{"Переработки", true, func(x calc.MonthlyResult) float64 { return x.OvertimeRF + x.OvertimeKG }},
-		{"НДФЛ", true, func(x calc.MonthlyResult) float64 { return x.NDFL }},
-		{"Взносы", true, func(x calc.MonthlyResult) float64 { return x.InsuranceRF + x.InsuranceKG }},
-		{"ФОТ вкл. взносы", true, func(x calc.MonthlyResult) float64 { return x.TotalFOT }},
-		{"Накладные расходы", false, func(x calc.MonthlyResult) float64 { return x.ProjectCostsExFOT }},
-		{"Непредвиденные", false, func(x calc.MonthlyResult) float64 { return x.Unpredictables }},
-		{"АУП", false, func(x calc.MonthlyResult) float64 { return x.AUP }},
-		{"БГ на исполнение", false, func(x calc.MonthlyResult) float64 { return x.BGExecution }},
-		{"БГ на гарантийный период", false, func(x calc.MonthlyResult) float64 { return x.BGWarranty }},
-		{"БГ на аванс", false, func(x calc.MonthlyResult) float64 { return x.BGAdvance }},
-		{"Итого расходы", false, func(x calc.MonthlyResult) float64 { return x.TotalCosts }},
-		{"Выручка", false, func(x calc.MonthlyResult) float64 { return x.Revenue }},
-	}
-	for _, l := range lines {
-		monthlyLine(l.label, l.bold, l.pick)
-	}
+	// Порядок блоков — решение владельца 2026-09-03: сначала карточка со
+	// всем, что в ней (показатели и гарантии), затем сводка по ИТР,
+	// помесячная разбивка, зарплаты со взносами и накладные по статьям.
+	writeTotals()
+	writeBG()
+	writeITR()
+	writeMonthly()
+	writeSalaries()
+	writeOverhead()
 
 	if len(reps) > 0 {
 		if err := reports.WriteSheets(f, reps...); err != nil {
