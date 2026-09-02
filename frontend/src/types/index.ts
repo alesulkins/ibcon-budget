@@ -712,6 +712,8 @@ export interface RentMarketEstimate {
   query: RentMarketQuery;
   /** Объявлений в расчёте. Только помесячная аренда. */
   sample: number;
+  /** По каким параметрам отобраны объявления и что пришлось ослабить. */
+  matched: string;
   model: string;
   model_reason: string;
   /** Прогноз модели для введённых параметров, ₽/мес. 0 — модель не строилась. */

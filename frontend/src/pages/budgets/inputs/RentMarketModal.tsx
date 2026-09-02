@@ -171,7 +171,7 @@ function Result({
         <Stat
           label="Объявлений в расчёте"
           value={String(est.sample)}
-          hint="только помесячная аренда"
+          hint={est.matched || 'только помесячная аренда'}
         />
       </div>
 
@@ -269,6 +269,7 @@ function Histogram({ est }: { est: RentMarketEstimate }) {
     <div style={{ marginBottom: 12 }}>
       <div style={{ fontSize: 12, color: 'var(--ibcon-muted)', marginBottom: 4 }}>
         Распределение цен, ₽/мес — {est.sample} объявлений
+        {est.matched ? ` (${est.matched})` : ''}
       </div>
       <div style={{ position: 'relative' }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', height: 90 }}>

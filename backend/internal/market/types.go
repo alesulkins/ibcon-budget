@@ -78,6 +78,9 @@ type Estimate struct {
 	// в месяц, к помесячной ставке отношения не имеет — решение
 	// владельца 2026-09-03.
 	Sample int `json:"sample"`
+	// По каким параметрам отобраны объявления и что пришлось ослабить —
+	// строкой для экрана. Пусто, если отбирать было не по чему.
+	Matched string `json:"matched"`
 	// Какая модель считала прогноз и почему — см. chooseModel.
 	Model       string `json:"model"`
 	ModelReason string `json:"model_reason"`

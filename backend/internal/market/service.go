@@ -116,6 +116,84 @@ func (s *Service) collect(ctx context.Context, q RentQuery) ([]Observation, []So
 	return all, statuses
 }
 
+// Насколько площадь объявления может отличаться от заданной. Первый
+// шаг — то, чем ограничивается и запрос к площадке; дальше диапазон
+// расширяется, если объявлений такого размера почти нет: пустая выборка
+// хуже, чем выборка по соседним площадям, — но человек должен видеть,
+// что диапазон расширили.
+const areaBandStart = 0.25
+
+var areaBands = []float64{areaBandStart, 0.4, 0.6}
+
+// Сколько объявлений считаем достаточным, чтобы не расширять отбор.
+const minMatched = 8
+
+// areaBand — границы диапазона площади вокруг заданной.
+func areaBand(area, band float64) (lo, hi float64) {
+	return area * (1 - band), area * (1 + band)
+}
+
+/*
+matchQuery оставляет объявления, похожие на то, что спросили.
+
+Без этого оценка не зависела от введённых параметров вовсе: и для 40 м²,
+и для 200 м² выдавалась одна и та же медиана по городу. Комнаты
+сверяются точно, площадь — с допуском; этаж, лифт и минуты до метро в
+отбор не идут, они слишком слабо сужают выборку и остаются признаками
+модели.
+
+Вторым значением возвращается объяснение для экрана: по каким
+параметрам отобраны объявления и что пришлось ослабить.
+*/
+func matchQuery(obs []Observation, q RentQuery) ([]Observation, string) {
+	var notes []string
+	out := obs
+
+	if q.Rooms > 0 {
+		byRooms := filter(out, func(o Observation) bool { return o.Rooms == q.Rooms })
+		if len(byRooms) >= minMatched {
+			out = byRooms
+			notes = append(notes, fmt.Sprintf("комнат: %d", q.Rooms))
+		} else {
+			notes = append(notes, fmt.Sprintf(
+				"объявлений на %d комн. мало (%d) — учтены все планировки",
+				q.Rooms, len(byRooms)))
+		}
+	}
+
+	if q.Area > 0 {
+		matched := false
+		for _, band := range areaBands {
+			lo, hi := areaBand(q.Area, band)
+			byArea := filter(out, func(o Observation) bool {
+				return o.Area >= lo && o.Area <= hi
+			})
+			if len(byArea) >= minMatched {
+				out = byArea
+				notes = append(notes, fmt.Sprintf("площадь %.0f–%.0f м²", lo, hi))
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			notes = append(notes, fmt.Sprintf(
+				"объявлений площадью около %.0f м² не нашлось — площадь не учтена", q.Area))
+		}
+	}
+
+	return out, strings.Join(notes, "; ")
+}
+
+func filter(obs []Observation, keep func(Observation) bool) []Observation {
+	out := make([]Observation, 0, len(obs))
+	for _, o := range obs {
+		if keep(o) {
+			out = append(out, o)
+		}
+	}
+	return out
+}
+
 // build считает оценку по собранным объявлениям.
 func build(q RentQuery, obs []Observation, statuses []SourceStatus) *Estimate {
 	est := &Estimate{Query: q, Sources: statuses, CalculatedAt: time.Now()}
@@ -123,7 +201,11 @@ func build(q RentQuery, obs []Observation, statuses []SourceStatus) *Estimate {
 	// Только помесячная аренда. Посуточная цена, умноженная на 30, — это
 	// не ставка по договору найма, и в расчёт она не идёт вовсе
 	// (решение владельца 2026-09-03).
-	obs = trimOutliers(longTerm(obs))
+	obs = longTerm(obs)
+	// Отбор по параметрам — до отбраковки выбросов: выбросы считаются
+	// внутри той выборки, по которой и будет оценка.
+	obs, est.Matched = matchQuery(obs, q)
+	obs = trimOutliers(obs)
 	est.Sample = len(obs)
 	if len(obs) == 0 {
 		est.ModelReason = "объявлений о помесячной аренде нет — оценивать нечего"

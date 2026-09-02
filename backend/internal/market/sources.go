@@ -118,15 +118,31 @@ func (y yandexSource) Fetch(ctx context.Context, q RentQuery) ([]Observation, er
 	if s, ok := yaRooms[q.Rooms]; ok {
 		addr += s + "/"
 	}
+	// Площадь — фильтром самой площадки: две страницы выдачи по всему
+	// городу могли вовсе не содержать квартир нужного размера, и оценка
+	// для 200 м² считалась бы по однушкам.
+	query := url.Values{}
+	if q.Area > 0 {
+		lo, hi := areaBand(q.Area, areaBandStart)
+		query.Set("areaMin", strconv.Itoa(int(lo)))
+		query.Set("areaMax", strconv.Itoa(int(hi)+1))
+	}
 	// Две страницы выдачи: на одной около полусотни объявлений, а
 	// линейная регрессия начинает уступать лесу уже с сорока. Больше не
 	// берём — площадку незачем обходить целиком ради оценки уровня цен.
 	var out []Observation
 	var lastErr error
 	for page := 1; page <= 2; page++ {
-		addr := addr
+		params := url.Values{}
+		for k, v := range query {
+			params[k] = v
+		}
 		if page > 1 {
-			addr += fmt.Sprintf("?page=%d", page)
+			params.Set("page", strconv.Itoa(page))
+		}
+		addr := addr
+		if len(params) > 0 {
+			addr += "?" + params.Encode()
 		}
 		data, err := fetchBody(ctx, http.MethodGet, addr, nil)
 		if err != nil {

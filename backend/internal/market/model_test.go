@@ -338,3 +338,56 @@ func TestExamplesAreComplete(t *testing.T) {
 		}
 	}
 }
+
+// Оценка должна зависеть от введённых параметров: до отбора и для 40 м²,
+// и для 200 м² выдавалась одна и та же медиана по городу.
+func TestEstimateFollowsArea(t *testing.T) {
+	var obs []Observation
+	// Маленькие квартиры — дешёвые, большие — дорогие.
+	for i := 0; i < 20; i++ {
+		obs = append(obs, Observation{Source: "аренда", Rooms: 1, Area: 38, PriceMonth: 35000 + float64(i)*200})
+		obs = append(obs, Observation{Source: "аренда", Rooms: 5, Area: 200, PriceMonth: 300000 + float64(i)*1000})
+	}
+
+	small := build(RentQuery{City: "Тестбург", Area: 40}, obs, nil)
+	big := build(RentQuery{City: "Тестбург", Area: 200}, obs, nil)
+
+	if small.Recommended > 40000 {
+		t.Errorf("для 40 м² предложено %v — похоже, большие квартиры не отсеяны", small.Recommended)
+	}
+	if big.Recommended < 250000 {
+		t.Errorf("для 200 м² предложено %v — похоже, маленькие квартиры не отсеяны", big.Recommended)
+	}
+	if small.Matched == "" || big.Matched == "" {
+		t.Error("на экране не сказано, по каким параметрам отобраны объявления")
+	}
+}
+
+// Если объявлений такого размера нет, диапазон расширяется, а человеку
+// об этом говорится — молча подменять выборку нельзя.
+func TestAreaFilterWidensAndReports(t *testing.T) {
+	var obs []Observation
+	for i := 0; i < 20; i++ {
+		obs = append(obs, Observation{Source: "аренда", Rooms: 1, Area: 38, PriceMonth: 35000 + float64(i)*200})
+	}
+	est := build(RentQuery{City: "Тестбург", Area: 120}, obs, nil)
+	if est.Sample != 20 {
+		t.Errorf("выборка %d — ожидалось, что отбор по площади ослабнет до всей выборки", est.Sample)
+	}
+	if !strings.Contains(est.Matched, "не нашлось") {
+		t.Errorf("человеку не сказали, что площадь не учтена: %q", est.Matched)
+	}
+}
+
+// Комнаты сверяются точно, пока объявлений хватает.
+func TestRoomsFilter(t *testing.T) {
+	var obs []Observation
+	for i := 0; i < 15; i++ {
+		obs = append(obs, Observation{Source: "аренда", Rooms: 1, Area: 35, PriceMonth: 30000})
+		obs = append(obs, Observation{Source: "аренда", Rooms: 3, Area: 80, PriceMonth: 90000})
+	}
+	est := build(RentQuery{City: "Тестбург", Rooms: 3}, obs, nil)
+	if est.Sample != 15 || est.Recommended != 90000 {
+		t.Errorf("отбор по комнатам не сработал: выборка %d, цена %v", est.Sample, est.Recommended)
+	}
+}
