@@ -22,6 +22,11 @@ import (
 // повод не показать цифры по трём другим.
 type Source interface {
 	Name() string
+	// Supports — работает ли площадка по этому городу. Площадку, которая
+	// города не знает, не спрашиваем вовсе: она либо ответит ошибкой,
+	// либо, что хуже, молча отдаст выдачу чужого города — так Яндекс
+	// Недвижимость на «Бишкек» отдаёт Москву.
+	Supports(q RentQuery) bool
 	Fetch(ctx context.Context, q RentQuery) ([]Observation, error)
 }
 
@@ -107,6 +112,8 @@ var errClosed = fmt.Errorf("площадка закрыта для автома�
 type yandexSource struct{}
 
 func (yandexSource) Name() string { return "Яндекс Недвижимость" }
+
+func (yandexSource) Supports(q RentQuery) bool { return citySlug(q.City) != "" }
 
 func (y yandexSource) Fetch(ctx context.Context, q RentQuery) ([]Observation, error) {
 	slug := citySlug(q.City)
@@ -311,6 +318,8 @@ type hotels101Source struct{}
 
 func (hotels101Source) Name() string { return "101hotels.com" }
 
+func (hotels101Source) Supports(q RentQuery) bool { return citySlug(q.City) != "" }
+
 // Посуточные апартаменты. Нужны не сами по себе: когда объявлений о
 // длительной аренде мало, посуточная цена всё равно показывает уровень
 // рынка в городе — модель учитывает разницу отдельным признаком.
@@ -358,16 +367,24 @@ func parse101(source string, body []byte) ([]Observation, error) {
 	return out, nil
 }
 
-// citySlug — адрес города в Яндекс Недвижимости. Список короткий
-// намеренно: у площадки свои написания, и угаданный транслитом адрес
-// отдал бы страницу другого города, а не ошибку.
+// citySlug — адрес города в Яндекс Недвижимости.
+//
+// Список закрытый и выверен запросом по каждому адресу: неизвестный
+// площадке адрес она молча подменяет Москвой, а не отвечает ошибкой.
+// Так «nizhniy-novgorod» отдавал московские цены — правильный адрес
+// пишется через подчёркивание. Новый город добавлять только после
+// проверки, что в заголовке выдачи стоит именно он.
 var yaSlugs = map[string]string{
+	"норильск":        "norilsk",
+	"сургут":          "surgut",
+	"якутск":          "yakutsk",
+	"сочи":            "sochi",
 	"москва":          "moskva",
 	"санкт-петербург": "sankt-peterburg",
 	"екатеринбург":    "ekaterinburg",
 	"новосибирск":     "novosibirsk",
 	"казань":          "kazan",
-	"нижний новгород": "nizhniy-novgorod",
+	"нижний новгород": "nizhniy_novgorod",
 	"краснодар":       "krasnodar",
 	"ростов-на-дону":  "rostov-na-donu",
 	"самара":          "samara",

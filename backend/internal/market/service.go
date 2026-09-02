@@ -31,16 +31,23 @@ type cacheEntry struct {
 	est Estimate
 }
 
-// DefaultSources — площадки, которые отвечают на запрос платформы и
-// отдают ПОМЕСЯЧНУЮ аренду.
-//
-// ЦИАН, Суточно.ру и Ostrovok убраны 2026-09-02: первый отдаёт 403 без
-// браузерной сессии, второй требует ключ приложения, третий не отвечает
-// вовсе. 101hotels.com убран 2026-09-03: он посуточный, а посуточные
-// цены в расчёт не идут — адаптер оставлен на случай, если решение
-// изменится. Вернутся, когда появится партнёрский доступ.
+/*
+DefaultSources — площадки, которые отвечают на запрос платформы и
+отдают ПОМЕСЯЧНУЮ аренду.
+
+Площадки привязаны к городам: Яндекс Недвижимость знает крупные города и
+Норильск, «Этажи» добавляют регионы, House.kg — Киргизию. Спрашиваем
+только те, что город знают (см. Source.Supports): площадка, города не
+знающая, молча отдаёт выдачу чужого — цифра оказалась бы московской.
+
+ЦИАН, Суточно.ру и Ostrovok убраны 2026-09-02: первый отдаёт 403 без
+браузерной сессии, второй требует ключ приложения, третий не отвечает
+вовсе. 101hotels.com убран 2026-09-03: он посуточный, а посуточные цены
+в расчёт не идут — адаптер оставлен на случай, если решение изменится.
+Вернутся, когда появится партнёрский доступ.
+*/
 func DefaultSources() []Source {
-	return []Source{yandexSource{}}
+	return []Source{yandexSource{}, etagiSource{}, houseKGSource{}}
 }
 
 func NewService(sources ...Source) *Service {
@@ -68,6 +75,12 @@ func (s *Service) Estimate(ctx context.Context, q RentQuery) (*Estimate, error) 
 
 	obs, statuses := s.collect(ctx, q)
 	est := build(q, obs, statuses)
+	if len(statuses) == 0 {
+		// Ни одна площадка города не знает. Это не «нет объявлений», а
+		// «мы туда не ходим» — и человек должен видеть разницу.
+		est.ModelReason = fmt.Sprintf(
+			"по городу «%s» подключённых площадок нет — оценку получить неоткуда", q.City)
+	}
 
 	// В кэш кладём и пустой ответ: если площадки закрылись, повторять
 	// поход к ним на каждое нажатие бессмысленно.
@@ -87,9 +100,19 @@ func (s *Service) collect(ctx context.Context, q RentQuery) ([]Observation, []So
 		obs []Observation
 		st  SourceStatus
 	}
-	out := make([]result, len(s.sources))
+	// Площадки, которые этот город не знают, не спрашиваем и в ответ не
+	// выводим: строка «город не поддерживается» у пяти площадок подряд
+	// только мешает читать ответ той, что данные дала.
+	var active []Source
+	for _, src := range s.sources {
+		if src.Supports(q) {
+			active = append(active, src)
+		}
+	}
+
+	out := make([]result, len(active))
 	var wg sync.WaitGroup
-	for i, src := range s.sources {
+	for i, src := range active {
 		wg.Add(1)
 		go func(i int, src Source) {
 			defer wg.Done()

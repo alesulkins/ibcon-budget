@@ -127,6 +127,10 @@ type stubSource struct {
 
 func (s stubSource) Name() string { return s.name }
 
+// Заглушка отвечает по любому городу: привязка к городам проверяется
+// отдельно, в TestSourcesBoundToCities.
+func (stubSource) Supports(RentQuery) bool { return true }
+
 func (s stubSource) Fetch(context.Context, RentQuery) ([]Observation, error) {
 	return s.obs, s.err
 }
@@ -392,4 +396,120 @@ func TestRoomsFilter(t *testing.T) {
 	if est.Sample != 15 || est.Recommended != 90000 {
 		t.Errorf("отбор по комнатам не сработал: выборка %d, цена %v", est.Sample, est.Recommended)
 	}
+}
+
+// Площадки привязаны к городам. Проверка держит главный риск этой части:
+// площадка, не знающая города, молча отдаёт выдачу другого — Яндекс
+// Недвижимость на «Бишкек» отвечает Москвой, поэтому её к киргизским
+// городам подключать нельзя.
+func TestSourcesBoundToCities(t *testing.T) {
+	cases := []struct {
+		city    string
+		source  Source
+		support bool
+	}{
+		{"Санкт-Петербург", yandexSource{}, true},
+		{"Норильск", yandexSource{}, true},
+		{"Бишкек", yandexSource{}, false},
+		{"Норильск", etagiSource{}, true},
+		{"Бишкек", etagiSource{}, false},
+		{"Бишкек", houseKGSource{}, true},
+		{"Ош", houseKGSource{}, true},
+		{"Санкт-Петербург", houseKGSource{}, false},
+		{"Норильск", houseKGSource{}, false},
+	}
+	for _, c := range cases {
+		if got := c.source.Supports(RentQuery{City: c.city}); got != c.support {
+			t.Errorf("%s по городу «%s»: подключается=%v, ожидалось %v",
+				c.source.Name(), c.city, got, c.support)
+		}
+	}
+}
+
+// Киргизские карточки: цена в сомах пересчитывается по курсу, комнаты и
+// площадь читаются из заголовка объявления.
+func TestParseHouseKG(t *testing.T) {
+	body := []byte(`<p class="title"><a href="/details/1">3-комн. кв., 76 м2, 10 этаж из 10</a></p>` +
+		`<div class="price">$ 900/мес.</div><div class="price-addition">78 831 сом/мес.</div>` +
+		`<p class="title"><a href="/details/2">1-комн. кв., 32 м2, 2 этаж из 5</a></p>` +
+		`<div class="price">$ 300/мес.</div><div class="price-addition">26 277 сом/мес.</div>`)
+
+	// Курс: 1 сом = 1 ₽ — так проверяется сам пересчёт, а не арифметика.
+	obs, err := parseHouseKG("House.kg", body, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(obs) != 2 {
+		t.Fatalf("разобрано %d объявлений, ожидалось 2: %+v", len(obs), obs)
+	}
+	if obs[0].PriceMonth != 78831 || obs[0].Rooms != 3 || obs[0].Area != 76 {
+		t.Errorf("первое объявление: %+v", obs[0])
+	}
+	if obs[1].PriceMonth != 26277 || obs[1].Rooms != 1 || obs[1].Area != 32 {
+		t.Errorf("второе объявление: %+v", obs[1])
+	}
+
+	// Тот же разбор при курсе 0.9948 ₽ за сом — цена должна вырасти не в
+	// разы, а на проценты: проверяем, что пересчёт применяется к цене, а
+	// не к чему-то ещё.
+	rated, err := parseHouseKG("House.kg", body, 0.9948)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := rated[0].PriceMonth; got < 78000 || got > 78831 {
+		t.Errorf("цена по курсу: %v, ожидалось около 78 421", got)
+	}
+}
+
+// «Этажи»: цена строкой, площадь и комнаты числами в том же объекте.
+func TestParseEtagi(t *testing.T) {
+	body := []byte(`{"lists":{"rents":[` +
+		`{"price":"50000","old_price":"55000","price_m2":"1157","square":43.2,"floors":5,"floor":4,"rooms":2},` +
+		`{"price":"32000","price_m2":"900","square":36,"floors":9,"floor":7,"rooms":1}]}}`)
+	obs, err := parseEtagi("Этажи", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(obs) != 2 {
+		t.Fatalf("разобрано %d объявлений, ожидалось 2: %+v", len(obs), obs)
+	}
+	if obs[0].PriceMonth != 50000 || obs[0].Area != 43.2 || obs[0].Rooms != 2 || obs[0].Floor != 4 {
+		t.Errorf("первое объявление: %+v", obs[0])
+	}
+	// Цена метра (1157) в выборку попасть не должна.
+	for _, o := range obs {
+		if o.PriceMonth < 3000 {
+			t.Errorf("цена метра принята за цену аренды: %+v", o)
+		}
+	}
+}
+
+// Город, которого не знает ни одна площадка, — это не «нет объявлений»,
+// а «мы туда не ходим»: ответ должен говорить именно это.
+func TestUnknownCityExplained(t *testing.T) {
+	svc := NewService(cityStub{name: "площадка", city: "Норильск"})
+	est, err := svc.Estimate(context.Background(), RentQuery{City: "Париж"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(est.Sources) != 0 {
+		t.Errorf("неподходящие площадки попали в ответ: %+v", est.Sources)
+	}
+	if !strings.Contains(est.ModelReason, "подключённых площадок нет") {
+		t.Errorf("человеку не объяснили, почему цифр нет: %q", est.ModelReason)
+	}
+}
+
+// cityStub — заглушка, отвечающая только по своему городу.
+type cityStub struct {
+	name string
+	city string
+}
+
+func (c cityStub) Name() string { return c.name }
+
+func (c cityStub) Supports(q RentQuery) bool { return q.City == c.city }
+
+func (c cityStub) Fetch(context.Context, RentQuery) ([]Observation, error) {
+	return []Observation{{Source: c.name, PriceMonth: 40000, Rooms: 1, Area: 35}}, nil
 }
