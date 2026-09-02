@@ -719,7 +719,7 @@ export interface RentMarketEstimate {
   mae: number;
   p50: number;
   p95: number;
-  /** Среднее по выборке без верхних пяти процентов — цена для бюджета. */
+  /** Медиана выборки без верхних пяти процентов — цена для бюджета. */
   recommended: number;
   /** Распределение цен: столбики для графика. */
   histogram: { from: number; to: number; count: number }[];

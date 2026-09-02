@@ -160,10 +160,14 @@ function Result({
         <Stat
           label="В бюджет"
           value={`${fmtNum(est.recommended)} ₽/мес`}
-          hint="среднее без верхних 5 % рынка"
+          hint="медиана без верхних 5 % рынка"
           strong
         />
-        <Stat label="Медиана рынка" value={`${fmtNum(est.p50)} ₽/мес`} />
+        <Stat
+          label="Верх рынка (95-й перцентиль)"
+          value={`${fmtNum(est.p95)} ₽/мес`}
+          hint="дороже — только 5 % предложений"
+        />
         <Stat
           label="Объявлений в расчёте"
           value={String(est.sample)}
@@ -279,7 +283,7 @@ function Histogram({ est }: { est: RentMarketEstimate }) {
         {/* Отметки медианы и цены для бюджета. Подписи не на графике, а
             под ним: обе цены близки друг к другу, и надписи налезали
             одна на другую поверх столбиков. */}
-        {[est.p50, est.recommended].map((v, i) => (
+        {[est.recommended, est.p95].map((v, i) => (
           <div
             key={i}
             style={{
@@ -288,7 +292,7 @@ function Histogram({ est }: { est: RentMarketEstimate }) {
               top: 0,
               bottom: 0,
               borderLeft: `1px dashed var(--ibcon-text)`,
-              opacity: i === 0 ? 0.35 : 0.7,
+              opacity: i === 0 ? 0.7 : 0.35,
             }}
           />
         ))}
@@ -297,8 +301,8 @@ function Histogram({ est }: { est: RentMarketEstimate }) {
         display: 'flex', gap: 12, flexWrap: 'wrap',
         fontSize: 11, color: 'var(--ibcon-muted)', marginTop: 4,
       }}>
-        <span>┆ медиана {fmtNum(est.p50)} ₽</span>
         <span>┆ в бюджет {fmtNum(est.recommended)} ₽</span>
+        <span>┆ верх рынка {fmtNum(est.p95)} ₽</span>
       </div>
       <div style={{
         display: 'flex', justifyContent: 'space-between',

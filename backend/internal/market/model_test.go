@@ -147,7 +147,7 @@ func TestEstimateCombinesSources(t *testing.T) {
 		t.Fatalf("перцентили не посчитаны: %+v", est)
 	}
 	if est.Recommended <= 0 || est.Recommended >= est.P95 {
-		t.Errorf("в бюджет предлагается %v — должно быть среднее без верхних пяти процентов, "+
+		t.Errorf("в бюджет предлагается %v — должна быть медиана без верхних пяти процентов, "+
 			"то есть меньше 95-го перцентиля %v", est.Recommended, est.P95)
 	}
 	if len(est.Sources) != 2 || est.Sources[1].Error == "" {
@@ -273,11 +273,11 @@ func TestOnlyDailyMeansNoEstimate(t *testing.T) {
 	}
 }
 
-// В бюджет идёт среднее по выборке без верхних пяти процентов, а не сам
+// В бюджет идёт медиана выборки без верхних пяти процентов, а не сам
 // 95-й перцентиль: тот — почти самое дорогое предложение рынка.
-func TestRecommendedIsMeanBelowP95(t *testing.T) {
+func TestRecommendedIsMedianBelowP95(t *testing.T) {
 	// Ровный ряд от 30 000 до 49 000: 95-й перцентиль около 49 000,
-	// среднее по выборке без верхушки — около 39 000.
+	// медиана выборки без верхушки — около 39 000.
 	var obs []Observation
 	for i := 0; i < 20; i++ {
 		obs = append(obs, Observation{Source: "аренда", PriceMonth: 30000 + float64(i)*1000})
@@ -289,7 +289,7 @@ func TestRecommendedIsMeanBelowP95(t *testing.T) {
 			est.Recommended, est.P95)
 	}
 	if est.Recommended < 38000 || est.Recommended > 40000 {
-		t.Errorf("среднее по выборке без верхушки: %v, ожидалось около 39 000", est.Recommended)
+		t.Errorf("медиана выборки без верхушки: %v, ожидалось около 39 000", est.Recommended)
 	}
 }
 

@@ -134,10 +134,12 @@ func build(q RentQuery, obs []Observation, statuses []SourceStatus) *Estimate {
 	sortFloats(p)
 	est.P50 = round2(percentile(p, 50))
 	est.P95 = round2(percentile(p, 95))
-	// В бюджет — среднее по выборке без верхних пяти процентов. Сам 95-й
+	// В бюджет — МЕДИАНА выборки без верхних пяти процентов. Сам 95-й
 	// перцентиль это почти самое дорогое предложение рынка: заложив его,
-	// проект переплатит за каждую квартиру.
-	est.Recommended = round2(meanBelow(p, percentile(p, 95)))
+	// проект переплатит за каждую квартиру. Медиана, а не среднее:
+	// среднее тянут вверх дорогие объявления, даже когда их немного, а
+	// медиана показывает цену, вокруг которой рынок и стоит.
+	est.Recommended = round2(medianBelow(p, percentile(p, 95)))
 	est.Histogram = histogram(p)
 
 	// Сид фиксирован: одинаковый запрос должен давать одинаковый ответ,
@@ -160,21 +162,18 @@ func build(q RentQuery, obs []Observation, statuses []SourceStatus) *Estimate {
 	return est
 }
 
-// meanBelow — среднее по значениям не выше границы. Отсечённые пять
+// medianBelow — медиана значений не выше границы. Отсечённые пять
 // процентов — это верхние выбросы рынка: премиальные квартиры и
 // объявления с завышенной ценой, которые месяцами висят несданными.
-func meanBelow(sorted []float64, limit float64) float64 {
-	sum, n := 0.0, 0
+func medianBelow(sorted []float64, limit float64) float64 {
+	kept := make([]float64, 0, len(sorted))
 	for _, v := range sorted {
 		if v <= limit {
-			sum += v
-			n++
+			kept = append(kept, v)
 		}
 	}
-	if n == 0 {
-		return 0
-	}
-	return sum / float64(n)
+	// sorted уже упорядочен, отбор порядка не нарушает.
+	return percentile(kept, 50)
 }
 
 // Сколько столбиков в графике распределения. Двенадцать — читаемо и на
