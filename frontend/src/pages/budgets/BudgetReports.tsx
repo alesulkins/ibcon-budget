@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Button, InputNumber, Segmented, Space, Spin, Switch, Table, Typography, message, Grid,
+  Button, InputNumber, Segmented, Space, Spin, Switch, Table, Tooltip, Typography,
+  message, Grid,
 } from 'antd';
-import { FileExcelOutlined } from '@ant-design/icons';
+import {
+  FileExcelOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
+} from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
 import { budgetsApi } from '../../api';
@@ -12,7 +15,6 @@ import { fmtNum, thousandFormatter, thousandParser } from '../../utils/fmt';
 import { LINE, TEXT_SOFT } from '../../theme';
 import { canIn, PERM } from '../../store/permissions';
 import { useAutosave } from '../../hooks/useAutosave';
-import { useFillToSiderFooter } from '../../hooks/useFillHeight';
 import { SCROLL_ROOT_ID } from '../../hooks/useScrollRestore';
 
 interface Props {
@@ -50,15 +52,14 @@ export default function BudgetReports({ versionId, permissions, readonly }: Prop
   const [kind, setKind] = useState<Kind>('bdr');
   const [showEmpty, setShowEmpty] = useState(false);
   const [manual, setManual] = useState<ManualValues>(EMPTY_MANUAL);
-  /**
-   * Таблица занимает место до линии ЛК и прокручивается сама.
-   * Фиксированная высота давала две прокрутки сразу — страницы и
-   * таблицы: шапка с кодификатором уезжала вверх вместе со страницей, и
-   * в длинном отчёте становилось непонятно, какой месяц перед глазами.
-   */
-  const [fillRef, fillHeight] = useFillToSiderFooter<HTMLDivElement>();
   // Телефон — до 768 точек (antd md), тот же порог, что и в каркасе.
   const mobile = !Grid.useBreakpoint().md;
+  /**
+   * Свёрнутая колонка статей. В отчёте больше сотни строк с длинными
+   * названиями, и при сравнении месяцев между собой название мешает:
+   * его сворачивают, оставляя узкий столбец с подсказкой по наведению.
+   */
+  const [foldNames, setFoldNames] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
   const { data, isLoading, error } = useQuery({
@@ -150,20 +151,36 @@ export default function BudgetReports({ versionId, permissions, readonly }: Prop
         dataIndex: 'name',
         // На телефоне колонка уже и переносится по словам: закреплённая
         // колонка в 320 точек не оставила бы места месяцам.
-        width: mobile ? 150 : 320,
+        // Свёрнутая — узкая полоса: название читается по наведению.
+        width: foldNames ? 44 : (mobile ? 150 : 320),
         fixed: 'left',
-        render: (v: string, r) => (
-          // Уровень показываем отступом: иерархия в кодификаторе, а не в
-          // структуре данных — список статей плоский, как в форме.
-          <span style={{
-            paddingLeft: r.level * (mobile ? 8 : 14),
-            fontWeight: r.group ? 600 : 400,
-            whiteSpace: mobile ? 'normal' : undefined,
-            display: 'inline-block',
-          }}>
-            {v}
-          </span>
-        ),
+        render: (v: string, r) => {
+          if (foldNames) {
+            return (
+              <Tooltip title={v}>
+                <span style={{
+                  color: TEXT_SOFT,
+                  fontWeight: r.group ? 600 : 400,
+                  cursor: 'default',
+                }}>
+                  ···
+                </span>
+              </Tooltip>
+            );
+          }
+          return (
+            // Уровень показываем отступом: иерархия в кодификаторе, а не
+            // в структуре данных — список статей плоский, как в форме.
+            <span style={{
+              paddingLeft: r.level * (mobile ? 8 : 14),
+              fontWeight: r.group ? 600 : 400,
+              whiteSpace: mobile ? 'normal' : undefined,
+              display: 'inline-block',
+            }}>
+              {v}
+            </span>
+          );
+        },
       },
       ...report.month_labels.map((label, i) => ({
         title: label,
@@ -204,7 +221,7 @@ export default function BudgetReports({ versionId, permissions, readonly }: Prop
     // manual входит в зависимости: без него ячейки ввода не
     // перерисовывались бы при наборе.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [report, canEdit, manual, kind, mobile]);
+  }, [report, canEdit, manual, kind, mobile, foldNames]);
 
   if (isLoading) {
     return <div style={{ textAlign: 'center', padding: 48 }}><Spin size="large" /></div>;
@@ -230,6 +247,12 @@ export default function BudgetReports({ versionId, permissions, readonly }: Prop
             Показывать незаполненные статьи
           </Typography.Text>
         </Space>
+        <Button
+          icon={foldNames ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+          onClick={() => setFoldNames(v => !v)}
+        >
+          {foldNames ? 'Показать статьи' : 'Свернуть статьи'}
+        </Button>
         <Button
           onClick={() => qc.invalidateQueries({ queryKey: ['budget-reports', versionId] })}
         >
@@ -258,33 +281,29 @@ export default function BudgetReports({ versionId, permissions, readonly }: Prop
           + 'после ввода нажмите «Пересчитать отчёты», чтобы обновились групповые суммы.'}
       </Typography.Paragraph>
 
-      <div ref={fillRef}>
-        <Table
-          rowKey="code"
-          columns={columns}
-          dataSource={rows}
-          size="small"
-          pagination={false}
-          tableLayout="fixed"
-          /**
-           * На телефоне у таблицы нет своей вертикальной прокрутки:
-           * сначала листается страница — уезжают переключатель и
-           * пояснение, — а дальше вниз идёт сама таблица. Отчёт в
-           * маленьком окне посреди экрана читать нельзя.
-           *
-           * Шапку при этом держим липкой к странице, иначе к середине
-           * отчёта непонятно, какой месяц перед глазами. Контейнер
-           * указываем явно: страница прокручивается не в окне, а в
-           * #ibcon-scroll-root.
-           */
-          sticky={mobile
-            ? { getContainer: () => document.getElementById(SCROLL_ROOT_ID) ?? window }
-            : false}
-          scroll={{ x: 'max-content', y: mobile ? undefined : fillHeight }}
-          rowClassName={(r) => (r.group ? 'ibcon-report-group' : '')}
-          locale={{ emptyText: 'Нет заполненных статей — версию ещё не считали.' }}
-        />
-      </div>
+      {/**
+        * Своей вертикальной прокрутки у таблицы нет ни на телефоне, ни на
+        * широком экране: сначала листается страница — уезжают
+        * переключатель и пояснение, — а дальше вниз идёт сама таблица.
+        * Отчёт в узком окне посреди экрана читать нельзя, а боковая
+        * прокрутка при этом одна на все строки сразу.
+        *
+        * Шапку держим липкой к странице, иначе к середине отчёта
+        * непонятно, какой месяц перед глазами. Контейнер указываем явно:
+        * страница прокручивается не в окне, а в #ibcon-scroll-root.
+        */}
+      <Table
+        rowKey="code"
+        columns={columns}
+        dataSource={rows}
+        size="small"
+        pagination={false}
+        tableLayout="fixed"
+        sticky={{ getContainer: () => document.getElementById(SCROLL_ROOT_ID) ?? window }}
+        scroll={{ x: 'max-content' }}
+        rowClassName={(r) => (r.group ? 'ibcon-report-group' : '')}
+        locale={{ emptyText: 'Нет заполненных статей — версию ещё не считали.' }}
+      />
     </div>
   );
 }

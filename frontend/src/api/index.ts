@@ -5,6 +5,7 @@ import type {
   BudgetVersion, CalcResult, BudgetReport,
   Executor, Position, WorkMode, CostItem, City, CitySalary,
   AuditEntry, PaginatedResponse, Profile, Reminder, UISettings,
+  RentMarketQuery, RentMarketEstimate,
 } from '../types';
 
 // ─── Auth ──────────────────────────────────────────────────────────────────
@@ -27,6 +28,14 @@ export const profileApi = {
       current_password: currentPassword,
       new_password: newPassword,
     }).then(r => r.data),
+};
+
+// ─── Рыночная стоимость аренды ─────────────────────────────────────────────
+// Запрос идёт к площадкам объявлений и занимает секунды, поэтому это
+// POST по требованию, а не фоновая загрузка страницы.
+export const marketApi = {
+  rentEstimate: (q: RentMarketQuery) =>
+    client.post<RentMarketEstimate>('/market/rent-estimate', q).then(r => r.data),
 };
 
 // ─── Напоминания ───────────────────────────────────────────────────────────

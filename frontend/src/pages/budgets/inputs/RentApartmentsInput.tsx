@@ -9,6 +9,7 @@ import MonthGrid, {
 } from '../../../components/MonthGrid';
 import { titleWithHint } from '../../../components/InfoHint';
 import { useAutosave } from '../../../hooks/useAutosave';
+import RentMarketModal from './RentMarketModal';
 
 const { Text } = Typography;
 
@@ -16,6 +17,8 @@ interface Props {
   versionId: number;
   duration: number;
   startDate: string;
+  /** Город проекта — подставляется в запрос рыночной стоимости. */
+  city?: string;
   readonly?: boolean;
 }
 
@@ -47,7 +50,13 @@ const cell: React.CSSProperties = {
 };
 const headCell: React.CSSProperties = { ...cell, background: '#fafafa', fontWeight: 500 };
 
-export default function RentApartmentsInput({ versionId, duration, startDate, readonly }: Props) {
+export default function RentApartmentsInput({
+  versionId, duration, startDate, city, readonly,
+}: Props) {
+  // Запрос рыночной стоимости к площадкам объявлений — по кнопке, а не
+  // при открытии шага: поход к площадкам занимает секунды и цену всё
+  // равно ставит человек.
+  const [marketOpen, setMarketOpen] = useState(false);
   const [rows, setRows] = useState<Record<RoomKey, RoomRow>>({
     '1room': emptyRow(duration),
     '2room': emptyRow(duration),
@@ -149,6 +158,11 @@ export default function RentApartmentsInput({ versionId, duration, startDate, re
         )}
         size="small"
         style={{ marginBottom: 16 }}
+        extra={(
+          <Button size="small" onClick={() => setMarketOpen(true)}>
+            Узнать рыночную стоимость
+          </Button>
+        )}
       >
         <MonthGrid
           months={months}
@@ -280,6 +294,17 @@ export default function RentApartmentsInput({ versionId, duration, startDate, re
           />
         </Card>
       </Space>
+
+      <RentMarketModal
+        open={marketOpen}
+        onClose={() => setMarketOpen(false)}
+        defaultCity={city}
+        // Подстановка только когда версию можно править: в архивной
+        // версии кнопка «узнать» остаётся, а «подставить» — нет.
+        onApply={readonly
+          ? undefined
+          : (r, price) => setPrice(`${r}room` as RoomKey, price)}
+      />
     </div>
   );
 }

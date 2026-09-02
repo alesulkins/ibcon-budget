@@ -675,3 +675,54 @@ export interface UISettings {
   /** Цвет всплывающих уведомлений. */
   notice_color?: string;
 }
+
+// ─── Рыночная стоимость аренды ─────────────────────────────────────────────
+// Платформа опрашивает площадки объявлений и считает по ним оценку.
+// Обязателен только город; остальные поля уточняют её.
+
+export interface RentMarketQuery {
+  city: string;
+  district?: string;
+  rooms?: number;
+  area?: number;
+  floor?: number;
+  elevator?: boolean | null;
+  metro_minutes?: number;
+}
+
+export interface RentMarketSource {
+  source: string;
+  count: number;
+  median: number;
+  /** Пусто, если площадка ответила. Иначе — почему не ответила. */
+  error?: string;
+}
+
+export interface RentMarketExample {
+  source: string;
+  price_month: number;
+  daily?: boolean;
+  rooms?: number;
+  area?: number;
+  title?: string;
+  url?: string;
+}
+
+export interface RentMarketEstimate {
+  query: RentMarketQuery;
+  sample: number;
+  model: string;
+  model_reason: string;
+  /** Прогноз модели для введённых параметров, ₽/мес. 0 — модель не строилась. */
+  predicted: number;
+  mae: number;
+  p50: number;
+  p75: number;
+  p95: number;
+  /** Что предлагается заложить в бюджет — 95-й перцентиль выборки. */
+  recommended: number;
+  sources: RentMarketSource[];
+  examples: RentMarketExample[];
+  calculated_at: string;
+  cached: boolean;
+}

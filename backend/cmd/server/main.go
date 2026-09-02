@@ -11,6 +11,7 @@ import (
 	"ibcon-budget/internal/auth"
 	"ibcon-budget/internal/budgets"
 	"ibcon-budget/internal/db"
+	"ibcon-budget/internal/market"
 	"ibcon-budget/internal/middleware"
 	"ibcon-budget/internal/projects"
 	"ibcon-budget/internal/references"
@@ -74,6 +75,11 @@ func main() {
 	// 2026-08-30.
 	remSvc := reminders.NewService(database)
 	reminders.NewHandler(remSvc).Register(protected)
+
+	// Рыночная стоимость аренды квартир: платформа сама опрашивает
+	// площадки объявлений и считает по ним оценку. Данных в базе не
+	// держит, поэтому и подключение ей не нужно.
+	market.NewHandler(market.NewService()).Register(protected)
 
 	projectsSvc := projects.NewService(database)
 	projects.NewHandler(projectsSvc, usersSvc, acl, auditSvc).Register(protected)
