@@ -36,6 +36,16 @@ export const profileApi = {
 export const marketApi = {
   rentEstimate: (q: RentMarketQuery) =>
     client.post<RentMarketEstimate>('/market/rent-estimate', q).then(r => r.data),
+
+  /** Постоянные пояснения к расчёту: медиана, перцентили, выбросы. */
+  methodology: () =>
+    client.get<{ blocks: { title: string; text: string }[] }>('/market/methodology')
+      .then(r => r.data.blocks),
+
+  /** Вопрос ассистенту по конкретному расчёту — он видит его цифры. */
+  ask: (question: string, estimate: RentMarketEstimate) =>
+    client.post<{ answer: string }>('/market/ask', { question, estimate })
+      .then(r => r.data.answer),
 };
 
 // ─── Напоминания ───────────────────────────────────────────────────────────

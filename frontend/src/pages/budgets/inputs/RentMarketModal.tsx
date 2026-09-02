@@ -7,6 +7,7 @@ import { useMutation } from '@tanstack/react-query';
 import { marketApi } from '../../../api';
 import { extractError } from '../../../api/client';
 import { fmtNum } from '../../../utils/fmt';
+import RentWhyPanel from './RentWhyPanel';
 import type { RentMarketEstimate, RentMarketQuery } from '../../../types';
 
 const { Text } = Typography;
@@ -63,7 +64,7 @@ export default function RentMarketModal({ open, onClose, defaultCity, onApply }:
         layout="inline"
         initialValues={{ city: defaultCity ?? '' }}
         onFinish={submit}
-        style={{ rowGap: 12, marginBottom: 12 }}
+        style={{ rowGap: 12, marginBottom: 12, flexWrap: 'wrap' }}
       >
         <Form.Item
           name="city"
@@ -78,10 +79,13 @@ export default function RentMarketModal({ open, onClose, defaultCity, onApply }:
         <Form.Item name="rooms" label="Комнат">
           <InputNumber min={1} max={6} style={{ width: 90 }} />
         </Form.Item>
-        <Form.Item name="area" label="Площадь, м²">
+        {/* Площадь и кнопка прижаты к правому краю: город с районом
+            задают, что искать, а эти два — уточнение и само действие,
+            и глазу проще, когда они стоят отдельной группой. */}
+        <Form.Item name="area" label="Площадь, м²" style={{ marginLeft: 'auto' }}>
           <InputNumber min={10} max={400} style={{ width: 100 }} />
         </Form.Item>
-        <Form.Item>
+        <Form.Item style={{ marginRight: 0 }}>
           <Button type="primary" htmlType="submit" loading={ask.isPending}>
             Узнать стоимость
           </Button>
@@ -193,15 +197,20 @@ function Result({
             pagination={false}
             scroll={{ x: 'max-content' }}
             columns={[
-              { title: 'Площадка', dataIndex: 'source' },
+              { title: 'Площадка', dataIndex: 'source', align: 'center' },
               {
                 title: 'Цена, ₽/мес',
                 dataIndex: 'price_month',
-                align: 'right',
+                align: 'center',
                 render: (v: number) => fmtNum(v),
               },
-              { title: 'Комнат', dataIndex: 'rooms' },
-              { title: 'Площадь', dataIndex: 'area', render: (v: number) => `${fmtNum(v)} м²` },
+              { title: 'Комнат', dataIndex: 'rooms', align: 'center' },
+              {
+                title: 'Площадь',
+                dataIndex: 'area',
+                align: 'center',
+                render: (v: number) => `${fmtNum(v)} м²`,
+              },
               {
                 title: '',
                 dataIndex: 'url',
@@ -213,6 +222,9 @@ function Result({
           />
         </>
       )}
+
+      {/* Пояснения — в самом низу: их читают после цифр, а не вместо. */}
+      <RentWhyPanel est={est} />
     </div>
   );
 }
@@ -294,21 +306,27 @@ function Histogram({ est }: { est: RentMarketEstimate }) {
       }}>
         <span style={{ position: 'absolute', left: 0, top: 0 }}>{fmtNum(lo)}</span>
         <span style={{ position: 'absolute', right: 0, top: 0 }}>{fmtNum(hi)}</span>
-        {marks.map(m => (
-          <span
-            key={m.label}
-            style={{
-              position: 'absolute',
-              left: `${at(m.v)}%`,
-              top: 14,
-              transform: 'translateX(-50%)',
-              whiteSpace: 'nowrap',
-              color: m.strong ? 'var(--ibcon-text)' : undefined,
-            }}
-          >
-            {m.label} {fmtNum(m.v)}
-          </span>
-        ))}
+        {marks.map(m => {
+          const x = at(m.v);
+          // У краёв шкалы подпись прижимается к краю, а не центрируется
+          // по линии: у правого края она иначе уезжает за пределы окна.
+          const shift = x > 85 ? '-100%' : x < 15 ? '0' : '-50%';
+          return (
+            <span
+              key={m.label}
+              style={{
+                position: 'absolute',
+                left: `${x}%`,
+                top: 14,
+                transform: `translateX(${shift})`,
+                whiteSpace: 'nowrap',
+                color: m.strong ? 'var(--ibcon-text)' : undefined,
+              }}
+            >
+              {m.label} {fmtNum(m.v)}
+            </span>
+          );
+        })}
       </div>
     </div>
   );
@@ -319,7 +337,9 @@ function Stat({ label, value, hint, strong }: {
   label: string; value: string; hint?: string; strong?: boolean;
 }) {
   return (
-    <div>
+    // По центру колонки: подписи и числа разной длины, и при выключке
+    // влево значения стояли лесенкой — глазу не за что зацепиться.
+    <div style={{ textAlign: 'center' }}>
       <div style={{ fontSize: 12, color: 'var(--ibcon-muted)' }}>{label}</div>
       <div style={{ fontSize: strong ? 20 : 16, fontWeight: strong ? 600 : 500 }}>{value}</div>
       {hint && <div style={{ fontSize: 11, color: 'var(--ibcon-muted)' }}>{hint}</div>}
@@ -338,17 +358,18 @@ function SourceTable({ est }: { est: RentMarketEstimate }) {
       dataSource={est.sources}
       pagination={false}
       columns={[
-        { title: 'Площадка', dataIndex: 'source' },
-        { title: 'Объявлений', dataIndex: 'count', align: 'right' },
+        { title: 'Площадка', dataIndex: 'source', align: 'center' },
+        { title: 'Объявлений', dataIndex: 'count', align: 'center' },
         {
           title: 'Медиана, ₽/мес',
           dataIndex: 'median',
-          align: 'right',
+          align: 'center',
           render: (v: number) => (v ? fmtNum(v) : '—'),
         },
         {
           title: 'Ответ',
           dataIndex: 'error',
+          align: 'center',
           render: (v: string) => (v
             ? <Text type="warning" style={{ fontSize: 12 }}>{v}</Text>
             : <Text type="success" style={{ fontSize: 12 }}>данные получены</Text>),

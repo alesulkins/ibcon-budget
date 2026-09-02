@@ -380,7 +380,11 @@ export default function BudgetVersionPage() {
     // ibcon-blocks — обводка блоков линией: на одном экране их до десятка
     // подряд, и без рамки не видно, где кончается один и начинается
     // следующий. Правило в index.css.
-    <div className="ibcon-blocks">
+    //
+    // key по версии и ibcon-version-swap: при переключении старая/новая
+    // содержимое проявляется, а не подменяется рывком — глаз успевает
+    // заметить, что страница та же, а версия другая.
+    <div key={versionId} className="ibcon-blocks ibcon-version-swap">
       {/* Возврат к проекту — по хлебным крошкам в шапке. */}
       <Card
         title={

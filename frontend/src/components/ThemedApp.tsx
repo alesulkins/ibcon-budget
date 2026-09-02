@@ -154,6 +154,15 @@ export default function ThemedApp() {
     root.setProperty('--ibcon-notice-bg', alpha(noticeColor, 0.72));
     root.setProperty('--ibcon-notice-fg', readableOn(noticeColor));
 
+    // Стекло: подложка панелей, светлая грань и обводка. Вынесено в
+    // переменные, потому что в тёмной теме грань слабее — на тёмном фоне
+    // яркая полоса выглядит наклеенной плёнкой, а не краем стекла.
+    root.setProperty('--ibcon-glass-bg', alpha(white, dark ? 0.55 : 0.62));
+    root.setProperty('--ibcon-glass-sheen',
+      dark ? 'rgba(255, 255, 255, 0.10)' : 'rgba(255, 255, 255, 0.55)');
+    root.setProperty('--ibcon-glass-edge',
+      dark ? 'rgba(255, 255, 255, 0.14)' : 'rgba(255, 255, 255, 0.45)');
+
     // Оттенки фирменного цвета: растяжка сайдбара и шапка входа. Раньше
     // они были вписаны литералами и не менялись вместе с цветом.
     //
