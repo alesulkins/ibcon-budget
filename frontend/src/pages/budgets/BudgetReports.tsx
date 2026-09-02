@@ -58,7 +58,37 @@ export default function BudgetReports({ versionId, permissions, readonly }: Prop
    * его сворачивают, оставляя узкий столбец с подсказкой по наведению.
    */
   const [foldNames, setFoldNames] = useState(false);
+  /**
+   * Обёртка таблицы и отступ, на котором стоит стрелка сворачивания.
+   *
+   * Стрелка живёт не в шапке: шапка уезжает вверх при прокрутке, а
+   * свернуть колонку нужно в любой момент. Она прилеплена к правой
+   * границе закреплённых колонок и скользит вместе с человеком по
+   * вертикали; ширину этих колонок берём измерением — она зависит и от
+   * ширины экрана, и от того, свёрнуто ли уже.
+   */
+  const [wrap, setWrap] = useState<HTMLDivElement | null>(null);
+  const [toggleX, setToggleX] = useState(0);
   const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    if (!wrap) return;
+    const measure = () => {
+      const cells = wrap.querySelectorAll<HTMLElement>(
+        '.ant-table-thead th.ant-table-cell-fix-start',
+      );
+      const last = cells[cells.length - 1];
+      // Свёрнуто — закреплённых колонок нет вовсе, стрелка встаёт у
+      // левого края таблицы.
+      setToggleX(last
+        ? last.getBoundingClientRect().right - wrap.getBoundingClientRect().left
+        : 0);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(wrap);
+    return () => ro.disconnect();
+  }, [wrap, foldNames]);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['budget-reports', versionId],
@@ -131,69 +161,31 @@ export default function BudgetReports({ versionId, permissions, readonly }: Prop
   const columns: ColumnsType<ReportRow> = useMemo(() => {
     if (!report) return [];
     return [
-      // Кодификатор на телефоне не показываем: две закреплённые колонки
-      // съедали почти всю ширину экрана, и месяцев было не видно. Номер
-      // статьи есть в выгрузке, а на экране статью узнают по названию.
-      ...(mobile ? [] : [{
-        title: 'Кодификатор',
-        dataIndex: 'code',
-        width: 110,
-        fixed: 'left' as const,
-        className: 'ibcon-num',
-        render: (v: string, r: ReportRow) => (
-          <span style={{ color: TEXT_SOFT, fontWeight: r.group ? 600 : 400 }}>{v}</span>
-        ),
-      }]),
-      {
-        // Стрелка на границе колонки — ею колонка и сворачивается:
-        // отдельная кнопка в панели стояла далеко от того, чем управляет.
-        title: (
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            gap: 4,
-          }}>
-            <span style={{ opacity: foldNames ? 0 : 1 }}>Статья оборотов</span>
-            <Tooltip title={foldNames ? 'Показать статьи' : 'Свернуть статьи'}>
-              <span
-                role="button"
-                aria-label={foldNames ? 'Показать статьи' : 'Свернуть статьи'}
-                onClick={(e) => { e.stopPropagation(); setFoldNames(v => !v); }}
-                style={{
-                  cursor: 'pointer',
-                  color: 'var(--ibcon-brand)',
-                  // Прижата к правому краю ячейки — к самой границе,
-                  // вдоль которой колонка и складывается.
-                  marginRight: -4,
-                  padding: '0 2px',
-                  lineHeight: 1,
-                }}
-              >
-                {foldNames ? <RightOutlined /> : <LeftOutlined />}
-              </span>
-            </Tooltip>
-          </div>
-        ),
-        dataIndex: 'name',
-        // На телефоне колонка уже и переносится по словам: закреплённая
-        // колонка в 320 точек не оставила бы места месяцам.
-        // Свёрнутая — узкая полоса: название читается по наведению.
-        width: foldNames ? 44 : (mobile ? 150 : 320),
-        fixed: 'left',
-        render: (v: string, r) => {
-          if (foldNames) {
-            return (
-              <Tooltip title={v}>
-                <span style={{
-                  color: TEXT_SOFT,
-                  fontWeight: r.group ? 600 : 400,
-                  cursor: 'default',
-                }}>
-                  ···
-                </span>
-              </Tooltip>
-            );
-          }
-          return (
+      // Свёрнутое состояние прячет ЛЕВЫЙ край целиком — и кодификатор, и
+      // статью: колонка в 44 точки всё равно занимала место, а месяцы
+      // между собой сравнивают именно без неё.
+      ...(foldNames ? [] : [
+        // Кодификатор на телефоне не показываем: две закреплённые колонки
+        // съедали почти всю ширину экрана, и месяцев было не видно. Номер
+        // статьи есть в выгрузке, а на экране статью узнают по названию.
+        ...(mobile ? [] : [{
+          title: 'Кодификатор',
+          dataIndex: 'code',
+          width: 110,
+          fixed: 'left' as const,
+          className: 'ibcon-num',
+          render: (v: string, r: ReportRow) => (
+            <span style={{ color: TEXT_SOFT, fontWeight: r.group ? 600 : 400 }}>{v}</span>
+          ),
+        }]),
+        {
+          title: 'Статья оборотов',
+          dataIndex: 'name',
+          // На телефоне колонка уже и переносится по словам: закреплённая
+          // колонка в 320 точек не оставила бы места месяцам.
+          width: mobile ? 150 : 320,
+          fixed: 'left' as const,
+          render: (v: string, r: ReportRow) => (
             // Уровень показываем отступом: иерархия в кодификаторе, а не
             // в структуре данных — список статей плоский, как в форме.
             <span style={{
@@ -204,9 +196,9 @@ export default function BudgetReports({ versionId, permissions, readonly }: Prop
             }}>
               {v}
             </span>
-          );
+          ),
         },
-      },
+      ]),
       ...report.month_labels.map((label, i) => ({
         title: label,
         key: `m${i}`,
@@ -311,18 +303,53 @@ export default function BudgetReports({ versionId, permissions, readonly }: Prop
         * непонятно, какой месяц перед глазами. Контейнер указываем явно:
         * страница прокручивается не в окне, а в #ibcon-scroll-root.
         */}
-      <Table
-        rowKey="code"
-        columns={columns}
-        dataSource={rows}
-        size="small"
-        pagination={false}
-        tableLayout="fixed"
-        sticky={{ getContainer: () => document.getElementById(SCROLL_ROOT_ID) ?? window }}
-        scroll={{ x: 'max-content' }}
-        rowClassName={(r) => (r.group ? 'ibcon-report-group' : '')}
-        locale={{ emptyText: 'Нет заполненных статей — версию ещё не считали.' }}
-      />
+      <div ref={setWrap} style={{ position: 'relative' }}>
+        {/* Стрелка сворачивания. Нулевой высоты и липкая: остаётся на
+            виду, пока таблица на экране, и исчезает вместе с ней. По
+            горизонтали стоит на границе закреплённых колонок — та при
+            боковой прокрутке не двигается, поэтому стрелка всегда рядом
+            со своей границей.
+
+            Стоит ПЕРЕД таблицей: липкий элемент не поднимается выше
+            своего места в потоке, и снизу он прилипал бы только у самого
+            конца отчёта. */}
+        {rows.length > 0 && (
+          <div style={{
+            position: 'sticky',
+            top: '45vh',
+            height: 0,
+            // Выше закреплённых колонок и липкой полосы прокрутки: они
+            // перехватывали нажатие на стрелку.
+            zIndex: 20,
+            pointerEvents: 'none',
+          }}>
+            <Tooltip title={foldNames ? 'Показать статьи' : 'Скрыть статьи'} placement="right">
+              <span
+                role="button"
+                aria-label={foldNames ? 'Показать статьи' : 'Скрыть статьи'}
+                className="ibcon-fold-toggle"
+                onClick={() => setFoldNames(v => !v)}
+                style={{ left: toggleX, pointerEvents: 'auto' }}
+              >
+                {foldNames ? <RightOutlined /> : <LeftOutlined />}
+              </span>
+            </Tooltip>
+          </div>
+        )}
+        <Table
+          rowKey="code"
+          columns={columns}
+          dataSource={rows}
+          size="small"
+          pagination={false}
+          tableLayout="fixed"
+          sticky={{ getContainer: () => document.getElementById(SCROLL_ROOT_ID) ?? window }}
+          scroll={{ x: 'max-content' }}
+          rowClassName={(r) => (r.group ? 'ibcon-report-group' : '')}
+          locale={{ emptyText: 'Нет заполненных статей — версию ещё не считали.' }}
+        />
+
+      </div>
     </div>
   );
 }

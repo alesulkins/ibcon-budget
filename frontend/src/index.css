@@ -467,6 +467,36 @@ html body {
   background: var(--ibcon-row-accent);
 }
 
+/**
+ * Стрелка сворачивания левых колонок отчёта.
+ *
+ * Полупрозрачная и всегда под рукой: она прилеплена к границе
+ * закреплённых колонок и скользит вместе с человеком, поэтому не должна
+ * закрывать собой цифры — под курсором становится плотной.
+ */
+.ibcon-fold-toggle {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--ibcon-white);
+  background: var(--ibcon-brand);
+  opacity: 0.45;
+  z-index: 20;
+  box-shadow: 0 1px 4px rgba(12, 26, 51, 0.25);
+  transition: opacity 0.15s ease;
+  font-size: 12px;
+}
+
+.ibcon-fold-toggle:hover {
+  opacity: 1;
+}
+
 /* ── Всплывающие сообщения и уведомления ───────────────────────────
  *
  * Цвет задаётся в настройках интерфейса и приходит переменной. Через
