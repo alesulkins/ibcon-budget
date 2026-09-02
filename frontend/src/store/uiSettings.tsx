@@ -1,6 +1,8 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
+import { message } from 'antd';
 import { profileApi } from '../api';
+import { extractError } from '../api/client';
 import type { FontSize, ThemeMode, UISettings } from '../types';
 import { BRAND } from '../theme';
 
@@ -75,9 +77,20 @@ export function UISettingsProvider({ children }: { children: React.ReactNode }) 
     retry: false,
   });
 
+  /**
+   * Что мы в последний раз ОТПРАВИЛИ на сервер. Пока ответ не пришёл,
+   * фоновые перезапросы профиля (react-query спрашивает его при
+   * возвращении на вкладку) не должны возвращать экран к прежнему
+   * оформлению: человек уже видит новое, и откат читается как
+   * «настройки не работают».
+   */
+  const sent = useRef<UISettings | null>(null);
+
   useEffect(() => {
     if (!profile) return;
     const fromServer = profile.ui_settings ?? {};
+    if (sent.current && !sameSettings(sent.current, fromServer)) return;
+    sent.current = null;
     setLocal(fromServer);
     writeCache(fromServer);
   }, [profile]);
@@ -85,6 +98,12 @@ export function UISettingsProvider({ children }: { children: React.ReactNode }) 
   const saveMutation = useMutation({
     mutationFn: (next: UISettings) => profileApi.update({ ui_settings: next }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['profile'] }),
+    // Молчаливая неудача выглядела как «настройки ничего не меняют»:
+    // на экране новое оформление, а после перезагрузки снова старое.
+    onError: (e) => {
+      sent.current = null;
+      message.error(`Настройки не сохранились: ${extractError(e)}`);
+    },
   });
 
   const value = useMemo<UISettingsValue>(() => ({
@@ -100,11 +119,20 @@ export function UISettingsProvider({ children }: { children: React.ReactNode }) 
       // должна отзываться мгновенно, иначе кажется, что не сработала.
       setLocal(next);
       writeCache(next);
+      sent.current = next;
       saveMutation.mutate(next);
     },
   }), [local, saveMutation]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+/** Совпадают ли настройки по значению: ссылки у ответа сервера всегда разные. */
+function sameSettings(a: UISettings, b: UISettings): boolean {
+  return a.font_size === b.font_size
+    && a.theme === b.theme
+    && a.brand_color === b.brand_color
+    && a.notice_color === b.notice_color;
 }
 
 export function useUISettings(): UISettingsValue {
