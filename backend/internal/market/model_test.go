@@ -146,8 +146,9 @@ func TestEstimateCombinesSources(t *testing.T) {
 	if est.Sample == 0 || est.P50 == 0 || est.P95 <= est.P50 {
 		t.Fatalf("перцентили не посчитаны: %+v", est)
 	}
-	if est.Recommended != est.P95 {
-		t.Errorf("в бюджет предлагается %v, а не 95-й перцентиль %v", est.Recommended, est.P95)
+	if est.Recommended <= 0 || est.Recommended >= est.P95 {
+		t.Errorf("в бюджет предлагается %v — должно быть среднее без верхних пяти процентов, "+
+			"то есть меньше 95-го перцентиля %v", est.Recommended, est.P95)
 	}
 	if len(est.Sources) != 2 || est.Sources[1].Error == "" {
 		t.Errorf("недоступная площадка не попала в ответ: %+v", est.Sources)
@@ -239,9 +240,9 @@ func TestParseYandexEmpty(t *testing.T) {
 	}
 }
 
-// Перцентили считаются по длительной аренде: суточная цена, пересчитанная
-// в месяц, выше месячной в разы и утащила бы «цену для бюджета» вверх.
-func TestPercentilesIgnoreDaily(t *testing.T) {
+// Посуточные объявления в расчёт не идут вовсе: суточная цена, даже
+// пересчитанная в месяц, не ставка по договору найма.
+func TestDailyExcludedFromEstimate(t *testing.T) {
 	var obs []Observation
 	for i := 0; i < 20; i++ {
 		obs = append(obs, Observation{Source: "аренда", PriceMonth: 40000 + float64(i)*500})
@@ -250,29 +251,78 @@ func TestPercentilesIgnoreDaily(t *testing.T) {
 		obs = append(obs, Observation{Source: "посуточно", PriceMonth: 130000, Daily: true})
 	}
 	est := build(RentQuery{City: "Тестбург"}, obs, nil)
-	if est.SampleLongTerm != 20 {
-		t.Fatalf("длительных объявлений в перцентилях: %d, ожидалось 20", est.SampleLongTerm)
+	if est.Sample != 20 {
+		t.Fatalf("в расчёт попало %d объявлений, ожидалось 20 помесячных", est.Sample)
 	}
 	if est.P95 > 50000 {
 		t.Errorf("посуточные цены попали в перцентили: p95 = %v", est.P95)
 	}
-	if est.Sample <= est.SampleLongTerm {
-		t.Errorf("посуточные объявления должны оставаться в выборке модели: %+v", est)
-	}
 }
 
-// Если длительных объявлений нет вовсе, считаем по посуточным — но
-// говорим об этом, а не выдаём их цену за месячную молча.
-func TestPercentilesFallBackToDaily(t *testing.T) {
+func TestOnlyDailyMeansNoEstimate(t *testing.T) {
 	var obs []Observation
 	for i := 0; i < 20; i++ {
 		obs = append(obs, Observation{Source: "посуточно", PriceMonth: 130000, Daily: true})
 	}
 	est := build(RentQuery{City: "Тестбург"}, obs, nil)
-	if est.SampleLongTerm != 0 || est.P50 == 0 {
-		t.Fatalf("оценка по посуточным не посчиталась: %+v", est)
+	if est.Sample != 0 || est.Recommended != 0 {
+		t.Fatalf("оценка построена на одних посуточных: %+v", est)
 	}
-	if !strings.Contains(est.ModelReason, "посуточным") {
-		t.Errorf("человека не предупредили, по чему посчитаны перцентили: %q", est.ModelReason)
+	if !strings.Contains(est.ModelReason, "помесячной") {
+		t.Errorf("человеку не объяснили, почему цифр нет: %q", est.ModelReason)
+	}
+}
+
+// В бюджет идёт среднее по выборке без верхних пяти процентов, а не сам
+// 95-й перцентиль: тот — почти самое дорогое предложение рынка.
+func TestRecommendedIsMeanBelowP95(t *testing.T) {
+	// Ровный ряд от 30 000 до 49 000: 95-й перцентиль около 49 000,
+	// среднее по выборке без верхушки — около 39 000.
+	var obs []Observation
+	for i := 0; i < 20; i++ {
+		obs = append(obs, Observation{Source: "аренда", PriceMonth: 30000 + float64(i)*1000})
+	}
+
+	est := build(RentQuery{City: "Тестбург"}, obs, nil)
+	if est.Recommended >= est.P95 {
+		t.Errorf("в бюджет предлагается %v — не меньше 95-го перцентиля %v",
+			est.Recommended, est.P95)
+	}
+	if est.Recommended < 38000 || est.Recommended > 40000 {
+		t.Errorf("среднее по выборке без верхушки: %v, ожидалось около 39 000", est.Recommended)
+	}
+}
+
+// График распределения: столбики покрывают всю выборку и ничего не
+// теряют — самое дорогое объявление попадает в последний столбик.
+func TestHistogramCoversSample(t *testing.T) {
+	var obs []Observation
+	for i := 0; i < 50; i++ {
+		obs = append(obs, Observation{Source: "аренда", PriceMonth: 30000 + float64(i)*1000})
+	}
+	est := build(RentQuery{City: "Тестбург"}, obs, nil)
+	total := 0
+	for _, b := range est.Histogram {
+		total += b.Count
+		if b.To < b.From {
+			t.Errorf("диапазон столбика перевёрнут: %+v", b)
+		}
+	}
+	if total != est.Sample {
+		t.Errorf("в столбиках %d объявлений, в выборке %d", total, est.Sample)
+	}
+}
+
+// В примерах — только объявления, где заполнено всё, что в них выведено.
+func TestExamplesAreComplete(t *testing.T) {
+	obs := []Observation{
+		{Source: "аренда", PriceMonth: 40000, Rooms: 1, Area: 35},
+		{Source: "аренда", PriceMonth: 45000},
+		{Source: "аренда", PriceMonth: 50000, Rooms: 2},
+	}
+	for _, e := range examples(obs) {
+		if e.Rooms == 0 || e.Area == 0 || e.PriceMonth == 0 {
+			t.Errorf("в примерах объявление с пустыми полями: %+v", e)
+		}
 	}
 }

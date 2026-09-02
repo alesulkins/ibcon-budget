@@ -31,16 +31,16 @@ type cacheEntry struct {
 	est Estimate
 }
 
-// DefaultSources — площадки, которые отвечают на запрос платформы:
-// сначала объявления о длительной аренде, потом посуточные.
+// DefaultSources — площадки, которые отвечают на запрос платформы и
+// отдают ПОМЕСЯЧНУЮ аренду.
 //
-// ЦИАН, Суточно.ру и Ostrovok отсюда убраны 2026-09-02: первый отдаёт
-// 403 без браузерной сессии, второй требует ключ приложения, третий не
-// отвечает вовсе. Держать в списке площадку, которая всегда возвращает
-// ошибку, — только пугать человека красной строкой на экране. Вернутся,
-// когда появится партнёрский доступ.
+// ЦИАН, Суточно.ру и Ostrovok убраны 2026-09-02: первый отдаёт 403 без
+// браузерной сессии, второй требует ключ приложения, третий не отвечает
+// вовсе. 101hotels.com убран 2026-09-03: он посуточный, а посуточные
+// цены в расчёт не идут — адаптер оставлен на случай, если решение
+// изменится. Вернутся, когда появится партнёрский доступ.
 func DefaultSources() []Source {
-	return []Source{yandexSource{}, hotels101Source{}}
+	return []Source{yandexSource{}}
 }
 
 func NewService(sources ...Source) *Service {
@@ -120,34 +120,25 @@ func (s *Service) collect(ctx context.Context, q RentQuery) ([]Observation, []So
 func build(q RentQuery, obs []Observation, statuses []SourceStatus) *Estimate {
 	est := &Estimate{Query: q, Sources: statuses, CalculatedAt: time.Now()}
 
-	obs = trimOutliers(obs)
+	// Только помесячная аренда. Посуточная цена, умноженная на 30, — это
+	// не ставка по договору найма, и в расчёт она не идёт вовсе
+	// (решение владельца 2026-09-03).
+	obs = trimOutliers(longTerm(obs))
 	est.Sample = len(obs)
 	if len(obs) == 0 {
-		est.ModelReason = "площадки не отдали объявлений — оценивать нечего"
+		est.ModelReason = "объявлений о помесячной аренде нет — оценивать нечего"
 		return est
 	}
 
-	// Перцентили — по длительной аренде. Посуточные объявления остаются
-	// в выборке для модели, но в «цену за месяц» их пересчёт входить не
-	// должен: 4 300 ₽ в сутки — это не 129 000 ₽ в месяц по договору.
-	base := longTerm(obs)
-	est.SampleLongTerm = len(base)
-	if len(base) < 8 {
-		// Длительных объявлений почти нет — считаем по всему, что есть,
-		// и говорим об этом прямо.
-		base = obs
-		est.SampleLongTerm = 0
-	}
-
-	p := prices(base)
+	p := prices(obs)
 	sortFloats(p)
-	est.P50 = percentile(p, 50)
-	est.P75 = percentile(p, 75)
-	est.P95 = percentile(p, 95)
-	// В бюджет закладывается верхняя граница рынка, а не середина:
-	// по медианной цене квартиру ищут месяцами, а проект начинается в
-	// назначенный день.
-	est.Recommended = est.P95
+	est.P50 = round2(percentile(p, 50))
+	est.P95 = round2(percentile(p, 95))
+	// В бюджет — среднее по выборке без верхних пяти процентов. Сам 95-й
+	// перцентиль это почти самое дорогое предложение рынка: заложив его,
+	// проект переплатит за каждую квартиру.
+	est.Recommended = round2(meanBelow(p, percentile(p, 95)))
+	est.Histogram = histogram(p)
 
 	// Сид фиксирован: одинаковый запрос должен давать одинаковый ответ,
 	// иначе две соседние попытки дают разные цифры и цифрам не верят.
@@ -164,15 +155,55 @@ func build(q RentQuery, obs []Observation, statuses []SourceStatus) *Estimate {
 	} else {
 		est.ModelReason = "объявлений слишком мало для модели — только перцентили"
 	}
-	if est.SampleLongTerm == 0 {
-		est.ModelReason += "; объявлений о длительной аренде нет — " +
-			"перцентили посчитаны по посуточным, пересчитанным в месяц"
-	}
 
-	est.P50, est.P75, est.P95 = round2(est.P50), round2(est.P75), round2(est.P95)
-	est.Recommended = round2(est.Recommended)
 	est.Examples = examples(obs)
 	return est
+}
+
+// meanBelow — среднее по значениям не выше границы. Отсечённые пять
+// процентов — это верхние выбросы рынка: премиальные квартиры и
+// объявления с завышенной ценой, которые месяцами висят несданными.
+func meanBelow(sorted []float64, limit float64) float64 {
+	sum, n := 0.0, 0
+	for _, v := range sorted {
+		if v <= limit {
+			sum += v
+			n++
+		}
+	}
+	if n == 0 {
+		return 0
+	}
+	return sum / float64(n)
+}
+
+// Сколько столбиков в графике распределения. Двенадцать — читаемо и на
+// узком экране, и на полусотне объявлений: больше превращается в частокол
+// из единиц, меньше — в три ступеньки, по которым разброс не виден.
+const histogramBins = 12
+
+// histogram раскладывает цены по равным диапазонам.
+func histogram(sorted []float64) []Bin {
+	if len(sorted) == 0 {
+		return nil
+	}
+	lo, hi := sorted[0], sorted[len(sorted)-1]
+	if hi <= lo {
+		return []Bin{{From: lo, To: hi, Count: len(sorted)}}
+	}
+	step := (hi - lo) / histogramBins
+	bins := make([]Bin, histogramBins)
+	for i := range bins {
+		bins[i] = Bin{From: round2(lo + step*float64(i)), To: round2(lo + step*float64(i+1))}
+	}
+	for _, v := range sorted {
+		i := int((v - lo) / step)
+		if i >= histogramBins {
+			i = histogramBins - 1 // самое дорогое объявление — в последний столбик
+		}
+		bins[i].Count++
+	}
+	return bins
 }
 
 // trimOutliers убирает объявления с ценой за полтора межквартильных
@@ -199,9 +230,16 @@ func trimOutliers(obs []Observation) []Observation {
 
 // examples — по одному-двум объявлениям с каждой площадки, ближе к
 // середине цены: крайние объявления производят ложное впечатление.
+//
+// Показываем только те, где заполнено всё, что выведено в таблице
+// примеров: цена, комнаты и площадь. Пример с прочерками вместо
+// половины полей ничего не подтверждает.
 func examples(obs []Observation) []Observation {
 	bySource := map[string][]Observation{}
 	for _, o := range obs {
+		if o.PriceMonth <= 0 || o.Rooms <= 0 || o.Area <= 0 {
+			continue
+		}
 		bySource[o.Source] = append(bySource[o.Source], o)
 	}
 	var out []Observation
@@ -217,7 +255,9 @@ func examples(obs []Observation) []Observation {
 	return out
 }
 
-// longTerm — объявления о длительной аренде.
+// longTerm — объявления о помесячной аренде. Посуточные площадки в
+// список источников сейчас не входят, но фильтр остаётся: он и есть то
+// место, где принято решение «в расчёт идёт только помесячная».
 func longTerm(obs []Observation) []Observation {
 	out := make([]Observation, 0, len(obs))
 	for _, o := range obs {

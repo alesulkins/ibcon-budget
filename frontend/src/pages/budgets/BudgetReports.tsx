@@ -3,9 +3,7 @@ import {
   Button, InputNumber, Segmented, Space, Spin, Switch, Table, Tooltip, Typography,
   message, Grid,
 } from 'antd';
-import {
-  FileExcelOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
-} from '@ant-design/icons';
+import { FileExcelOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
 import { budgetsApi } from '../../api';
@@ -147,7 +145,34 @@ export default function BudgetReports({ versionId, permissions, readonly }: Prop
         ),
       }]),
       {
-        title: 'Статья оборотов',
+        // Стрелка на границе колонки — ею колонка и сворачивается:
+        // отдельная кнопка в панели стояла далеко от того, чем управляет.
+        title: (
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            gap: 4,
+          }}>
+            <span style={{ opacity: foldNames ? 0 : 1 }}>Статья оборотов</span>
+            <Tooltip title={foldNames ? 'Показать статьи' : 'Свернуть статьи'}>
+              <span
+                role="button"
+                aria-label={foldNames ? 'Показать статьи' : 'Свернуть статьи'}
+                onClick={(e) => { e.stopPropagation(); setFoldNames(v => !v); }}
+                style={{
+                  cursor: 'pointer',
+                  color: 'var(--ibcon-brand)',
+                  // Прижата к правому краю ячейки — к самой границе,
+                  // вдоль которой колонка и складывается.
+                  marginRight: -4,
+                  padding: '0 2px',
+                  lineHeight: 1,
+                }}
+              >
+                {foldNames ? <RightOutlined /> : <LeftOutlined />}
+              </span>
+            </Tooltip>
+          </div>
+        ),
         dataIndex: 'name',
         // На телефоне колонка уже и переносится по словам: закреплённая
         // колонка в 320 точек не оставила бы места месяцам.
@@ -247,12 +272,6 @@ export default function BudgetReports({ versionId, permissions, readonly }: Prop
             Показывать незаполненные статьи
           </Typography.Text>
         </Space>
-        <Button
-          icon={foldNames ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-          onClick={() => setFoldNames(v => !v)}
-        >
-          {foldNames ? 'Показать статьи' : 'Свернуть статьи'}
-        </Button>
         <Button
           onClick={() => qc.invalidateQueries({ queryKey: ['budget-reports', versionId] })}
         >

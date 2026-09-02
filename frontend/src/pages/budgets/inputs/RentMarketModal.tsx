@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   Alert, Button, Divider, Form, Input, InputNumber, Modal, Select,
-  Space, Table, Tag, Typography,
+  Space, Table, Tooltip, Typography,
 } from 'antd';
 import { useMutation } from '@tanstack/react-query';
 import { marketApi } from '../../../api';
@@ -158,30 +158,21 @@ function Result({
         marginBottom: 12,
       }}>
         <Stat
-          label="В бюджет (95-й перцентиль)"
+          label="В бюджет"
           value={`${fmtNum(est.recommended)} ₽/мес`}
+          hint="среднее без верхних 5 % рынка"
           strong
         />
         <Stat label="Медиана рынка" value={`${fmtNum(est.p50)} ₽/мес`} />
-        <Stat label="75-й перцентиль" value={`${fmtNum(est.p75)} ₽/мес`} />
-        <Stat
-          label="Прогноз по вашим параметрам"
-          value={est.predicted ? `${fmtNum(est.predicted)} ₽/мес` : '—'}
-          hint={est.predicted ? `ошибка ±${fmtNum(est.mae)} ₽` : undefined}
-        />
         <Stat
           label="Объявлений в расчёте"
-          value={est.sample_long_term
-            ? `${est.sample} · длительных ${est.sample_long_term}`
-            : String(est.sample)}
-          hint={est.model_reason}
+          value={String(est.sample)}
+          hint="только помесячная аренда"
         />
       </div>
 
-      <Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
-        Перцентили считаются по объявлениям о длительной аренде; посуточные
-        идут только в модель — она учитывает разницу отдельным признаком.
-      </Text>
+      <Histogram est={est} />
+
 
       {est.cached && (
         <Text type="secondary" style={{ fontSize: 12 }}>
@@ -225,19 +216,10 @@ function Result({
                 title: 'Цена, ₽/мес',
                 dataIndex: 'price_month',
                 align: 'right',
-                render: (v: number, r) => (
-                  <Space size={4}>
-                    {fmtNum(v)}
-                    {r.daily && <Tag color="default">посуточно ×30</Tag>}
-                  </Space>
-                ),
+                render: (v: number) => fmtNum(v),
               },
-              { title: 'Комнат', dataIndex: 'rooms', render: (v: number) => v || '—' },
-              {
-                title: 'Площадь',
-                dataIndex: 'area',
-                render: (v: number) => (v ? `${fmtNum(v)} м²` : '—'),
-              },
+              { title: 'Комнат', dataIndex: 'rooms' },
+              { title: 'Площадь', dataIndex: 'area', render: (v: number) => `${fmtNum(v)} м²` },
               {
                 title: '',
                 dataIndex: 'url',
@@ -249,6 +231,82 @@ function Result({
           />
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * Распределение цен: сколько объявлений в каждом диапазоне.
+ *
+ * График, а не одни числа: по нему видно, из чего сложилась цена, —
+ * плотный ли рынок вокруг медианы или предложения разбросаны. Рисуем
+ * своей разметкой, без библиотеки графиков: столбики и две отметки.
+ */
+function Histogram({ est }: { est: RentMarketEstimate }) {
+  const bins = est.histogram ?? [];
+  if (bins.length === 0) return null;
+
+  const max = Math.max(...bins.map(b => b.count));
+  const lo = bins[0].from;
+  const hi = bins[bins.length - 1].to;
+  // Доля ширины графика, на которой стоит отметка.
+  const at = (v: number) => (hi > lo ? ((v - lo) / (hi - lo)) * 100 : 0);
+
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ fontSize: 12, color: 'var(--ibcon-muted)', marginBottom: 4 }}>
+        Распределение цен, ₽/мес
+      </div>
+      <div style={{ position: 'relative' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 90 }}>
+          {bins.map((b, i) => (
+            <Tooltip
+              key={i}
+              title={`${fmtNum(b.from)} – ${fmtNum(b.to)} ₽/мес · объявлений: ${b.count}`}
+            >
+              <div style={{
+                flex: 1,
+                // Пустой диапазон тоже занимает место: провал в середине
+                // распределения — это тоже про рынок.
+                height: `${max > 0 ? Math.max((b.count / max) * 100, 2) : 2}%`,
+                background: 'var(--ibcon-brand)',
+                opacity: b.count === 0 ? 0.15 : 0.75,
+                borderRadius: '2px 2px 0 0',
+              }} />
+            </Tooltip>
+          ))}
+        </div>
+        {/* Отметки медианы и цены для бюджета. Подписи не на графике, а
+            под ним: обе цены близки друг к другу, и надписи налезали
+            одна на другую поверх столбиков. */}
+        {[est.p50, est.recommended].map((v, i) => (
+          <div
+            key={i}
+            style={{
+              position: 'absolute',
+              left: `${Math.min(Math.max(at(v), 0), 100)}%`,
+              top: 0,
+              bottom: 0,
+              borderLeft: `1px dashed var(--ibcon-text)`,
+              opacity: i === 0 ? 0.35 : 0.7,
+            }}
+          />
+        ))}
+      </div>
+      <div style={{
+        display: 'flex', gap: 12, flexWrap: 'wrap',
+        fontSize: 11, color: 'var(--ibcon-muted)', marginTop: 4,
+      }}>
+        <span>┆ медиана {fmtNum(est.p50)} ₽</span>
+        <span>┆ в бюджет {fmtNum(est.recommended)} ₽</span>
+      </div>
+      <div style={{
+        display: 'flex', justifyContent: 'space-between',
+        fontSize: 11, color: 'var(--ibcon-muted)', marginTop: 2,
+      }}>
+        <span>{fmtNum(lo)}</span>
+        <span>{fmtNum(hi)}</span>
+      </div>
     </div>
   );
 }

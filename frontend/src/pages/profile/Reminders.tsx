@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Button, Checkbox, DatePicker, Input, Popover, Space, Tooltip, Typography, message,
 } from 'antd';
@@ -37,11 +37,15 @@ function parseTime(raw: string): { h: number; m: number } | null {
  * Раскрывающийся список часов и минут для «через двадцать минут»
  * медленнее, чем набрать четыре цифры.
  */
-function WhenPicker({ date, time, onDate, onTime, children }: {
+function WhenPicker({ date, time, onDate, onTime, open, onOpenChange, onSubmit, children }: {
   date: Dayjs | null;
   time: string;
   onDate: (d: Dayjs | null) => void;
   onTime: (t: string) => void;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  /** Enter в сроке — то же, что «Готово». */
+  onSubmit: () => void;
   children: React.ReactNode;
 }) {
   return (
@@ -49,8 +53,20 @@ function WhenPicker({ date, time, onDate, onTime, children }: {
       trigger="click"
       placement="bottomRight"
       title="Когда напомнить"
+      open={open}
+      onOpenChange={onOpenChange}
       content={(
-        <Space direction="vertical" size={8} style={{ width: 220 }}>
+        <Space
+          direction="vertical"
+          size={8}
+          style={{ width: 220 }}
+          // Обработчик один на всю панель: Enter в поле времени и Enter
+          // в календаре приходят сюда всплытием, и напоминание не
+          // сохраняется дважды.
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') onSubmit();
+          }}
+        >
           <DatePicker
             format="DD.MM.YYYY"
             placeholder="Дата"
@@ -69,7 +85,7 @@ function WhenPicker({ date, time, onDate, onTime, children }: {
             status={time !== '' && parseTime(time) === null ? 'error' : undefined}
           />
           <Text type="secondary" style={{ fontSize: 12 }}>
-            Время вводится вручную: например, 09:30.
+            Время вводится вручную: например, 09:30. Enter сохраняет напоминание.
           </Text>
         </Space>
       )}
@@ -92,6 +108,7 @@ export default function Reminders() {
   const [text, setText] = useState('');
   const [date, setDate] = useState<Dayjs | null>(null);
   const [time, setTime] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const { data: items = [] } = useQuery({
     queryKey: ['reminders'],
@@ -131,6 +148,21 @@ export default function Reminders() {
 
   const parsed = parseTime(time);
   const canSave = text.trim() !== '' && parsed !== null;
+
+  /**
+   * Enter в панели срока. Значение читается на следующем такте: Enter в
+   * календаре сначала подтверждает набранную дату, и в этот момент
+   * состояние ещё прежнее — сохранили бы вчерашний срок.
+   */
+  const draft = useRef({ text, time });
+  draft.current = { text, time };
+  function submitFromPicker() {
+    setTimeout(() => {
+      const { text: t, time: tm } = draft.current;
+      setPickerOpen(false);
+      if (t.trim() !== '' && parseTime(tm) !== null) createMutation.mutate();
+    }, 0);
+  }
   // Дата не выбрана — считаем сегодняшнюю: «напомнить в 18:00» обычно
   // про сегодня, и лишний клик по календарю тут не нужен.
   const draftWhen = parsed
@@ -153,7 +185,15 @@ export default function Reminders() {
       {/* Заготовка в виде напоминания: то же место, тот же строй. */}
       {row(
         <Space size={2}>
-          <WhenPicker date={date} time={time} onDate={setDate} onTime={setTime}>
+          <WhenPicker
+            date={date}
+            time={time}
+            onDate={setDate}
+            onTime={setTime}
+            open={pickerOpen}
+            onOpenChange={setPickerOpen}
+            onSubmit={submitFromPicker}
+          >
             <Tooltip title="Выбрать дату и время">
               <Button
                 size="small"

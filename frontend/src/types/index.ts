@@ -710,19 +710,19 @@ export interface RentMarketExample {
 
 export interface RentMarketEstimate {
   query: RentMarketQuery;
+  /** Объявлений в расчёте. Только помесячная аренда. */
   sample: number;
-  /** Из них объявлений о длительной аренде — по ним считаются перцентили. */
-  sample_long_term: number;
   model: string;
   model_reason: string;
   /** Прогноз модели для введённых параметров, ₽/мес. 0 — модель не строилась. */
   predicted: number;
   mae: number;
   p50: number;
-  p75: number;
   p95: number;
-  /** Что предлагается заложить в бюджет — 95-й перцентиль выборки. */
+  /** Среднее по выборке без верхних пяти процентов — цена для бюджета. */
   recommended: number;
+  /** Распределение цен: столбики для графика. */
+  histogram: { from: number; to: number; count: number }[];
   sources: RentMarketSource[];
   examples: RentMarketExample[];
   calculated_at: string;

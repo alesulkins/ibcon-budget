@@ -4,7 +4,6 @@ import { LockOutlined, MailOutlined } from '@ant-design/icons';
 import { authApi } from '../../api';
 import { setAuth, savedEmail } from '../../store/auth';
 import { extractError } from '../../api/client';
-import { BRAND, BRAND_LIGHT, PAGE_BG } from '../../theme';
 
 const { Text } = Typography;
 
@@ -77,7 +76,9 @@ export default function LoginPage() {
       height: '100%',
       overflowY: 'auto',
       overscrollBehavior: 'none',
-      background: PAGE_BG,
+      // Переменной, а не константой: экран входа тоже подчиняется теме и
+      // выбранному цвету — иначе в тёмной теме он оставался светлым.
+      background: 'var(--ibcon-bg)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
