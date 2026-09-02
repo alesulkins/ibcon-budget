@@ -157,7 +157,11 @@ function Result({
         gap: 12,
         marginBottom: 12,
       }}>
-        <Stat label="В бюджет (95-й перцентиль)" value={`${fmtNum(est.recommended)} ₽/мес`} strong />
+        <Stat
+          label="В бюджет (95-й перцентиль)"
+          value={`${fmtNum(est.recommended)} ₽/мес`}
+          strong
+        />
         <Stat label="Медиана рынка" value={`${fmtNum(est.p50)} ₽/мес`} />
         <Stat label="75-й перцентиль" value={`${fmtNum(est.p75)} ₽/мес`} />
         <Stat
@@ -165,8 +169,19 @@ function Result({
           value={est.predicted ? `${fmtNum(est.predicted)} ₽/мес` : '—'}
           hint={est.predicted ? `ошибка ±${fmtNum(est.mae)} ₽` : undefined}
         />
-        <Stat label="Объявлений в расчёте" value={String(est.sample)} hint={est.model_reason} />
+        <Stat
+          label="Объявлений в расчёте"
+          value={est.sample_long_term
+            ? `${est.sample} · длительных ${est.sample_long_term}`
+            : String(est.sample)}
+          hint={est.model_reason}
+        />
       </div>
+
+      <Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
+        Перцентили считаются по объявлениям о длительной аренде; посуточные
+        идут только в модель — она учитывает разницу отдельным признаком.
+      </Text>
 
       {est.cached && (
         <Text type="secondary" style={{ fontSize: 12 }}>

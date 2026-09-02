@@ -2,9 +2,9 @@ package market
 
 import (
 	"context"
-	"fmt"
 	"math"
 	"math/rand"
+	"strings"
 	"testing"
 )
 
@@ -187,13 +187,19 @@ func TestEstimateRequiresCity(t *testing.T) {
 // Посуточные площадки приводятся к месяцу и помечаются признаком: без
 // него месячная оценка уехала бы вверх вслед за суточной ценой.
 func TestDailyPricesNormalized(t *testing.T) {
-	body := []byte(fmt.Sprintf(`{"items":[{"price":%d},{"price":%d}]}`, 3000, 3500))
-	obs, err := parseEmbedded("Суточно.ру", body, true)
+	body := []byte(`<span class="price-value" data-price-currency="RUB" data-price-value="3000">` +
+		`3 000</span><span data-price-value="3500.50">3 500,50</span>` +
+		// Цена за час или доплата: в месяц это меньше пяти тысяч — не аренда.
+		`<span data-price-value="100">100</span>`)
+	obs, err := parse101("101hotels.com", body)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(obs) != 2 || obs[0].PriceMonth != 3000*daysInMonth || !obs[0].Daily {
-		t.Fatalf("суточная цена не пересчитана в месяц: %+v", obs)
+	if len(obs) != 2 {
+		t.Fatalf("разобрано %d цен, ожидалось 2: %+v", len(obs), obs)
+	}
+	if obs[0].PriceMonth != 3000*daysInMonth || !obs[0].Daily {
+		t.Fatalf("суточная цена не пересчитана в месяц: %+v", obs[0])
 	}
 }
 
@@ -230,5 +236,43 @@ func TestParseYandexOffer(t *testing.T) {
 func TestParseYandexEmpty(t *testing.T) {
 	if _, err := parseYandex("Яндекс Недвижимость", []byte("<html>проверка робота</html>")); err == nil {
 		t.Error("страница без объявлений должна давать ошибку, а не пустую выборку")
+	}
+}
+
+// Перцентили считаются по длительной аренде: суточная цена, пересчитанная
+// в месяц, выше месячной в разы и утащила бы «цену для бюджета» вверх.
+func TestPercentilesIgnoreDaily(t *testing.T) {
+	var obs []Observation
+	for i := 0; i < 20; i++ {
+		obs = append(obs, Observation{Source: "аренда", PriceMonth: 40000 + float64(i)*500})
+	}
+	for i := 0; i < 20; i++ {
+		obs = append(obs, Observation{Source: "посуточно", PriceMonth: 130000, Daily: true})
+	}
+	est := build(RentQuery{City: "Тестбург"}, obs, nil)
+	if est.SampleLongTerm != 20 {
+		t.Fatalf("длительных объявлений в перцентилях: %d, ожидалось 20", est.SampleLongTerm)
+	}
+	if est.P95 > 50000 {
+		t.Errorf("посуточные цены попали в перцентили: p95 = %v", est.P95)
+	}
+	if est.Sample <= est.SampleLongTerm {
+		t.Errorf("посуточные объявления должны оставаться в выборке модели: %+v", est)
+	}
+}
+
+// Если длительных объявлений нет вовсе, считаем по посуточным — но
+// говорим об этом, а не выдаём их цену за месячную молча.
+func TestPercentilesFallBackToDaily(t *testing.T) {
+	var obs []Observation
+	for i := 0; i < 20; i++ {
+		obs = append(obs, Observation{Source: "посуточно", PriceMonth: 130000, Daily: true})
+	}
+	est := build(RentQuery{City: "Тестбург"}, obs, nil)
+	if est.SampleLongTerm != 0 || est.P50 == 0 {
+		t.Fatalf("оценка по посуточным не посчиталась: %+v", est)
+	}
+	if !strings.Contains(est.ModelReason, "посуточным") {
+		t.Errorf("человека не предупредили, по чему посчитаны перцентили: %q", est.ModelReason)
 	}
 }

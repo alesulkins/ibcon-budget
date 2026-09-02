@@ -3,13 +3,11 @@ package market
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -93,119 +91,15 @@ func fetchBody(ctx context.Context, method, addr string, body []byte) ([]byte, e
 	return data, nil
 }
 
-// ── ЦИАН ──────────────────────────────────────────────────────────
+// errUnparsed — площадка ответила, но данными это не является: обычно
+// вместо выдачи приходит страница проверки на робота. Отдельная ошибка,
+// чтобы на экране это читалось не как «сеть недоступна».
+var errUnparsed = fmt.Errorf("площадка не отдала объявления автоматическому запросу")
 
-type cianSource struct{}
-
-func (cianSource) Name() string { return "ЦИАН" }
-
-// Регионы, известные без обращения к площадке: два города, где проект
-// снимает квартиры чаще всего. Остальные ищутся подсказчиком ЦИАН.
-var cianRegions = map[string]int{
-	"москва":          1,
-	"санкт-петербург": 2,
-}
-
-func (c cianSource) Fetch(ctx context.Context, q RentQuery) ([]Observation, error) {
-	region, err := c.region(ctx, q.City)
-	if err != nil {
-		return nil, err
-	}
-	jq := map[string]any{
-		"_type":          "flatrent",
-		"engine_version": map[string]any{"type": "term", "value": 2},
-		"region":         map[string]any{"type": "terms", "value": []int{region}},
-		// Аренда на длительный срок: посуточные объявления ЦИАН
-		// смешивать с месячными нельзя.
-		"for_day": map[string]any{"type": "term", "value": "!1"},
-		"page":    map[string]any{"type": "term", "value": 1},
-	}
-	if q.Rooms > 0 {
-		jq["room"] = map[string]any{"type": "terms", "value": []int{q.Rooms}}
-	}
-	body, _ := json.Marshal(map[string]any{"jsonQuery": jq})
-	data, err := fetchBody(ctx,
-		http.MethodPost,
-		"https://api.cian.ru/search-offers/v2/search-offers-desktop/",
-		body)
-	if err != nil {
-		return nil, err
-	}
-
-	var res struct {
-		Data struct {
-			OffersSerialized []struct {
-				BargainTerms struct {
-					PriceRur float64 `json:"priceRur"`
-				} `json:"bargainTerms"`
-				RoomsCount  int     `json:"roomsCount"`
-				TotalArea   float64 `json:"totalArea"`
-				FloorNumber int     `json:"floorNumber"`
-				Building    struct {
-					PassengerLiftsCount int `json:"passengerLiftsCount"`
-				} `json:"building"`
-				Geo struct {
-					Undergrounds []struct {
-						TimeToGet int `json:"time"`
-					} `json:"undergrounds"`
-				} `json:"geo"`
-				FullURL string `json:"fullUrl"`
-				Title   string `json:"title"`
-			} `json:"offersSerialized"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(data, &res); err != nil {
-		return nil, errUnparsed
-	}
-	var out []Observation
-	for _, o := range res.Data.OffersSerialized {
-		if o.BargainTerms.PriceRur <= 0 {
-			continue
-		}
-		lift := o.Building.PassengerLiftsCount > 0
-		metro := 0
-		if len(o.Geo.Undergrounds) > 0 {
-			metro = o.Geo.Undergrounds[0].TimeToGet
-		}
-		out = append(out, Observation{
-			Source:       c.Name(),
-			PriceMonth:   o.BargainTerms.PriceRur,
-			Rooms:        o.RoomsCount,
-			Area:         o.TotalArea,
-			Floor:        o.FloorNumber,
-			Elevator:     &lift,
-			MetroMinutes: metro,
-			Title:        o.Title,
-			URL:          o.FullURL,
-		})
-	}
-	if len(out) == 0 {
-		return nil, errUnparsed
-	}
-	return out, nil
-}
-
-// region ищет числовой идентификатор города у подсказчика ЦИАН.
-func (c cianSource) region(ctx context.Context, city string) (int, error) {
-	if id, ok := cianRegions[strings.ToLower(strings.TrimSpace(city))]; ok {
-		return id, nil
-	}
-	data, err := fetchBody(ctx, http.MethodGet,
-		"https://api.cian.ru/geo-suggest/v1/suggest/?query="+url.QueryEscape(city), nil)
-	if err != nil {
-		return 0, err
-	}
-	var res struct {
-		Items []struct {
-			ID   int    `json:"id"`
-			Text string `json:"text"`
-		} `json:"items"`
-	}
-	if err := json.Unmarshal(data, &res); err != nil || len(res.Items) == 0 {
-		return 0, fmt.Errorf("город «%s» не найден", city)
-	}
-	return res.Items[0].ID, nil
-}
+// errClosed — площадка отвечает отказом на запрос без ключа приложения
+// или без браузерной сессии. Лечится ключом партнёрского API или
+// выходом через MARKET_PROXY_URL, а не правкой кода.
+var errClosed = fmt.Errorf("площадка закрыта для автоматических запросов — нужен ключ или прокси")
 
 // ── Яндекс Недвижимость ───────────────────────────────────────────
 
@@ -224,11 +118,35 @@ func (y yandexSource) Fetch(ctx context.Context, q RentQuery) ([]Observation, er
 	if s, ok := yaRooms[q.Rooms]; ok {
 		addr += s + "/"
 	}
-	data, err := fetchBody(ctx, http.MethodGet, addr, nil)
-	if err != nil {
-		return nil, err
+	// Две страницы выдачи: на одной около полусотни объявлений, а
+	// линейная регрессия начинает уступать лесу уже с сорока. Больше не
+	// берём — площадку незачем обходить целиком ради оценки уровня цен.
+	var out []Observation
+	var lastErr error
+	for page := 1; page <= 2; page++ {
+		addr := addr
+		if page > 1 {
+			addr += fmt.Sprintf("?page=%d", page)
+		}
+		data, err := fetchBody(ctx, http.MethodGet, addr, nil)
+		if err != nil {
+			lastErr = err
+			break
+		}
+		obs, err := parseYandex(y.Name(), data)
+		if err != nil {
+			lastErr = err
+			break
+		}
+		out = append(out, obs...)
 	}
-	return parseYandex(y.Name(), data)
+	if len(out) == 0 {
+		if lastErr != nil {
+			return nil, lastErr
+		}
+		return nil, errUnparsed
+	}
+	return out, nil
 }
 
 // parseYandex разбирает объявления из состояния приложения, вшитого в
@@ -324,115 +242,57 @@ var yaRooms = map[int]string{
 	4: "chetyryohkomnatnaya",
 }
 
-// ── Суточно.ру ────────────────────────────────────────────────────
+// ── 101hotels.com ─────────────────────────────────────────────────
 
-type sutochnoSource struct{}
+type hotels101Source struct{}
 
-func (sutochnoSource) Name() string { return "Суточно.ру" }
+func (hotels101Source) Name() string { return "101hotels.com" }
 
-func (s sutochnoSource) Fetch(ctx context.Context, q RentQuery) ([]Observation, error) {
-	addr := "https://sutochno.ru/search?" + url.Values{
-		"q":        {q.City},
-		"type":     {"apartment"},
-		"occupied": {"1"},
-	}.Encode()
-	data, err := fetchBody(ctx, http.MethodGet, addr, nil)
+// Посуточные апартаменты. Нужны не сами по себе: когда объявлений о
+// длительной аренде мало, посуточная цена всё равно показывает уровень
+// рынка в городе — модель учитывает разницу отдельным признаком.
+func (h hotels101Source) Fetch(ctx context.Context, q RentQuery) ([]Observation, error) {
+	slug := citySlug(q.City)
+	if slug == "" {
+		return nil, fmt.Errorf("город «%s» не поддерживается площадкой", q.City)
+	}
+	data, err := fetchBody(ctx, http.MethodGet,
+		"https://101hotels.com/main/cities/"+slug+"/apartments", nil)
 	if err != nil {
 		return nil, err
 	}
-	// Посуточная площадка: цена за сутки, пересчёт в месяц — в parseEmbedded.
-	return parseEmbedded(s.Name(), data, true)
+	return parse101(h.Name(), data)
 }
 
-// ── Ostrovok ──────────────────────────────────────────────────────
-
-type ostrovokSource struct{}
-
-func (ostrovokSource) Name() string { return "Ostrovok" }
-
-func (o ostrovokSource) Fetch(ctx context.Context, q RentQuery) ([]Observation, error) {
-	addr := "https://ostrovok.ru/hotel/search/?" + url.Values{
-		"q":        {q.City},
-		"dates":    {""},
-		"guests":   {"2"},
-		"category": {"apartment"},
-	}.Encode()
-	data, err := fetchBody(ctx, http.MethodGet, addr, nil)
-	if err != nil {
-		return nil, err
-	}
-	return parseEmbedded(o.Name(), data, true)
-}
-
-// ── Разбор встроенных данных ──────────────────────────────────────
-
-// errUnparsed — площадка ответила, но данными это не является: обычно
-// вместо выдачи приходит страница проверки на робота. Отдельная ошибка,
-// чтобы на экране это читалось не как «сеть недоступна».
-var errUnparsed = fmt.Errorf("площадка не отдала объявления автоматическому запросу")
-
-// errClosed — площадка отвечает отказом на запрос без ключа приложения
-// или без браузерной сессии. Лечится ключом партнёрского API или
-// выходом через MARKET_PROXY_URL, а не правкой кода.
-var errClosed = fmt.Errorf("площадка закрыта для автоматических запросов — нужен ключ или прокси")
-
-// Цены в страницах площадок лежат внутри встроенного JSON состояния
-// приложения. Разметка у всех разная и меняется, а форма записи цены —
-// нет: числовое поле с ценой рядом с площадью и числом комнат.
-var (
-	rePrice = regexp.MustCompile(`"(?:priceRur|price|priceValue|value)"\s*:\s*(\d{3,9})`)
-	reArea  = regexp.MustCompile(`"(?:totalArea|area|square)"\s*:\s*(\d{1,3}(?:\.\d+)?)`)
-	reRooms = regexp.MustCompile(`"(?:roomsCount|rooms|roomsTotal)"\s*:\s*(\d{1,2})`)
-)
-
-// parseEmbedded вытаскивает цены из страницы. Площадь и комнаты берутся
-// «в среднем по странице»: привязать их к конкретному объявлению без
-// разбора всей разметки нельзя, а для оценки уровня цен этого хватает —
-// признаки всё равно усредняются пропусками.
-func parseEmbedded(source string, body []byte, daily bool) ([]Observation, error) {
-	prices := numbers(rePrice, body)
-	if len(prices) == 0 {
-		return nil, errUnparsed
-	}
-	area := median(numbers(reArea, body))
-	rooms := int(median(numbers(reRooms, body)))
-
-	out := make([]Observation, 0, len(prices))
-	for _, p := range prices {
-		if daily {
-			// Суточная цена ниже месячной по абсолютной величине, но в
-			// пересчёте на месяц заметно выше: признак Daily сообщает
-			// модели, что это другая цена, а не выброс.
-			p *= daysInMonth
+// parse101 читает цены из разметки карточек: цена вынесена в атрибут
+// data-price-value рядом с валютой, и это устойчивее, чем разбирать
+// подпись «от 7 215,19 руб.» с пробелами и запятой.
+func parse101(source string, body []byte) ([]Observation, error) {
+	const key = `data-price-value="`
+	var out []Observation
+	for pos := 0; ; {
+		i := bytes.Index(body[pos:], []byte(key))
+		if i < 0 {
+			break
 		}
-		if p < 5000 || p > 5_000_000 {
-			// Явно не аренда квартиры: цена продажи, цена за час,
-			// идентификатор, попавший под то же имя поля.
+		i += pos
+		pos = i + len(key)
+		price, ok := readNumber(body, pos)
+		if !ok {
 			continue
 		}
-		out = append(out, Observation{
-			Source:     source,
-			PriceMonth: p,
-			Area:       area,
-			Rooms:      rooms,
-			Daily:      daily,
-		})
+		// Суточная цена — в месяц. Признак Daily остаётся: без него
+		// месячная оценка уехала бы вслед за суточной ценой.
+		month := price * daysInMonth
+		if month < 5000 || month > 5_000_000 {
+			continue
+		}
+		out = append(out, Observation{Source: source, PriceMonth: month, Daily: true})
 	}
 	if len(out) == 0 {
 		return nil, errUnparsed
 	}
 	return out, nil
-}
-
-func numbers(re *regexp.Regexp, body []byte) []float64 {
-	var out []float64
-	for _, m := range re.FindAllSubmatch(body, 400) {
-		v, err := strconv.ParseFloat(string(m[1]), 64)
-		if err == nil && v > 0 {
-			out = append(out, v)
-		}
-	}
-	return out
 }
 
 // citySlug — адрес города в Яндекс Недвижимости. Список короткий

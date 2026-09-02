@@ -31,10 +31,16 @@ type cacheEntry struct {
 	est Estimate
 }
 
-// DefaultSources — площадки в порядке доверия к данным: сначала
-// объявления о длительной аренде, потом посуточные.
+// DefaultSources — площадки, которые отвечают на запрос платформы:
+// сначала объявления о длительной аренде, потом посуточные.
+//
+// ЦИАН, Суточно.ру и Ostrovok отсюда убраны 2026-09-02: первый отдаёт
+// 403 без браузерной сессии, второй требует ключ приложения, третий не
+// отвечает вовсе. Держать в списке площадку, которая всегда возвращает
+// ошибку, — только пугать человека красной строкой на экране. Вернутся,
+// когда появится партнёрский доступ.
 func DefaultSources() []Source {
-	return []Source{cianSource{}, yandexSource{}, sutochnoSource{}, ostrovokSource{}}
+	return []Source{yandexSource{}, hotels101Source{}}
 }
 
 func NewService(sources ...Source) *Service {
@@ -121,7 +127,19 @@ func build(q RentQuery, obs []Observation, statuses []SourceStatus) *Estimate {
 		return est
 	}
 
-	p := prices(obs)
+	// Перцентили — по длительной аренде. Посуточные объявления остаются
+	// в выборке для модели, но в «цену за месяц» их пересчёт входить не
+	// должен: 4 300 ₽ в сутки — это не 129 000 ₽ в месяц по договору.
+	base := longTerm(obs)
+	est.SampleLongTerm = len(base)
+	if len(base) < 8 {
+		// Длительных объявлений почти нет — считаем по всему, что есть,
+		// и говорим об этом прямо.
+		base = obs
+		est.SampleLongTerm = 0
+	}
+
+	p := prices(base)
 	sortFloats(p)
 	est.P50 = percentile(p, 50)
 	est.P75 = percentile(p, 75)
@@ -145,6 +163,10 @@ func build(q RentQuery, obs []Observation, statuses []SourceStatus) *Estimate {
 		}
 	} else {
 		est.ModelReason = "объявлений слишком мало для модели — только перцентили"
+	}
+	if est.SampleLongTerm == 0 {
+		est.ModelReason += "; объявлений о длительной аренде нет — " +
+			"перцентили посчитаны по посуточным, пересчитанным в месяц"
 	}
 
 	est.P50, est.P75, est.P95 = round2(est.P50), round2(est.P75), round2(est.P95)
@@ -192,6 +214,17 @@ func examples(obs []Observation) []Observation {
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Source < out[j].Source })
+	return out
+}
+
+// longTerm — объявления о длительной аренде.
+func longTerm(obs []Observation) []Observation {
+	out := make([]Observation, 0, len(obs))
+	for _, o := range obs {
+		if !o.Daily {
+			out = append(out, o)
+		}
+	}
 	return out
 }
 
