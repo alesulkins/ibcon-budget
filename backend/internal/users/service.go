@@ -137,30 +137,6 @@ func (s *Service) RevokeProjectAccess(userID, projectID int) error {
 	return err
 }
 
-// HasProjectAccess проверяет, есть ли у пользователя доступ к проекту (индивидуальный)
-func (s *Service) HasProjectAccess(userID, projectID int) (exists bool, canEdit bool, err error) {
-	var row struct {
-		CanEdit bool `db:"can_edit"`
-	}
-	e := s.db.Get(&row,
-		`SELECT can_edit FROM user_project_permissions WHERE user_id=$1 AND project_id=$2`,
-		userID, projectID,
-	)
-	if e != nil {
-		return false, false, nil
-	}
-	return true, row.CanEdit, nil
-}
-
-// ProjectsForUser возвращает project_id, к которым у пользователя есть доступ
-func (s *Service) ProjectsForUser(userID int) ([]int, error) {
-	var ids []int
-	err := s.db.Select(&ids,
-		`SELECT project_id FROM user_project_permissions WHERE user_id=$1`, userID,
-	)
-	return ids, err
-}
-
 func (s *Service) UnlockUser(id int) error {
 	res, err := s.db.Exec(
 		`UPDATE users SET failed_attempts=0, locked_until=NULL WHERE id=$1`, id,

@@ -191,25 +191,6 @@ func TestEstimateRequiresCity(t *testing.T) {
 	}
 }
 
-// Посуточные площадки приводятся к месяцу и помечаются признаком: без
-// него месячная оценка уехала бы вверх вслед за суточной ценой.
-func TestDailyPricesNormalized(t *testing.T) {
-	body := []byte(`<span class="price-value" data-price-currency="RUB" data-price-value="3000">` +
-		`3 000</span><span data-price-value="3500.50">3 500,50</span>` +
-		// Цена за час или доплата: в месяц это меньше пяти тысяч — не аренда.
-		`<span data-price-value="100">100</span>`)
-	obs, err := parse101("101hotels.com", body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(obs) != 2 {
-		t.Fatalf("разобрано %d цен, ожидалось 2: %+v", len(obs), obs)
-	}
-	if obs[0].PriceMonth != 3000*daysInMonth || !obs[0].Daily {
-		t.Fatalf("суточная цена не пересчитана в месяц: %+v", obs[0])
-	}
-}
-
 // Разбор выдачи Яндекс Недвижимости. Фрагмент — форма записи объявления
 // в состоянии страницы: цена, комнаты, площадь и этаж лежат в одном
 // объекте, и признаки должны браться от него, а не «в среднем».

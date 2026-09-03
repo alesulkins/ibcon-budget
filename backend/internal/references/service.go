@@ -42,14 +42,6 @@ func (s *Service) ListExecutors(activeOnly bool) ([]Executor, error) {
 	return rows, s.db.Select(&rows, q)
 }
 
-func (s *Service) GetExecutorByName(name string) (*Executor, error) {
-	var e Executor
-	err := s.db.QueryRowx(
-		withEditor("executors", executorCols)+` WHERE lower(t.name) = lower($1)`, name,
-	).StructScan(&e)
-	return &e, err
-}
-
 func (s *Service) CreateExecutor(name, fullName string, profitTax, refinancing float64, by int) (*Executor, error) {
 	var id int
 	err := s.db.QueryRowx(
@@ -130,23 +122,6 @@ func (s *Service) attachCitySalaries(rows []Position) error {
 		rows[i].CitySalaries = byPosition[rows[i].ID]
 	}
 	return nil
-}
-
-// SalaryFor — оклад должности в городе location.
-func (s *Service) SalaryFor(positionName, location string) (float64, error) {
-	var salary float64
-	err := s.db.Get(&salary, `
-		SELECT COALESCE(
-			(SELECT pcs.salary
-			   FROM position_city_salaries pcs
-			   JOIN cities c ON c.id = pcs.city_id
-			  WHERE pcs.position_id = p.id
-			    AND lower(btrim(c.name)) = lower(btrim($2))),
-			p.salary)
-		FROM positions p
-		WHERE lower(btrim(p.name)) = lower(btrim($1))`,
-		positionName, location)
-	return salary, err
 }
 
 // ---------- Cities ----------

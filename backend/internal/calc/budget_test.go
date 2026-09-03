@@ -462,7 +462,7 @@ func TestMarkupRate(t *testing.T) {
 		{"вырожденный", 80, ExecutorAibicon, 0},
 	}
 	for _, tt := range tests {
-		if got := markupRate(tt.targetRent, tt.executor); math.Abs(got-tt.want) > 1e-9 {
+		if got := markupRateAt(tt.targetRent, profitTaxRate(tt.executor)); math.Abs(got-tt.want) > 1e-9 {
 			t.Errorf("%s: markupRate want %.10f, got %.10f", tt.name, tt.want, got)
 		}
 	}
@@ -498,7 +498,7 @@ func TestRun_TargetRentabilityIsReached(t *testing.T) {
 		}
 
 		// Выручка = расходы × (1 + наценка), маржа = расходы × наценка
-		markup := markupRate(tt.targetRent, tt.executor)
+		markup := markupRateAt(tt.targetRent, profitTaxRate(tt.executor))
 		var costs, margin float64
 		for _, m := range res.Monthly {
 			costs += m.TotalCosts

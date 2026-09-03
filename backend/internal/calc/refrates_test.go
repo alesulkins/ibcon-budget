@@ -41,7 +41,7 @@ func TestMarkupRate_UsesReferenceRate(t *testing.T) {
 	wantDefault := 0.27 / (1 - 0.04 - 0.27)
 	wantForm := 0.27 / (1 - 0.25 - 0.27)
 
-	if got := markupRate(target, ExecutorAibiconKG); math.Abs(got-wantDefault) > 1e-9 {
+	if got := markupRateAt(target, profitTaxRate(ExecutorAibiconKG)); math.Abs(got-wantDefault) > 1e-9 {
 		t.Errorf("без справочного значения want %.10f, got %.10f", wantDefault, got)
 	}
 	got := markupRateAt(target, effectiveTaxRate(&InputBudgetParams{ProfitTaxPct: pct(25)}, ExecutorAibiconKG))

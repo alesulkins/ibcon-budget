@@ -410,13 +410,6 @@ func (s *Service) UpdateCachedResults(versionID int, costNoVat, profitability *f
 	return err
 }
 
-// VersionOwner возвращает created_by версии
-func (s *Service) VersionOwner(versionID int) (int, error) {
-	var uid int
-	err := s.db.Get(&uid, `SELECT created_by FROM budget_versions WHERE id=$1`, versionID)
-	return uid, err
-}
-
 func nullStr(s string) *string {
 	if s == "" {
 		return nil

@@ -262,13 +262,6 @@ func (s *Service) ChangeStatus(id int, req ChangeStatusRequest, updatedBy int) (
 	return s.Get(id)
 }
 
-// CreatedByUser возвращает created_by проекта
-func (s *Service) CreatedByUser(projectID int) (int, error) {
-	var uid int
-	err := s.db.Get(&uid, `SELECT created_by FROM projects WHERE id=$1`, projectID)
-	return uid, err
-}
-
 // ProjectStatus возвращает текущий статус проекта
 func (s *Service) ProjectStatus(projectID int) (string, error) {
 	var st string

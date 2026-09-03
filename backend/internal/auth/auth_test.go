@@ -5,40 +5,6 @@ import (
 	"time"
 )
 
-// TestHumanMinutes — склонение «минута» в сообщении о блокировке.
-// Длительность округляется ВВЕРХ: пользователю нельзя обещать разблокировку
-// раньше, чем она произойдёт.
-func TestHumanMinutes(t *testing.T) {
-	tests := []struct {
-		d    time.Duration
-		want string
-	}{
-		{15 * time.Minute, "15 минут"},
-		{time.Minute, "1 минуту"},
-		{2 * time.Minute, "2 минуты"},
-		{4 * time.Minute, "4 минуты"},
-		{5 * time.Minute, "5 минут"},
-		{11 * time.Minute, "11 минут"},
-		{12 * time.Minute, "12 минут"},
-		{14 * time.Minute, "14 минут"},
-		{21 * time.Minute, "21 минуту"},
-		{22 * time.Minute, "22 минуты"},
-		{25 * time.Minute, "25 минут"},
-		// Округление вверх до целой минуты
-		{14*time.Minute + 30*time.Second, "15 минут"},
-		{90 * time.Second, "2 минуты"},
-		// Хвост меньше минуты не должен давать «0 минут»
-		{30 * time.Second, "1 минуту"},
-		{0, "1 минуту"},
-		{-5 * time.Second, "1 минуту"},
-	}
-	for _, tt := range tests {
-		if got := humanMinutes(tt.d); got != tt.want {
-			t.Errorf("humanMinutes(%v) = %q, want %q", tt.d, got, tt.want)
-		}
-	}
-}
-
 // TestValidatePassword — требования ТЗ 3.8: не менее 10 символов,
 // минимум 1 заглавная буква, минимум 1 цифра.
 func TestValidatePassword(t *testing.T) {

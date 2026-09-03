@@ -43,13 +43,6 @@ function emptyRow(duration: number): RoomRow {
   return { price: 0, counts: Array(duration).fill(0), uniform: false };
 }
 
-const cell: React.CSSProperties = {
-  border: '1px solid var(--ibcon-line)',
-  padding: '2px 4px',
-  textAlign: 'center',
-};
-const headCell: React.CSSProperties = { ...cell, background: '#fafafa', fontWeight: 500 };
-
 export default function RentApartmentsInput({
   versionId, duration, startDate, city, readonly,
 }: Props) {

@@ -114,29 +114,3 @@ func (s *Service) Login(req LoginRequest) (*LoginResponse, error) {
 		Role:     u.Role,
 	}, nil
 }
-
-// humanMinutes округляет длительность вверх до минут и склоняет слово
-// «минута» по-русски: 1 минуту, 3 минуты, 15 минут.
-func humanMinutes(d time.Duration) string {
-	m := int(d.Minutes())
-	if d > time.Duration(m)*time.Minute {
-		m++ // 14 мин 30 с → «15 минут», а не «14»
-	}
-	if m < 1 {
-		m = 1
-	}
-
-	word := "минут"
-	switch {
-	case m%100 >= 11 && m%100 <= 14: // 11–14 минут
-	case m%10 == 1:
-		word = "минуту"
-	case m%10 >= 2 && m%10 <= 4:
-		word = "минуты"
-	}
-	return fmt.Sprintf("%d %s", m, word)
-}
-
-func (s *Service) UpdateActivity(userID int) {
-	_, _ = s.db.Exec(`UPDATE users SET last_activity=NOW() WHERE id=$1`, userID)
-}

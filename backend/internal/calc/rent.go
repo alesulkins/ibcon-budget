@@ -27,14 +27,6 @@ func intVal(arr []int, idx int) int {
 	return 0
 }
 
-// apartmentCount — общее количество квартир всех типов в месяце monthIdx
-// (0-based). Формула Excel: 4.2!C23 = SUM(C19:C21).
-func apartmentCount(in *InputRentApartments, monthIdx int) int {
-	return intVal(in.Count1Room, monthIdx) +
-		intVal(in.Count2Room, monthIdx) +
-		intVal(in.Count3Room, monthIdx)
-}
-
 // cleaningEnabled сообщает, начисляется ли уборка в месяце monthIdx
 // (0-based). Пустой список означает «уборки нет за весь период» — так решил
 // владелец 2026-08-23.

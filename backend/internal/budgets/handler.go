@@ -101,18 +101,6 @@ func (h *Handler) createPerm(projectID int) string {
 	return auth.PermBudgetVersion
 }
 
-// checkProjectNotFrozen проверяет, что бюджет можно создавать/редактировать
-func (h *Handler) checkProjectNotFrozen(projectID int) error {
-	status, err := h.projectsSvc.ProjectStatus(projectID)
-	if err != nil {
-		return err
-	}
-	if projects.IsFrozenForBudget(status) {
-		return nil // вернёт ошибку снаружи
-	}
-	return nil
-}
-
 func (h *Handler) listVersions(c *gin.Context) {
 	pid := h.projectID(c)
 	claims := middleware.GetClaims(c)

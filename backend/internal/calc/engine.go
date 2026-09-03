@@ -547,10 +547,6 @@ func contractNetOfVAT(tkp float64, executor string) float64 {
 	}
 }
 
-func markupRate(targetRentPct float64, executor string) float64 {
-	return markupRateAt(targetRentPct, profitTaxRate(executor))
-}
-
 // markupRateAt — та же наценка, но по явно заданной ставке налога:
 // справочное значение исполнителя, подставленное в форму, может
 // отличаться от ставки эталонной формы.

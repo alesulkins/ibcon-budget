@@ -300,61 +300,6 @@ var yaRooms = map[int]string{
 	4: "chetyryohkomnatnaya",
 }
 
-// ── 101hotels.com ─────────────────────────────────────────────────
-
-type hotels101Source struct{}
-
-func (hotels101Source) Name() string { return "101hotels.com" }
-
-func (hotels101Source) Supports(q RentQuery) bool { return citySlug(q.City) != "" }
-
-// Посуточные апартаменты. Нужны не сами по себе: когда объявлений о
-// длительной аренде мало, посуточная цена всё равно показывает уровень
-// рынка в городе — модель учитывает разницу отдельным признаком.
-func (h hotels101Source) Fetch(ctx context.Context, q RentQuery) ([]Observation, error) {
-	slug := citySlug(q.City)
-	if slug == "" {
-		return nil, fmt.Errorf("город «%s» не поддерживается площадкой", q.City)
-	}
-	data, err := fetchBody(ctx, http.MethodGet,
-		"https://101hotels.com/main/cities/"+slug+"/apartments", nil)
-	if err != nil {
-		return nil, err
-	}
-	return parse101(h.Name(), data)
-}
-
-// parse101 читает цены из разметки карточек: цена вынесена в атрибут
-// data-price-value рядом с валютой, и это устойчивее, чем разбирать
-// подпись «от 7 215,19 руб.» с пробелами и запятой.
-func parse101(source string, body []byte) ([]Observation, error) {
-	const key = `data-price-value="`
-	var out []Observation
-	for pos := 0; ; {
-		i := bytes.Index(body[pos:], []byte(key))
-		if i < 0 {
-			break
-		}
-		i += pos
-		pos = i + len(key)
-		price, ok := readNumber(body, pos)
-		if !ok {
-			continue
-		}
-		// Суточная цена — в месяц. Признак Daily остаётся: без него
-		// месячная оценка уехала бы вслед за суточной ценой.
-		month := price * daysInMonth
-		if month < 5000 || month > 5_000_000 {
-			continue
-		}
-		out = append(out, Observation{Source: source, PriceMonth: month, Daily: true})
-	}
-	if len(out) == 0 {
-		return nil, errUnparsed
-	}
-	return out, nil
-}
-
 // citySlug — адрес города в Яндекс Недвижимости.
 var yaSlugs = map[string]string{
 	"анадырь":         "anadyr",
