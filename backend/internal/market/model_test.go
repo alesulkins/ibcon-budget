@@ -153,7 +153,7 @@ func TestEstimateCombinesSources(t *testing.T) {
 		t.Fatalf("перцентили не посчитаны: %+v", est)
 	}
 	if est.Recommended <= 0 || est.Recommended >= est.P95 {
-		t.Errorf("в бюджет предлагается %v — должна быть медиана без верхних пяти процентов, "+
+		t.Errorf("в бюджет предлагается %v — должно быть среднее без верхних пяти процентов, "+
 			"то есть меньше 95-го перцентиля %v", est.Recommended, est.P95)
 	}
 	if len(est.Sources) != 2 || est.Sources[1].Error == "" {
@@ -279,11 +279,11 @@ func TestOnlyDailyMeansNoEstimate(t *testing.T) {
 	}
 }
 
-// В бюджет идёт медиана выборки без верхних пяти процентов, а не сам
+// В бюджет идёт среднее по выборке без верхних пяти процентов, а не сам
 // 95-й перцентиль: тот — почти самое дорогое предложение рынка.
-func TestRecommendedIsMedianBelowP95(t *testing.T) {
+func TestRecommendedIsMeanBelowP95(t *testing.T) {
 	// Ровный ряд от 30 000 до 49 000: 95-й перцентиль около 49 000,
-	// медиана выборки без верхушки — около 39 000.
+	// среднее по выборке без верхушки — около 39 000.
 	var obs []Observation
 	for i := 0; i < 20; i++ {
 		obs = append(obs, Observation{Source: "аренда", PriceMonth: 30000 + float64(i)*1000})
@@ -295,7 +295,7 @@ func TestRecommendedIsMedianBelowP95(t *testing.T) {
 			est.Recommended, est.P95)
 	}
 	if est.Recommended < 38000 || est.Recommended > 40000 {
-		t.Errorf("медиана выборки без верхушки: %v, ожидалось около 39 000", est.Recommended)
+		t.Errorf("среднее по выборке без верхушки: %v, ожидалось около 39 000", est.Recommended)
 	}
 }
 
@@ -512,4 +512,50 @@ func (c cityStub) Supports(q RentQuery) bool { return q.City == c.city }
 
 func (c cityStub) Fetch(context.Context, RentQuery) ([]Observation, error) {
 	return []Observation{{Source: c.name, PriceMonth: 40000, Rooms: 1, Area: 35}}, nil
+}
+
+// N1: площадь записана в сотых долях метра целым числом, цена и площадь
+// стоят перед числом комнат в том же объекте объявления.
+func TestParseN1(t *testing.T) {
+	body := []byte(`{"items":[` +
+		`{"params":{"price":50000,"price_per_sqm":1134},"total_area":4410,"floor":8,"rooms_count":2},` +
+		`{"params":{"price":32000,"price_per_sqm":900},"total_area":3550,"floor":3,"rooms_count":1}]}`)
+	obs, err := parseN1("N1.ru", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(obs) != 2 {
+		t.Fatalf("разобрано %d объявлений, ожидалось 2: %+v", len(obs), obs)
+	}
+	if obs[0].PriceMonth != 50000 || obs[0].Rooms != 2 || obs[0].Floor != 8 {
+		t.Errorf("первое объявление: %+v", obs[0])
+	}
+	if obs[0].Area != 44.1 {
+		t.Errorf("площадь %v — должна быть 44,1 м² (в разметке сотые доли)", obs[0].Area)
+	}
+}
+
+// Города, по которым платформа умеет считать: список большой и выверен
+// запросом по каждому адресу, поэтому проверяем не полноту, а что
+// список не потерялся и что редкие города в нём есть.
+func TestCityCoverage(t *testing.T) {
+	if len(yaSlugs) < 70 {
+		t.Errorf("городов у Яндекс Недвижимости: %d — список поредел", len(yaSlugs))
+	}
+	for _, city := range []string{
+		"Норильск", "Сургут", "Якутск", "Мурманск", "Магадан",
+		"Южно-Сахалинск", "Петропавловск-Камчатский", "Усинск", "Когалым",
+	} {
+		q := RentQuery{City: city}
+		covered := false
+		for _, src := range DefaultSources() {
+			if src.Supports(q) {
+				covered = true
+				break
+			}
+		}
+		if !covered {
+			t.Errorf("город «%s» не покрыт ни одной площадкой", city)
+		}
+	}
 }

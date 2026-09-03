@@ -510,38 +510,60 @@ html body {
  * Ошибки не трогаем: красный у них смысловой, а не оформительский. */
 /* ── Стекло ────────────────────────────────────────────────────────
  *
- * Всплывающее поверх страницы — сообщения, напоминания, пояснения —
- * сделано «стеклом»: полупрозрачная подложка выбранного цвета, размытие
- * того, что за ней, тонкая светлая грань сверху и мягкая тень снизу.
+ * Всплывающее и накладываемое поверх страницы — сообщения, напоминания,
+ * панель пояснений, переключатель версий — сделано «стеклом»:
+ * полупрозрачная подложка, размытие и подъём насыщенности того, что за
+ * ней, светлая грань сверху и мягкая тень снизу.
  *
  * Смысл не в украшении: плашка стоит поверх таблиц с цифрами, и сквозь
  * неё должно быть видно, где ты находишься. Непрозрачная карточка
  * вырезает кусок экрана, стекло — только приглушает.
  *
- * Грань светлее подложки сверху и темнее снизу — так плашка читается
- * выпуклой, а не наклеенной. Тот же приём в оформлении Apple, откуда
- * владелец и просил взять вид.
+ * Три слоя дают объём: заливка, скользящий блик сверху вниз (::before) и
+ * внутренние грани — светлая по верхнему краю, тёмная по нижнему. Без
+ * блика стекло выглядит матовой плёнкой, с ним — выпуклой пластиной.
  */
 .ibcon-glass,
 .ant-message .ant-message-notice:not(:has(.ant-message-error)),
 .ant-notification .ant-notification-notice {
+  position: relative;
   background: var(--ibcon-notice-bg);
-  backdrop-filter: blur(18px) saturate(150%);
-  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  backdrop-filter: blur(22px) saturate(180%);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
   border: 1px solid var(--ibcon-glass-edge);
-  border-radius: 14px;
+  border-radius: 16px;
   box-shadow:
-    /* грань сверху — свет, падающий на выпуклый край */
     inset 0 1px 0 var(--ibcon-glass-sheen),
-    /* грань снизу — собственная тень стекла */
-    inset 0 -1px 0 rgba(12, 26, 51, 0.12),
-    0 8px 28px rgba(12, 26, 51, 0.18);
+    inset 0 -1px 0 rgba(12, 26, 51, 0.14),
+    0 10px 32px rgba(12, 26, 51, 0.20);
+  overflow: hidden;
+}
+
+.ibcon-glass::before,
+.ant-message .ant-message-notice:not(:has(.ant-message-error))::before,
+.ant-notification .ant-notification-notice::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    160deg,
+    var(--ibcon-glass-sheen) 0%,
+    rgba(255, 255, 255, 0) 42%,
+    rgba(255, 255, 255, 0) 100%
+  );
 }
 
 /* Панель пояснений стоит на странице, а не всплывает: ей нужен цвет
    рабочей области, а не цвет уведомлений. */
 .ibcon-glass {
   background: var(--ibcon-glass-bg);
+}
+
+/* Содержимое — над бликом, иначе он ложился бы поверх текста. */
+.ibcon-glass > * {
+  position: relative;
+  z-index: 1;
 }
 
 .ant-message .ant-message-notice-wrapper,
@@ -566,11 +588,11 @@ html body {
    возникает. Тем, кто просил уменьшить анимацию, отдаём её сразу. */
 .ant-notification .ant-notification-notice,
 .ant-message .ant-message-notice {
-  animation: ibcon-glass-in 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+  animation: ibcon-glass-in 0.36s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @keyframes ibcon-glass-in {
-  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
   to   { opacity: 1; transform: none; }
 }
 
@@ -607,14 +629,15 @@ html body {
 }
 
 /* Содержимое версии при переключении проявляется, а не подменяется
-   рывком: глаз успевает заметить, что страница та же, а версия другая. */
+   рывком. Только прозрачность: сдвиг по вертикали читался как прыжок
+   страницы, а прокрутка при переключении сохраняется. */
 .ibcon-version-swap {
-  animation: ibcon-version-in 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+  animation: ibcon-version-in 0.3s ease-out;
 }
 
 @keyframes ibcon-version-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: none; }
+  from { opacity: 0.35; }
+  to   { opacity: 1; }
 }
 
 @media (prefers-reduced-motion: reduce) {

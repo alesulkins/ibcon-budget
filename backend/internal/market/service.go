@@ -47,7 +47,7 @@ DefaultSources — площадки, которые отвечают на зап
 Вернутся, когда появится партнёрский доступ.
 */
 func DefaultSources() []Source {
-	return []Source{yandexSource{}, etagiSource{}, houseKGSource{}}
+	return []Source{yandexSource{}, etagiSource{}, n1Source{}, houseKGSource{}}
 }
 
 func NewService(sources ...Source) *Service {
@@ -239,12 +239,14 @@ func build(q RentQuery, obs []Observation, statuses []SourceStatus) *Estimate {
 	sortFloats(p)
 	est.P50 = round2(percentile(p, 50))
 	est.P95 = round2(percentile(p, 95))
-	// В бюджет — МЕДИАНА выборки без верхних пяти процентов. Сам 95-й
-	// перцентиль это почти самое дорогое предложение рынка: заложив его,
-	// проект переплатит за каждую квартиру. Медиана, а не среднее:
-	// среднее тянут вверх дорогие объявления, даже когда их немного, а
-	// медиана показывает цену, вокруг которой рынок и стоит.
-	est.Recommended = round2(medianBelow(p, percentile(p, 95)))
+	// В бюджет — СРЕДНЕЕ по выборке без верхних пяти процентов.
+	//
+	// Обычное возражение против среднего — чувствительность к дорогим
+	// объявлениям — здесь уже снято: верхние пять процентов отброшены, и
+	// на оставшейся выборке среднее несмещённое. В отличие от медианы оно
+	// учитывает всю выборку, а не только её середину: если дорогих
+	// квартир в диапазоне много, цена для бюджета это увидит.
+	est.Recommended = round2(meanBelow(p, percentile(p, 95)))
 	est.Histogram = histogram(p)
 
 	// Сид фиксирован: одинаковый запрос должен давать одинаковый ответ,
@@ -267,18 +269,22 @@ func build(q RentQuery, obs []Observation, statuses []SourceStatus) *Estimate {
 	return est
 }
 
-// medianBelow — медиана значений не выше границы. Отсечённые пять
+// meanBelow — среднее значений не выше границы. Отсечённые пять
 // процентов — это верхние выбросы рынка: премиальные квартиры и
-// объявления с завышенной ценой, которые месяцами висят несданными.
-func medianBelow(sorted []float64, limit float64) float64 {
-	kept := make([]float64, 0, len(sorted))
+// объявления с завышенной ценой, которые месяцами висят несданными;
+// после их отсечения среднее считается по однородной выборке.
+func meanBelow(sorted []float64, limit float64) float64 {
+	sum, n := 0.0, 0
 	for _, v := range sorted {
 		if v <= limit {
-			kept = append(kept, v)
+			sum += v
+			n++
 		}
 	}
-	// sorted уже упорядочен, отбор порядка не нарушает.
-	return percentile(kept, 50)
+	if n == 0 {
+		return 0
+	}
+	return sum / float64(n)
 }
 
 // Сколько столбиков в графике распределения. Двенадцать — читаемо и на

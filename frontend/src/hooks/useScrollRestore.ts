@@ -127,15 +127,21 @@ export function useScrollRestore() {
       saved = Number(sessionStorage.getItem(key) ?? '0');
     } catch { /* нет доступа к хранилищу — начнём сверху */ }
 
-    // Восстановление ждёт, пока панель дорастёт до нужной высоты.
-    //
-    // Сразу после навигации контента нет вовсе: версия бюджета грузится
-    // запросом, панель схлопывается, и браузер сам сбрасывает прокрутку
-    // в ноль. Пары кадров тут мало — ждём появления высоты наблюдателем
-    // за размером, с ограничением по времени, чтобы не держать его
-    // вечно на странице, которая так и осталась короткой.
-    let observer: ResizeObserver | undefined;
-    let giveUp: number | undefined;
+    /*
+     * Восстановление ждёт, пока панель дорастёт до нужной высоты.
+     *
+     * Сразу после навигации содержимого нет вовсе: версия бюджета
+     * грузится запросом, панель схлопывается, и браузер сам сбрасывает
+     * прокрутку в ноль. Ждём покадрово, а не наблюдателем за размером:
+     * React при переходе заменяет содержимое панели целиком, и
+     * наблюдатель оставался висеть на выброшенном узле — позиция не
+     * возвращалась вовсе, а через три секунды срабатывал запасной путь и
+     * швырял страницу. Это и был «прыжок» при переключении версий.
+     *
+     * Опрос дешёвый (чтение двух свойств) и живёт не дольше трёх секунд.
+     */
+    let frame: number | undefined;
+    const deadline = performance.now() + 3000;
 
     if (saved > 0) {
       const tryScroll = () => {
@@ -145,29 +151,32 @@ export function useScrollRestore() {
         return true;
       };
 
-      if (!tryScroll()) {
-        observer = new ResizeObserver(() => {
-          if (tryScroll()) stopWaiting();
-        });
-        observer.observe(el);
-        giveUp = window.setTimeout(() => {
+      const step = () => {
+        if (tryScroll()) {
+          frame = undefined;
+          return;
+        }
+        if (performance.now() > deadline) {
           // Страница оказалась короче, чем была: так бывает при
           // переключении между версиями бюджета — у одной есть
-          // предупреждение в шапке, у другой нет. Докручиваем до конца:
-          // это ближе к искомому месту, чем прыжок в начало.
+          // предупреждение в шапке, у другой нет. Встаём как можно ближе
+          // к искомому месту, но не дальше конца страницы.
           const reachable = el.scrollHeight - el.clientHeight;
-          if (reachable > 0 && el.scrollTop === 0) el.scrollTop = reachable;
-          stopWaiting();
-        }, 3000);
-      }
+          if (reachable > 0 && el.scrollTop === 0) {
+            el.scrollTop = Math.min(saved, reachable);
+          }
+          frame = undefined;
+          return;
+        }
+        frame = requestAnimationFrame(step);
+      };
+      frame = requestAnimationFrame(step);
     }
 
     function stopWaiting() {
-      observer?.disconnect();
-      observer = undefined;
-      if (giveUp !== undefined) {
-        clearTimeout(giveUp);
-        giveUp = undefined;
+      if (frame !== undefined) {
+        cancelAnimationFrame(frame);
+        frame = undefined;
       }
     }
 

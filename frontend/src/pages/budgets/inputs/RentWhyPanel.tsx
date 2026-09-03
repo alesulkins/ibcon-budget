@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Alert, Button, Collapse, Input, Spin, Typography } from 'antd';
 import { QuestionCircleOutlined, SendOutlined } from '@ant-design/icons';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -21,6 +21,25 @@ const { Text, Paragraph } = Typography;
  */
 export default function RentWhyPanel({ est }: { est: RentMarketEstimate }) {
   const [open, setOpen] = useState(false);
+  const panel = useRef<HTMLDivElement>(null);
+
+  /**
+   * После раскрытия панель подводится к глазам плавной прокруткой: она
+   * появляется НИЖЕ таблиц с примерами, и человек её просто не находил.
+   *
+   * Прокрутка на следующем такте: до перерисовки блока ещё нет, и
+   * прокручивать было бы не к чему.
+   */
+  const toggle = useCallback(() => {
+    setOpen(v => {
+      if (!v) {
+        setTimeout(() => {
+          panel.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 60);
+      }
+      return !v;
+    });
+  }, []);
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
 
@@ -42,14 +61,14 @@ export default function RentWhyPanel({ est }: { est: RentMarketEstimate }) {
       <Button
         type="text"
         icon={<QuestionCircleOutlined />}
-        onClick={() => setOpen(v => !v)}
+        onClick={toggle}
         style={{ paddingLeft: 0 }}
       >
         Почему такая цена?
       </Button>
 
       {open && (
-        <div className="ibcon-glass" style={{ padding: 14, marginTop: 8 }}>
+        <div ref={panel} className="ibcon-glass" style={{ padding: 14, marginTop: 8 }}>
           <Collapse
             ghost
             size="small"

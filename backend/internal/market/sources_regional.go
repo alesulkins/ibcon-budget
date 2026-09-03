@@ -38,21 +38,18 @@ func (etagiSource) Name() string { return "Этажи" }
 угадывать адрес.
 */
 var etagiSlugs = map[string]string{
-	"москва":          "msk",
-	"санкт-петербург": "spb",
-	"норильск":        "norilsk",
-	"сургут":          "surgut",
-	"якутск":          "yakutsk",
-	"тюмень":          "tyumen",
-	"екатеринбург":    "ekb",
 	"казань":          "kazan",
-	"новосибирск":     "novosibirsk",
+	"москва":          "msk",
 	"нижний новгород": "nn",
-	"краснодар":       "krasnodar",
+	"норильск":        "norilsk",
 	"ростов-на-дону":  "rostov",
 	"самара":          "samara",
-	"уфа":             "ufa",
+	"санкт-петербург": "spb",
 	"сочи":            "sochi",
+	"сургут":          "surgut",
+	"тверь":           "tver",
+	"тюмень":          "tyumen",
+	"якутск":          "yakutsk",
 }
 
 // Сколько страниц берём: на странице тридцать объявлений, пять страниц —
@@ -122,6 +119,106 @@ func parseEtagi(source string, body []byte) ([]Observation, error) {
 		}
 		if v, ok := firstNumberFor(ahead, `"floor":`); ok {
 			o.Floor = int(v)
+		}
+		out = append(out, o)
+	}
+	if len(out) == 0 {
+		return nil, errUnparsed
+	}
+	return dedupe(out), nil
+}
+
+// ── N1.ru ─────────────────────────────────────────────────────────
+//
+// Площадка объявлений с городами Урала, Сибири и Севера. Даёт вторую
+// выборку там, где у федеральных площадок объявлений мало, и объявление
+// у неё разобрано по полям: цена, комнаты, этаж и площадь.
+
+type n1Source struct{}
+
+func (n1Source) Name() string { return "N1.ru" }
+
+// Поддомены выверены запросом по каждому: заголовок выдачи должен
+// называть тот же город, что и в запросе.
+var n1Slugs = map[string]string{
+	"архангельск":     "arhangelsk",
+	"волжский":        "volzhskiy",
+	"екатеринбург":    "ekaterinburg",
+	"красноярск":      "krasnoyarsk",
+	"магнитогорск":    "magnitogorsk",
+	"москва":          "msk",
+	"новосибирск":     "novosibirsk",
+	"норильск":        "norilsk",
+	"пермь":           "perm",
+	"ростов-на-дону":  "rostov-na-donu",
+	"санкт-петербург": "spb",
+	"севастополь":     "sevastopol",
+	"челябинск":       "chelyabinsk",
+	"южно-сахалинск":  "yuzhno-sahalinsk",
+}
+
+// На странице выдачи два с половиной десятка объявлений — пять страниц
+// дают полторы сотни.
+const n1Pages = 5
+
+func (n1Source) Supports(q RentQuery) bool {
+	_, ok := n1Slugs[cityKey(q.City)]
+	return ok
+}
+
+func (n n1Source) Fetch(ctx context.Context, q RentQuery) ([]Observation, error) {
+	slug := n1Slugs[cityKey(q.City)]
+	if slug == "" {
+		return nil, fmt.Errorf("город «%s» не поддерживается площадкой", q.City)
+	}
+	base := fmt.Sprintf("https://%s.n1.ru/snyat/kvartiry/", slug)
+
+	return fetchPages(ctx, n1Pages, func(page int) string {
+		if page == 1 {
+			return base
+		}
+		return base + "?page=" + strconv.Itoa(page)
+	}, func(body []byte) ([]Observation, error) {
+		return parseN1(n.Name(), body)
+	})
+}
+
+/*
+parseN1 разбирает объявления из состояния страницы.
+
+Площадь у площадки записана в сотых долях метра целым числом
+("total_area":4410 — это 44,1 м²): читаем и делим, иначе однушка
+выглядела бы как гектар и вылетала из отбора по площади.
+*/
+func parseN1(source string, body []byte) ([]Observation, error) {
+	const roomsKey = `"rooms_count":`
+	var out []Observation
+	for pos := 0; ; {
+		i := bytes.Index(body[pos:], []byte(roomsKey))
+		if i < 0 {
+			break
+		}
+		i += pos
+		pos = i + len(roomsKey)
+
+		o := Observation{Source: source}
+		if v, ok := readNumber(body, pos); ok {
+			o.Rooms = int(v)
+		}
+		// Цена и площадь стоят ПЕРЕД числом комнат в том же объекте
+		// объявления — смотрим назад до начала предыдущего.
+		back := body[max0(i-6000):i]
+		if v, ok := lastNumberFor(back, `"price":`); ok {
+			o.PriceMonth = v
+		}
+		if v, ok := lastNumberFor(back, `"total_area":`); ok {
+			o.Area = v / 100
+		}
+		if v, ok := lastNumberFor(back, `"floor":`); ok {
+			o.Floor = int(v)
+		}
+		if o.PriceMonth < 3000 || o.PriceMonth > 5_000_000 {
+			continue
 		}
 		out = append(out, o)
 	}

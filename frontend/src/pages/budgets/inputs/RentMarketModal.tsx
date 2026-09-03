@@ -55,7 +55,9 @@ export default function RentMarketModal({ open, onClose, defaultCity, onApply }:
       open={open}
       onCancel={onClose}
       title="Рыночная стоимость аренды"
-      width={860}
+      // Ширина под одну строку формы: город, район, комнаты, площадь и
+      // кнопка должны поместиться, не переносясь.
+      width={1000}
       footer={null}
       destroyOnHidden
     >
@@ -64,26 +66,26 @@ export default function RentMarketModal({ open, onClose, defaultCity, onApply }:
         layout="inline"
         initialValues={{ city: defaultCity ?? '' }}
         onFinish={submit}
-        style={{ rowGap: 12, marginBottom: 12, flexWrap: 'wrap' }}
+        // Одной строкой: город, район, комнаты, площадь и кнопка. Поля
+        // подобраны по ширине так, чтобы строка помещалась целиком —
+        // перенос разрывал бы один вопрос на две части.
+        style={{ rowGap: 12, marginBottom: 12, flexWrap: 'nowrap' }}
       >
         <Form.Item
           name="city"
           label="Город"
           rules={[{ required: true, message: 'Город обязателен' }]}
         >
-          <Input style={{ width: 180 }} placeholder="Санкт-Петербург" />
+          <Input style={{ width: 160 }} placeholder="Санкт-Петербург" />
         </Form.Item>
         <Form.Item name="district" label="Район">
-          <Input style={{ width: 150 }} placeholder="необязательно" />
+          <Input style={{ width: 120 }} placeholder="необязательно" />
         </Form.Item>
         <Form.Item name="rooms" label="Комнат">
-          <InputNumber min={1} max={6} style={{ width: 90 }} />
+          <InputNumber min={1} max={6} style={{ width: 72 }} />
         </Form.Item>
-        {/* Площадь и кнопка прижаты к правому краю: город с районом
-            задают, что искать, а эти два — уточнение и само действие,
-            и глазу проще, когда они стоят отдельной группой. */}
-        <Form.Item name="area" label="Площадь, м²" style={{ marginLeft: 'auto' }}>
-          <InputNumber min={10} max={400} style={{ width: 100 }} />
+        <Form.Item name="area" label="Площадь, м²">
+          <InputNumber min={10} max={400} style={{ width: 84 }} />
         </Form.Item>
         <Form.Item style={{ marginRight: 0 }}>
           <Button type="primary" htmlType="submit" loading={ask.isPending}>
@@ -142,7 +144,7 @@ function Result({
         <Stat
           label="В бюджет"
           value={`${fmtNum(est.recommended)} ₽/мес`}
-          hint="медиана без верхних 5 % рынка"
+          hint="среднее без верхних 5 % рынка"
           strong
         />
         <Stat
@@ -337,11 +339,12 @@ function Stat({ label, value, hint, strong }: {
   label: string; value: string; hint?: string; strong?: boolean;
 }) {
   return (
-    // По центру колонки: подписи и числа разной длины, и при выключке
-    // влево значения стояли лесенкой — глазу не за что зацепиться.
-    <div style={{ textAlign: 'center' }}>
+    // Выключка влево — как в остальных итогах платформы. Кегль у всех
+    // показателей один: разный размер читался бы как разная важность, а
+    // важность здесь показывает начертание — цена для бюджета жирная.
+    <div>
       <div style={{ fontSize: 12, color: 'var(--ibcon-muted)' }}>{label}</div>
-      <div style={{ fontSize: strong ? 20 : 16, fontWeight: strong ? 600 : 500 }}>{value}</div>
+      <div style={{ fontSize: 20, fontWeight: strong ? 700 : 400 }}>{value}</div>
       {hint && <div style={{ fontSize: 11, color: 'var(--ibcon-muted)' }}>{hint}</div>}
     </div>
   );

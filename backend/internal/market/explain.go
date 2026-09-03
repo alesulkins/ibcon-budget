@@ -1,12 +1,14 @@
 package market
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
-
-	"github.com/anthropics/anthropic-sdk-go"
+	"time"
 )
 
 /*
@@ -14,15 +16,17 @@ import (
 
 Две части, и они не взаимозаменяемы.
 
-Первая — постоянный текст: как считается цена для бюджета, чем медиана
-отличается от среднего, что такое перцентиль и какие объявления
+Первая — постоянный текст: как считается цена для бюджета, чем среднее
+отличается от медианы, что такое перцентиль и какие объявления
 отбрасываются. Он живёт здесь, в коде, а не в модели: методику человек
 должен читать одну и ту же каждый раз, а не в новом пересказе.
 
 Вторая — вопрос ассистенту про конкретный расчёт. Здесь без модели не
 обойтись: вопросы задают словами, и заранее их не перечислить.
 Ассистент отвечает по цифрам ЭТОГО расчёта — они передаются ему в
-задании, — и не может ни поменять оценку, ни дописать данные.
+задании, — и не может ни поменять оценку, ни дописать данные. Модель
+разворачивается рядом с платформой, а не в чужом облаке: вопрос про
+бюджет проекта не должен уходить за периметр.
 */
 
 // ExplainRequest — вопрос по конкретному расчёту.
@@ -46,20 +50,22 @@ func MethodologyText() []Methodology {
 	return []Methodology{
 		{
 			Title: "Что берётся в бюджет",
-			Text: "Медиана объявлений, из которых убраны пять процентов самых " +
-				"дорогих. Медиана — цена, выше и ниже которой ровно половина " +
-				"объявлений: в отличие от среднего её не тянут вверх несколько " +
-				"дорогих квартир. Верхние пять процентов отброшены потому, что " +
-				"это премиальные объекты и объявления с завышенной ценой — они " +
-				"месяцами висят несданными и на цену договора не влияют.",
+			Text: "Среднее по объявлениям, из которых убраны пять процентов " +
+				"самых дорогих. Верхние пять процентов отброшены потому, что это " +
+				"премиальные объекты и объявления с завышенной ценой — они " +
+				"месяцами висят несданными и на цену договора не влияют. На " +
+				"оставшейся выборке среднее уже не перекошено: обычная претензия " +
+				"к среднему — чувствительность к дорогим объявлениям — снята " +
+				"самим отсечением.",
 		},
 		{
-			Title: "Почему не среднее",
-			Text: "Среднее чувствительно к краям выборки: одна квартира за " +
-				"300 000 ₽ среди двадцати по 40 000 поднимает среднее почти на " +
-				"четверть, а медиану не двигает вовсе. Для бюджета важна цена, " +
-				"по которой квартиру действительно снимут, а не арифметическая " +
-				"середина рынка.",
+			Title: "Почему среднее, а не медиана",
+			Text: "Медиана показывает только середину ряда и не замечает, как " +
+				"устроена остальная выборка: рынок, где дорогих квартир много, и " +
+				"рынок, где их нет вовсе, дадут одну и ту же медиану. Среднее " +
+				"учитывает все объявления сразу. Его слабое место — дорогие " +
+				"выбросы, но они уже отсечены по 95-му перцентилю, поэтому " +
+				"среднее здесь несмещённое.",
 		},
 		{
 			Title: "Что такое 95-й перцентиль",
@@ -87,9 +93,29 @@ func MethodologyText() []Methodology {
 	}
 }
 
-// Модель ассистента. Opus 5 — задача не механическая: человек спрашивает
-// словами и ждёт ответа по своим цифрам.
-const assistantModel = "claude-opus-5"
+/*
+Ассистент работает на модели, которую разворачивают РЯДОМ с платформой,
+а не в чужом облаке.
+
+Почему так: вопросы задаются про конкретный бюджет проекта, и текст
+запроса не должен уходить за периметр — это же и есть требование к
+отечественному контуру. Плюс открытая модель не требует подписки и не
+считает токены.
+
+Разговор идёт по протоколу OpenAI (`/v1/chat/completions`) — его понимают
+Ollama, llama.cpp, vLLM, LM Studio и российские шлюзы, поэтому сменить
+модель можно переменными окружения, не трогая код:
+
+	ASSISTANT_BASE_URL — адрес сервера модели (по умолчанию локальная Ollama)
+	ASSISTANT_MODEL    — имя модели
+	ASSISTANT_API_KEY  — ключ, если сервер его спрашивает (локальному не нужен)
+
+Готовый рецепт: `ollama serve` и `ollama pull qwen2.5:7b-instruct`.
+*/
+const (
+	defaultAssistantURL   = "http://localhost:11434/v1"
+	defaultAssistantModel = "qwen2.5:7b-instruct"
+)
 
 // Потолок ответа. Ассистент отвечает на вопрос по расчёту, а не пишет
 // доклад: длинный ответ в узкой панели никто не читает.
@@ -99,9 +125,25 @@ const assistantMaxTokens = 700
 // расчёту, а попытка передать модели посторонний текст.
 const maxQuestionLen = 500
 
-// ErrNoAssistant — ключа к модели нет, ассистент не подключён.
-var ErrNoAssistant = fmt.Errorf(
-	"ии-ассистент не подключён: не задан ANTHROPIC_API_KEY")
+// Локальная модель на процессоре отвечает не мгновенно — ждём до минуты.
+const assistantTimeout = 60 * time.Second
+
+// ErrNoAssistant — сервер модели не отвечает, ассистент недоступен.
+var ErrNoAssistant = fmt.Errorf("ии-ассистент не отвечает: не запущен сервер модели")
+
+func assistantBaseURL() string {
+	if v := os.Getenv("ASSISTANT_BASE_URL"); v != "" {
+		return strings.TrimRight(v, "/")
+	}
+	return defaultAssistantURL
+}
+
+func assistantModelName() string {
+	if v := os.Getenv("ASSISTANT_MODEL"); v != "" {
+		return v
+	}
+	return defaultAssistantModel
+}
 
 // Ask отвечает на вопрос человека по конкретному расчёту.
 func Ask(ctx context.Context, req ExplainRequest) (string, error) {
@@ -112,34 +154,62 @@ func Ask(ctx context.Context, req ExplainRequest) (string, error) {
 	if len([]rune(q)) > maxQuestionLen {
 		return "", fmt.Errorf("вопрос длиннее %d символов", maxQuestionLen)
 	}
-	if os.Getenv("ANTHROPIC_API_KEY") == "" {
+
+	body, _ := json.Marshal(map[string]any{
+		"model": assistantModelName(),
+		"messages": []map[string]string{
+			{"role": "system", "content": assistantSystem(req.Estimate)},
+			{"role": "user", "content": q},
+		},
+		"max_tokens": assistantMaxTokens,
+		// Ответ про цифры должен быть одинаковым от раза к разу: человек
+		// перечитывает его, а не собирает варианты.
+		"temperature": 0.2,
+		"stream":      false,
+	})
+
+	ctx, cancel := context.WithTimeout(ctx, assistantTimeout)
+	defer cancel()
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		assistantBaseURL()+"/chat/completions", bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	if key := os.Getenv("ASSISTANT_API_KEY"); key != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+key)
+	}
+
+	resp, err := (&http.Client{Timeout: assistantTimeout}).Do(httpReq)
+	if err != nil {
 		return "", ErrNoAssistant
 	}
+	defer resp.Body.Close()
 
-	client := anthropic.NewClient()
-	resp, err := client.Messages.New(ctx, anthropic.MessageNewParams{
-		Model:     assistantModel,
-		MaxTokens: assistantMaxTokens,
-		System: []anthropic.TextBlockParam{{
-			Text: assistantSystem(req.Estimate),
-		}},
-		Messages: []anthropic.MessageParam{
-			anthropic.NewUserMessage(anthropic.NewTextBlock(q)),
-		},
-	})
-	if err != nil {
-		return "", fmt.Errorf("ассистент не ответил: %w", err)
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode >= 500 {
+		return "", ErrNoAssistant
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("модель ответила %d", resp.StatusCode)
 	}
 
-	var out strings.Builder
-	for _, block := range resp.Content {
-		if b, ok := block.AsAny().(anthropic.TextBlock); ok {
-			out.WriteString(b.Text)
-		}
+	var out struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
 	}
-	answer := strings.TrimSpace(out.String())
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return "", fmt.Errorf("ответ модели не разобран")
+	}
+	if len(out.Choices) == 0 {
+		return "", fmt.Errorf("модель вернула пустой ответ")
+	}
+	answer := strings.TrimSpace(out.Choices[0].Message.Content)
 	if answer == "" {
-		return "", fmt.Errorf("ассистент вернул пустой ответ")
+		return "", fmt.Errorf("модель вернула пустой ответ")
 	}
 	return answer, nil
 }
@@ -148,7 +218,7 @@ func Ask(ctx context.Context, req ExplainRequest) (string, error) {
 assistantSystem — задание ассистенту.
 
 Цифры расчёта передаются целиком: без них ассистент отвечал бы общими
-словами про медиану, а спрашивают про конкретную квартиру. Считать он
+словами про среднее, а спрашивают про конкретную квартиру. Считать он
 ничего не должен — расчёт уже сделан, и второй его вариант в ответе
 только запутает.
 */
@@ -182,7 +252,7 @@ func assistantSystem(e Estimate) string {
 	if e.Matched != "" {
 		fmt.Fprintf(&b, "— отбор: %s\n", e.Matched)
 	}
-	fmt.Fprintf(&b, "— цена для бюджета (медиана без верхних 5 %%): %.0f ₽/мес\n", e.Recommended)
+	fmt.Fprintf(&b, "— цена для бюджета (среднее без верхних 5 %%): %.0f ₽/мес\n", e.Recommended)
 	fmt.Fprintf(&b, "— медиана всей выборки: %.0f ₽/мес\n", e.P50)
 	fmt.Fprintf(&b, "— верх рынка (95-й перцентиль): %.0f ₽/мес\n", e.P95)
 	for _, s := range e.Sources {
