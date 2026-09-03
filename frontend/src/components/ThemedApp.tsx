@@ -151,7 +151,9 @@ export default function ThemedApp() {
     // цвет, взятый полупрозрачным, поверх размытия. Цвет текста
     // подбирается под неё, иначе на светлом цвете белые подписи
     // пропадали.
-    root.setProperty('--ibcon-notice-bg', alpha(noticeColor, 0.72));
+    // Прозрачность 30 % — решение владельца: сквозь плашку видно
+    // страницу, но подписи на ней читаются.
+    root.setProperty('--ibcon-notice-bg', alpha(noticeColor, 0.7));
     root.setProperty('--ibcon-notice-fg', readableOn(noticeColor));
 
     // Стекло: подложка панелей, светлая грань и обводка. Вынесено в

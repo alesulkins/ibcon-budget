@@ -226,7 +226,7 @@ function Result({
       )}
 
       {/* Пояснения — в самом низу: их читают после цифр, а не вместо. */}
-      <RentWhyPanel est={est} />
+      <RentWhyPanel />
     </div>
   );
 }

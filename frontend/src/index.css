@@ -508,62 +508,21 @@ html body {
  * читаемость текста не должна зависеть от выбранного цвета.
  *
  * Ошибки не трогаем: красный у них смысловой, а не оформительский. */
-/* ── Стекло ────────────────────────────────────────────────────────
+/* ── Всплывающие сообщения и напоминания ───────────────────────────
  *
- * Всплывающее и накладываемое поверх страницы — сообщения, напоминания,
- * панель пояснений, переключатель версий — сделано «стеклом»:
- * полупрозрачная подложка, размытие и подъём насыщенности того, что за
- * ней, светлая грань сверху и мягкая тень снизу.
+ * Простая плашка выбранного цвета с размытием под собой — без граней и
+ * бликов: «стекло» на них владельцу не подошло. Прозрачность 30 %:
+ * сквозь плашку видно, где на странице ты находишься, но подписи на ней
+ * читаются.
  *
- * Смысл не в украшении: плашка стоит поверх таблиц с цифрами, и сквозь
- * неё должно быть видно, где ты находишься. Непрозрачная карточка
- * вырезает кусок экрана, стекло — только приглушает.
- *
- * Три слоя дают объём: заливка, скользящий блик сверху вниз (::before) и
- * внутренние грани — светлая по верхнему краю, тёмная по нижнему. Без
- * блика стекло выглядит матовой плёнкой, с ним — выпуклой пластиной.
+ * Ошибки не трогаем: красный у них смысловой, а не оформительский.
  */
-.ibcon-glass,
 .ant-message .ant-message-notice:not(:has(.ant-message-error)),
 .ant-notification .ant-notification-notice {
-  position: relative;
   background: var(--ibcon-notice-bg);
-  backdrop-filter: blur(22px) saturate(180%);
-  -webkit-backdrop-filter: blur(22px) saturate(180%);
-  border: 1px solid var(--ibcon-glass-edge);
-  border-radius: 16px;
-  box-shadow:
-    inset 0 1px 0 var(--ibcon-glass-sheen),
-    inset 0 -1px 0 rgba(12, 26, 51, 0.14),
-    0 10px 32px rgba(12, 26, 51, 0.20);
-  overflow: hidden;
-}
-
-.ibcon-glass::before,
-.ant-message .ant-message-notice:not(:has(.ant-message-error))::before,
-.ant-notification .ant-notification-notice::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(
-    160deg,
-    var(--ibcon-glass-sheen) 0%,
-    rgba(255, 255, 255, 0) 42%,
-    rgba(255, 255, 255, 0) 100%
-  );
-}
-
-/* Панель пояснений стоит на странице, а не всплывает: ей нужен цвет
-   рабочей области, а не цвет уведомлений. */
-.ibcon-glass {
-  background: var(--ibcon-glass-bg);
-}
-
-/* Содержимое — над бликом, иначе он ложился бы поверх текста. */
-.ibcon-glass > * {
-  position: relative;
-  z-index: 1;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 6px 24px rgba(12, 26, 51, 0.18);
 }
 
 .ant-message .ant-message-notice-wrapper,
@@ -584,23 +543,42 @@ html body {
   color: var(--ibcon-notice-fg);
 }
 
-/* Появление — снизу вверх с проявлением: плашка «подплывает», а не
-   возникает. Тем, кто просил уменьшить анимацию, отдаём её сразу. */
-.ant-notification .ant-notification-notice,
-.ant-message .ant-message-notice {
-  animation: ibcon-glass-in 0.36s cubic-bezier(0.22, 1, 0.36, 1);
+/* ── Стекло ────────────────────────────────────────────────────────
+ *
+ * Осталось у панели пояснений и переключателя версий: они лежат ПОВЕРХ
+ * содержимого страницы, и сквозь них полезно видеть, что под ними.
+ */
+.ibcon-glass {
+  position: relative;
+  background: var(--ibcon-glass-bg);
+  backdrop-filter: blur(22px) saturate(180%);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  border: 1px solid var(--ibcon-glass-edge);
+  border-radius: 16px;
+  box-shadow:
+    inset 0 1px 0 var(--ibcon-glass-sheen),
+    inset 0 -1px 0 rgba(12, 26, 51, 0.14),
+    0 10px 32px rgba(12, 26, 51, 0.20);
+  overflow: hidden;
 }
 
-@keyframes ibcon-glass-in {
-  from { opacity: 0; transform: translateY(10px) scale(0.97); }
-  to   { opacity: 1; transform: none; }
+.ibcon-glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    160deg,
+    var(--ibcon-glass-sheen) 0%,
+    rgba(255, 255, 255, 0) 42%,
+    rgba(255, 255, 255, 0) 100%
+  );
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .ant-notification .ant-notification-notice,
-  .ant-message .ant-message-notice {
-    animation: none;
-  }
+/* Содержимое — над бликом, иначе он ложился бы поверх текста. */
+.ibcon-glass > * {
+  position: relative;
+  z-index: 1;
 }
 
 /* Переключатель версий: плашка выбранной версии переезжает между
