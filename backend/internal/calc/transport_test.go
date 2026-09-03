@@ -7,18 +7,8 @@ import (
 )
 
 // Эталонные данные листа 4.3 из calc_sheets_ibcon-project-russia.xlsm
-// (единственный из трёх файлов, где заполнена и аренда авто, и покупка,
-// и гараж). Длительность проекта 2.Бюджет!D8 = 6 месяцев.
-//
-// Что стоит в форме:
-//
-//	аренда авто   4.3!B6  = 70 000, кол-во 4.3!C5:BJ5  = 1, 2, 3, 3, 3, 6
-//	покупка авто  4.3!A17:C18 = мес.2 × 1 шт × 2 500 000
-//	                            мес.5 × 2 шт × 1 950 000
-//	аренда гаража 4.3!B11 = 50 000, кол-во 4.3!C10:BJ10 = 1, 1, 1, 2, 3, 3
-//
-// Ввод платформы ложится на форму один в один: таблица покупок — строка в
-// строку, аренда — цена за единицу плюс количество в каждом месяце.
+// (единственный из трёх файлов, где заполнена и аренда авто, и покупка, и
+// гараж).
 func referenceTransportInput() *InputTransport {
 	return &InputTransport{
 		// 4.3!A17:C18
@@ -38,10 +28,6 @@ func referenceTransportInput() *InputTransport {
 }
 
 // TestCalcTransport_Reference — численная сверка с эталоном.
-//
-// Ожидаемые значения взяты из calc_sheets_ibcon-project-russia.xlsm:
-// строка 4.3!C6:BJ6 (она же 2.Бюджет!H180:BO180) и 4.3!C11:BJ11
-// (она же 2.Бюджет!H210:BO210). Месяц 6 в форме лежит в колонке BJ.
 func TestCalcTransport_Reference(t *testing.T) {
 	transport, garage := calcTransport(referenceTransportInput(), 6)
 
@@ -139,12 +125,6 @@ func TestCalcTransport_LegacyFallback(t *testing.T) {
 }
 
 // TestCalcTransport_SplitFormulaFixed — исправление расщеплённой формулы.
-//
-// В форме проверка «месяц покупки внутри проекта» стоит только у строк
-// 17–24 (`D17 = IF(A17<=$D$8, C17*B17, 0)`), а у строк 25–27 её нет
-// (`D25 = C25*B25`), из-за чего результат зависел от того, в какую строку
-// таблицы попал ввод. Здесь правило одно для всех строк: покупка вне
-// проекта не считается, каким бы номером строка ни была.
 func TestCalcTransport_SplitFormulaFixed(t *testing.T) {
 	in := &InputTransport{CarPurchases: []ItemPurchase{
 		{Name: "внутри проекта", Month: 3, Count: 1, Price: 1_000_000},

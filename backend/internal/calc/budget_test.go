@@ -293,13 +293,8 @@ func TestRun_VATByExecutor(t *testing.T) {
 	}
 }
 
-// TestRun_OperatingProfitWithManualRevenue — операционная прибыль (строка 238)
-// должна считаться и в режиме ручной выручки.
-//
-// Формула Excel H238 = IF(H11<=$D$8; IF(H234<>0; 0; H236-H232); 0).
-// При ручной выручке форма обнуляет маржу H234, поэтому работает вторая
-// ветка: прибыль = выручка − расходы. Раньше Go в этом режиме давал 0
-// (audit/numeric_final.md, ошибка 1).
+// TestRun_OperatingProfitWithManualRevenue — операционная прибыль (строка
+// 238) должна считаться и в режиме ручной выручки.
 func TestRun_OperatingProfitWithManualRevenue(t *testing.T) {
 	inp := &BudgetInputs{
 		ProjectStartDate: mustDate(2026, 12, 1),
@@ -596,10 +591,6 @@ func TestValidateBudgetParams_TargetRent(t *testing.T) {
 
 // TestRun_BankGuaranteesNeedContractValue — банковские гарантии считаются
 // строго от ТКП (стоимости договора), а не от расчётной выручки.
-//
-// Источник: 2.Бюджет!G220 = G251*F220, G224 = G251*F224, G228 = F228*G251,
-// и уже от них G222 / G226 / G230. Если ТКП не задан (режим наценки), эти
-// произведения равны нулю — договора ещё нет, гарантию не от чего считать.
 func TestRun_BankGuaranteesNeedContractValue(t *testing.T) {
 	bg := func() *InputBudgetParams {
 		return &InputBudgetParams{
@@ -659,11 +650,7 @@ func TestRun_BankGuaranteesNeedContractValue(t *testing.T) {
 
 // TestRun_OtherExpensesPctUsesEstimatedRevenue — «прочие расходы» в режиме
 // процента продолжают считаться от расчётной выручки, даже когда ТКП не
-// задан. Этот механизм отдельный от БГ и правкой БГ не затронут.
-//
-// Источник: 2.Бюджет!H218 = IF(...; $G$251*$F$218/100/$D$8; ...) — в форме
-// база тоже ТКП, но платформа подставляет расчётную выручку, чтобы статья
-// не обнулялась в режиме наценки.
+// задан.
 func TestRun_OtherExpensesPctUsesEstimatedRevenue(t *testing.T) {
 	res := Run(&BudgetInputs{
 		ProjectStartDate: mustDate(2026, 12, 1),
@@ -694,10 +681,6 @@ func TestRun_OtherExpensesPctUsesEstimatedRevenue(t *testing.T) {
 
 // TestRun_KirgiziaTaxNeedsContractValue — налог киргизского спецрежима
 // считается строго от ТКП (2.Бюджет!$G$251), а не от расчётной выручки.
-//
-// По правилу формы у киргизского филиала ТКП задаётся всегда, поэтому
-// проекта без ТКП быть не может; если он всё же придёт — налог 0, а не
-// посчитанный от подставленной выручки.
 func TestRun_KirgiziaTaxNeedsContractValue(t *testing.T) {
 	base := func(p *InputBudgetParams) *BudgetInputs {
 		return &BudgetInputs{
@@ -728,16 +711,8 @@ func TestRun_KirgiziaTaxNeedsContractValue(t *testing.T) {
 	}
 }
 
-// TestRun_AUPPlusTwoMonths — АУП (строка 215) начисляется, пока номер
-// месяца <= длительность + 2: H215 = IF(H11<=$D$8+2, (H212+H214+H176)*F215, 0).
-//
-// Проверено на calc_sheets_ibcon-russia.xlsm (D8=6): в колонках месяцев 7 и 8
-// база (212, 214, 176) равна нулю, поэтому АУП там тоже ноль, а G215
-// совпадает с суммой первых шести месяцев. То есть «+2» ничего не
-// добавляет: строки расходов сами закрыты проверкой «месяц <= D8».
-//
-// Отсюда требование к платформе: массивы длиной ровно duration дают тот же
-// итог, что и форма, и никакого «хвоста» дописывать не нужно.
+// TestRun_AUPPlusTwoMonths — АУП (строка 215) начисляется, пока номер месяца
+// <= длительность + 2: H215 = IF(H11<=$D$8+2, (H212+H214+H176)*F215, 0).
 func TestRun_AUPPlusTwoMonths(t *testing.T) {
 	const n = 6
 	inp := &BudgetInputs{

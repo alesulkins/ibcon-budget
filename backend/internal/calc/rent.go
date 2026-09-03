@@ -13,14 +13,8 @@ func sameExecutor(a, b string) bool {
 	return strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b))
 }
 
-// normalizeCountry приводит «Страну НО» к каноническому виду для сравнения
-// с константами CountryRF / CountryKG / CountrySelfEmployed.
-//
-// Нужно потому, что Excel сравнивает страну через SUMIF, а он
-// регистронезависим: в форме записано «Россия», а формула ищет «россия»
-// (2.Бюджет!H172, H173, H174). Без нормализации все налоги обнуляются.
-// У поля 4.6!BS нет выпадающего списка — значение вводится свободным
-// текстом, поэтому пробелы по краям тоже срезаем.
+// normalizeCountry приводит «Страну НО» к каноническому виду для сравнения с
+// константами CountryRF / CountryKG / CountrySelfEmployed.
 func normalizeCountry(s string) string {
 	return strings.ToLower(strings.TrimSpace(s))
 }
@@ -41,10 +35,9 @@ func apartmentCount(in *InputRentApartments, monthIdx int) int {
 		intVal(in.Count3Room, monthIdx)
 }
 
-// cleaningEnabled сообщает, начисляется ли уборка в месяце monthIdx (0-based).
-//
-// Пустой список означает «уборки нет за весь период» — так решил владелец
-// 2026-08-23. Это расширение сверх формы: в Excel уборка безусловна.
+// cleaningEnabled сообщает, начисляется ли уборка в месяце monthIdx
+// (0-based). Пустой список означает «уборки нет за весь период» — так решил
+// владелец 2026-08-23.
 func cleaningEnabled(in *InputRentApartments, monthIdx int) bool {
 	for _, m := range in.CleaningMonths {
 		if m == monthIdx+1 { // в списке номера месяцев 1-based
@@ -54,21 +47,8 @@ func cleaningEnabled(in *InputRentApartments, monthIdx int) bool {
 	return false
 }
 
-// calcRentApartments рассчитывает аренду квартир и услуги риелтора по месяцам
-// (лист 4.2). Возвращает два массива длиной duration:
-//
-//	rent    — «Итого аренда» (4.2!строка 5)  → 2.Бюджет строка 178
-//	realtor — «Риелтор»      (4.2!строка 13) → 2.Бюджет строка 179
-//
-// Формулы Excel (месяц 1 = колонка C, месяц D = колонка BJ):
-//
-//	Основа   4.2!C22 = IF(месяц<=D8, SUMPRODUCT($B$19:$B$21, C19:C21), 0)
-//	Уборка   4.2!C9  = IF(месяц<=D8, $B$9*(C19+C20+C21), 0)
-//	Аренда   4.2!C5  = IF(исполнитель="Айбикон Киргизия", C22+C9, (C22+C9)/0.87)
-//	Риелтор  4.2!C13 = IF(C12=1, C23*$B$13, IF(C23>B23, (C23-B23)*$B$13, 0))
-//
-// Проверка «месяц <= длительность проекта» здесь не нужна: массивы строятся
-// ровно на duration месяцев, месяцев за пределами проекта в платформе нет.
+// calcRentApartments рассчитывает аренду квартир и услуги риелтора по
+// месяцам (лист 4.2).
 func calcRentApartments(in *InputRentApartments, executor string, duration int) (rent, realtor []float64) {
 	rent = make([]float64, duration)
 	realtor = make([]float64, duration)
@@ -109,16 +89,11 @@ func calcRentApartments(in *InputRentApartments, executor string, duration int) 
 		switch {
 		case m == 0:
 			// Первый месяц: платим за все квартиры.
-			// Ветка проверяется первой, поэтому при duration==1 риелтор
-			// начисляется (в форме там был бы 0 из-за пустой BJ13, но
-			// проектов длиной 1 месяц не бывает — решение владельца).
 			realtor[m] = float64(count) * in.RealtorBase
 		case m == duration-1:
-			// Последний месяц проекта: риелтор не начисляется — квартиры
-			// уже не ищут. В форме ячейка 4.2!BJ13 пустая (формулы нет),
-			// это сознательное правило, а не опечатка.
-			// Чтобы прирост квартир не потерялся молча, ввод ограничен
-			// валидацией ValidateRentApartments.
+			// Последний месяц проекта: риелтор не начисляется — квартиры уже не ищут.
+			// В форме ячейка 4.2!BJ13 пустая (формулы нет), это сознательное правило,
+			// а не опечатка.
 			realtor[m] = 0
 		case count > prevCount:
 			// Прирост количества квартир × базовая стоимость риелтора.
@@ -131,12 +106,8 @@ func calcRentApartments(in *InputRentApartments, executor string, duration int) 
 	return rent, realtor
 }
 
-// ValidateRentApartments проверяет корректность ввода по листу 4.2:
-// цены и количества не могут быть отрицательными.
-//
-// Правило «в последнем месяце квартир не больше, чем в предыдущем»
-// сюда сознательно НЕ включено — оно отложено,
-// см. docs/deferred_validations.md.
+// ValidateRentApartments проверяет корректность ввода по листу 4.2: цены и
+// количества не могут быть отрицательными.
 func ValidateRentApartments(in *InputRentApartments) error {
 	if in == nil {
 		return nil
@@ -179,14 +150,8 @@ func ValidateRentApartments(in *InputRentApartments) error {
 }
 
 // ValidateBudgetParams проверяет параметры бюджета перед сохранением.
-//
-// Главное правило — целевая рентабельность должна быть достижима при
-// ставке налога исполнителя. Коэффициент наценки считается как
-// E234/(1-F240-E234) (2.Бюджет!F234), поэтому при
-// targetRent + ставка налога >= 1 знаменатель обращается в ноль или
-// становится отрицательным. В форме это дало бы #DIV/0! или
-// отрицательную наценку; в платформе отклоняем ввод с понятной ошибкой,
-// а не пропускаем молча.
+// Главное правило — целевая рентабельность должна быть достижима при ставке
+// налога исполнителя.
 func ValidateBudgetParams(p *InputBudgetParams, executor string) error {
 	if p == nil {
 		return nil
@@ -212,12 +177,9 @@ func ValidateBudgetParams(p *InputBudgetParams, executor string) error {
 	return nil
 }
 
-// ValidateEmployees проверяет список сотрудников перед сохранением.
-//
-// Главное правило — страна НО «Киргизия» допустима ТОЛЬКО у исполнителя
-// «Айбикон Киргизия». У остальных исполнителей киргизских сотрудников не
-// бывает: взносы Киргизии (2.Бюджет!174) считаются лишь в киргизской
-// ветке, и такой сотрудник молча остался бы без страховых взносов вовсе.
+// ValidateEmployees проверяет список сотрудников перед сохранением. Главное
+// правило — страна НО «Киргизия» допустима ТОЛЬКО у исполнителя «Айбикон
+// Киргизия».
 func ValidateEmployees(in *InputEmployees, executor string) error {
 	if in == nil {
 		return nil
@@ -256,11 +218,8 @@ func ValidateEmployees(in *InputEmployees, executor string) error {
 	return nil
 }
 
-// ValidateInput проверяет входные данные одного типа перед сохранением.
-// Для типов без собственных правил возвращает nil.
-//
-// executor нужен для проверок, зависящих от исполнителя (ставка налога),
-// duration — для проверок, где месяц должен лежать внутри проекта (лист 4.3).
+// ValidateInput проверяет входные данные одного типа перед сохранением. Для
+// типов без собственных правил возвращает nil.
 func ValidateInput(inputType string, raw []byte, executor string, duration int) error {
 	switch inputType {
 	case TypeRentApartments:

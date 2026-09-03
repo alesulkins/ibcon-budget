@@ -90,11 +90,8 @@ export const usersApi = {
   revokeAccess: (userId: number, projectId: number) =>
     client.delete(`/users/${userId}/projects/${projectId}/access`),
 
-  /**
-   * Приводит доступ пользователя к переданному списку проектов:
-   * чего в списке нет — отзывается. Вместе с отозванным проектом
-   * снимаются и выданные на него индивидуальные права.
-   */
+  // Приводит доступ пользователя к переданному списку проектов: чего в
+  // списке нет — отзывается.
   setProjects: (userId: number, projects: { project_id: number; can_edit: boolean }[]) =>
     client.put(`/users/${userId}/projects`, { projects }),
 
@@ -221,15 +218,7 @@ export const budgetsApi = {
   calculate: (vid: number) =>
     client.get<CalcResult>(`/budget-versions/${vid}/calculate`).then(r => r.data),
 
-  /**
-   * Выгружает версию бюджета в xlsx и отдаёт файл браузеру. Книга
-   * содержит три листа сразу — «Бюджет», БДР и БДДС; у администратора
-   * проекта только один урезанный лист «Бюджет».
-   *
-   * Имя файла берём из Content-Disposition: сервер кладёт его туда в
-   * filename* с кодировкой UTF-8, иначе русское название проекта
-   * сохранилось бы крякозябрами.
-   */
+  // Выгружает версию бюджета в xlsx и отдаёт файл браузеру.
   exportXlsx: (vid: number) =>
     downloadFile(`/budget-versions/${vid}/export`, `budget-${vid}.xlsx`),
 
@@ -240,11 +229,7 @@ export const budgetsApi = {
     ).then(r => r.data),
 };
 
-/**
- * Скачивание файла с сервера. Имя берём из Content-Disposition —
- * сервер кладёт его в filename* с кодировкой UTF-8, иначе русское
- * название проекта сохранилось бы крякозябрами.
- */
+// Скачивание файла с сервера.
 async function downloadFile(url: string, fallbackName: string) {
   const res = await client.get(url, { responseType: 'blob' });
 

@@ -24,12 +24,8 @@ import Fireworks, { shouldShowFireworks, markFireworksShown } from '../../compon
 import StatusTag from '../../components/StatusTag';
 import { useFillToSiderFooter } from '../../hooks/useFillHeight';
 
-/**
- * Реестр листается не страницами, а прокруткой — вся видимая (по правам)
- * выборка запрашивается одним куском. Проектов в системе на порядки
- * меньше, чем такой лимит: он просто гарантия, что реестр не обрежется
- * молча, если их станет много.
- */
+// Реестр листается не страницами, а прокруткой — вся видимая (по правам)
+// выборка запрашивается одним куском.
 const REGISTRY_LIMIT = 1000;
 
 export default function ProjectsPage() {
@@ -92,11 +88,7 @@ export default function ProjectsPage() {
     onError: (e) => message.error(extractError(e)),
   });
 
-  /**
-   * Закрытие формы создания. Если пользователь успел что-то ввести —
-   * спрашиваем подтверждение, чтобы случайный клик мимо модала или по
-   * «Отмена» не стирал заполненную карточку.
-   */
+  // Закрытие формы создания.
   function closeCreate() {
     const touched = Object.values(form.getFieldsValue()).some(
       v => v !== undefined && v !== null && v !== '',
@@ -132,14 +124,8 @@ export default function ProjectsPage() {
     (!budgetStatusFilter || p.budget_status === budgetStatusFilter)
     && (!executorFilter || p.executor_name === executorFilter));
 
-  /**
-   * Порядок колонок задан владельцем 2026-08-27 и менять его нельзя.
-   * «№» — не колонка данных, а номер записи, поэтому стоит перед ними.
-   *
-   * Ширины не задаём: колонка должна быть ровно такой, чтобы значение
-   * помещалось в одну строку (nowrap в index.css), а лишняя ширина
-   * уходит в горизонтальную прокрутку — scroll x: 'max-content'.
-   */
+  // Порядок колонок задан владельцем 2026-08-27 и менять его нельзя. «№» —
+  // не колонка данных, а номер записи, поэтому стоит перед ними.
   const columns: ColumnsType<ProjectListItem> = [
     {
       title: '№',

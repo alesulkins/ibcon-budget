@@ -27,9 +27,6 @@ type CostLine struct {
 	// В расчёте не участвует, нужно только чтобы опознать строку.
 	Name string `json:"name"`
 	// MonthlyAmounts — стоимость по месяцам проекта, индекс 0 = первый месяц.
-	// Длина равна длительности проекта (D8); массив короче добивается
-	// нулями, длиннее — обрезается (длительность проекта могли изменить
-	// после сохранения). Пусто или 0 — в этом месяце позиция не оплачивается.
 	MonthlyAmounts []float64 `json:"monthly_amounts"`
 }
 
@@ -69,8 +66,6 @@ func costLinesTitle(inputType string) string {
 
 // ValidateCostLines проверяет ввод листа-списка: стоимость не может быть
 // отрицательной. Ноль допустим — в этом месяце позиции просто нет.
-//
-// title — название листа для текста ошибки («ПО и лицензии» и т.п.).
 func ValidateCostLines(title string, in *InputCostLines) error {
 	if in == nil {
 		return nil

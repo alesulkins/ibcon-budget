@@ -7,13 +7,7 @@ import { BRAND } from '../../theme';
 
 const { Text } = Typography;
 
-/**
- * Настройки интерфейса: размер шрифта, тема и цвета.
- *
- * Применяются сразу, без кнопки «Сохранить»: настройка оформления должна
- * отзываться мгновенно, иначе кажется, что не сработала. В учётку они
- * уходят тем же действием (см. store/uiSettings).
- */
+// Настройки интерфейса: размер шрифта, тема и цвета.
 export default function InterfaceSettings() {
   const { fontSize, theme, brandColor, noticeColor, update } = useUISettings();
 

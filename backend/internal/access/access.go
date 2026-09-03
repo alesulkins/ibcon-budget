@@ -128,9 +128,6 @@ func (s *Service) SeesAllProjects(cl *auth.Claims, perm string) bool {
 
 // VisibleProjectIDs — проекты, в которых у пользователя есть указанное
 // право. Вызывать только когда SeesAllProjects вернул false.
-//
-// Пустой список означает «не видно ничего»: обработчик обязан отдать
-// пустой ответ, а не весь реестр.
 func (s *Service) VisibleProjectIDs(cl *auth.Claims, perm string) []int {
 	if cl == nil {
 		return nil
@@ -175,11 +172,9 @@ func (s *Service) VisibleProjectIDs(cl *auth.Claims, perm string) []int {
 	return out
 }
 
-// Permissions — что пользователь может в данном проекте.
-//
-// projectID = 0 — список «может хотя бы где-нибудь»: им фронт решает,
-// показывать ли пункт меню и кнопку создания. Права на конкретный
-// проект приходят вместе с карточкой проекта.
+// Permissions — что пользователь может в данном проекте. projectID = 0 —
+// список «может хотя бы где-нибудь»: им фронт решает, показывать ли пункт
+// меню и кнопку создания.
 func (s *Service) Permissions(cl *auth.Claims, projectID int) []string {
 	out := make([]string, 0, len(auth.AllPermissions))
 	for _, p := range auth.AllPermissions {
@@ -196,10 +191,8 @@ func (s *Service) Permissions(cl *auth.Claims, projectID int) []string {
 
 // ─── Middleware для внепроектных маршрутов ──────────────────────────────
 
-// Require — 403, если у пользователя нет права. Годится для маршрутов,
-// не привязанных к проекту: справочники, пользователи, история.
-// Проектные маршруты проверяют доступ внутри обработчика, потому что
-// им нужен id проекта.
+// Require — 403, если у пользователя нет права. Годится для маршрутов, не
+// привязанных к проекту: справочники, пользователи, история.
 func (s *Service) Require(perm string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		cl := middleware.GetClaims(c)
@@ -396,14 +389,8 @@ func (s *Service) hasIndividual(userID int, perm string, projectID int) bool {
 	return err == nil && n > 0
 }
 
-// grantCodes — какие записи user_permissions дают запрошенное право.
-//
-// Обычно это само право и «звёздочка». Но «звёздочка» покрывает только
-// то, что главный экономист вправе выдать индивидуально: управление
-// пользователями через неё пройти не должно, иначе тумблер «все права»
-// обходил бы запрет auth.IsGrantable. Для таких прав вторым кодом
-// возвращается то же самое право — совпасть может только точная запись,
-// а её выдача отклоняется при создании.
+// grantCodes — какие записи user_permissions дают запрошенное право. Обычно
+// это само право и «звёздочка».
 func grantCodes(perm string) (exact, star string) {
 	if auth.IsGrantable(perm) {
 		return perm, auth.PermAll

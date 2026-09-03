@@ -6,11 +6,7 @@ const REMEMBER_KEY = 'remember';
 const LAST_ACTIVITY_KEY = 'last_activity';
 const SAVED_EMAIL_KEY = 'saved_email';
 
-/**
- * Автовыход при бездействии — 60 минут (ТЗ 3.8 п.6).
- * Дублирует серверную проверку в middleware.Auth: клиент выкидывает
- * пользователя сам, не дожидаясь ответа 401 на следующий запрос.
- */
+// Автовыход при бездействии — 60 минут (ТЗ 3.8 п.6).
 export const INACTIVITY_LIMIT_MS = 60 * 60 * 1000;
 
 /** Причина, по которой пользователя вернуло на форму логина. */
@@ -108,11 +104,7 @@ export function hasRole(...roles: string[]): boolean {
   return roles.includes(u.role);
 }
 
-/**
- * Отметка активности. Живёт в localStorage, чтобы работа в одной вкладке
- * продлевала сессию во всех остальных — иначе фоновая вкладка выкинула бы
- * пользователя посреди работы.
- */
+// Отметка активности.
 export function touchActivity() {
   localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
 }

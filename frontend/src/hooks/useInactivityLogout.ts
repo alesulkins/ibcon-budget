@@ -13,14 +13,9 @@ const ACTIVITY_EVENTS = [
   'mousedown', 'keydown', 'wheel', 'touchstart', 'scroll',
 ] as const;
 
-/**
- * Автовыход при бездействии — 60 минут (ТЗ 3.8 п.6).
- *
- * Клиентская половина проверки; серверная живёт в middleware.Auth и
- * опирается на users.last_activity. Клиент нужен, чтобы пользователь,
- * который просто оставил вкладку открытой и не делает запросов, всё
- * равно оказался разлогинен — сервер о таком простое узнать не может.
- */
+// Автовыход при бездействии — 60 минут (ТЗ 3.8 п.6). Клиентская половина
+// проверки; серверная живёт в middleware.Auth и опирается на
+// users.last_activity.
 export function useInactivityLogout() {
   useEffect(() => {
     if (!isLoggedIn()) return;

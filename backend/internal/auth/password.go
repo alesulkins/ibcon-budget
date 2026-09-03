@@ -23,15 +23,8 @@ func CheckPassword(hash, plain string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(plain)) == nil
 }
 
-// ValidatePassword проверяет пароль по ТЗ 3.8: не менее 10 символов,
-// минимум 1 заглавная буква, минимум 1 цифра.
-//
-// Считаем именно символы (руны), а не байты: в UTF-8 кириллическая буква
-// занимает два байта, поэтому len() пропускал бы «Пароль1» (7 символов,
-// 13 байт) как достаточно длинный.
-//
-// Заглавную букву и цифру ищем по Unicode, а не по [A-Z]/[0-9]: система
-// русскоязычная, и «Длинный1» обязан считаться паролем с заглавной буквой.
+// ValidatePassword проверяет пароль по ТЗ 3.8: не менее 10 символов, минимум
+// 1 заглавная буква, минимум 1 цифра.
 func ValidatePassword(plain string) error {
 	if utf8.RuneCountInString(plain) < minPasswordLen {
 		return errors.New("пароль должен содержать не менее 10 символов")

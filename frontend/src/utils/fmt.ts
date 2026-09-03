@@ -10,20 +10,8 @@ export function fmtDateTime(d: string | null | undefined): string {
   return dayjs(d).format('DD.MM.YYYY HH:mm');
 }
 
-/**
- * Денежная сумма без знака валюты: разряды пробелами, РОВНО два знака
- * после запятой.
- *
- * Два знака обязательны и там, где сумма круглая: в форме встречаются
- * значения с копейками (аренда после gross-up на НДФЛ — 143 678.16), и
- * колонка, где часть чисел с копейками, а часть без, не читается. Кроме
- * того, сверка с Excel идёт до копейки, и «1 189 655,172» на экране
- * сбивало с толку.
- *
- * Округление здесь ТОЛЬКО для показа. В расчёте округлений нет: Excel
- * тоже считает в полной точности и округляет лишь при выводе, а любое
- * промежуточное округление увело бы итоги от эталона.
- */
+// Денежная сумма без знака валюты: разряды пробелами, РОВНО два знака после
+// запятой.
 export function fmtNum(n: number | null | undefined): string {
   if (n == null || !Number.isFinite(n)) return '—';
   return new Intl.NumberFormat('ru-RU', {
@@ -57,13 +45,8 @@ export function thousandParser(v: string | undefined): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-/**
- * Подпись месяца проекта: 0 — первый месяц. Формат «дек 26»
- * (локаль dayjs выставлена в main.tsx).
- *
- * Единая точка для всех экранов мастера: раньше часть форм рисовала
- * «М1/М2», часть — свои даты.
- */
+// Подпись месяца проекта: 0 — первый месяц. Формат «дек 26» (локаль dayjs
+// выставлена в main.tsx).
 export function monthLabel(startDate: string | null | undefined, idx: number): string {
   if (!startDate) return `М${idx + 1}`;
   const d = dayjs(startDate).add(idx, 'month');

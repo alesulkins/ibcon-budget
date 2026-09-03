@@ -133,11 +133,6 @@ func (s *Service) attachCitySalaries(rows []Position) error {
 }
 
 // SalaryFor — оклад должности в городе location.
-//
-// Город берётся из карточки проекта строкой, поэтому сравниваем по
-// имени и регистронезависимо: «Санкт-Петербург» и «санкт-петербург» —
-// один и тот же город. Если для города ставки нет, возвращается оклад
-// по умолчанию (positions.salary).
 func (s *Service) SalaryFor(positionName, location string) (float64, error) {
 	var salary float64
 	err := s.db.Get(&salary, `
@@ -339,10 +334,6 @@ func (s *Service) getCostItem(id int) (*CostItem, error) {
 }
 
 // ITRPositions — названия должностей с признаком ИТР, в нижнем регистре.
-//
-// Сотрудник хранит должность СТРОКОЙ (snapshot на момент ввода), поэтому
-// связать его со справочником можно только по имени; регистр приводим,
-// потому что в старых версиях название могли ввести иначе.
 func (s *Service) ITRPositions() (map[string]bool, error) {
 	var names []string
 	if err := s.db.Select(&names,

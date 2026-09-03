@@ -207,10 +207,7 @@ func (h *Handler) revokeAccess(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "доступ отозван"})
 }
 
-// setProjects приводит доступ пользователя к проектам к переданному
-// списку. Вместе с отозванными проектами снимаются и индивидуальные
-// права на них: иначе доступ «отозван», а право на правку бюджета
-// этого проекта продолжало бы действовать.
+// setProjects приводит доступ пользователя к проектам к переданному списку.
 func (h *Handler) setProjects(c *gin.Context) {
 	userID, _ := strconv.Atoi(c.Param("id"))
 	var req SetProjectsRequest

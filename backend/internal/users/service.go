@@ -210,12 +210,8 @@ func (s *Service) ProjectAccessAll() (map[int][]ProjectAccess, error) {
 	return out, nil
 }
 
-// SetProjectAccess приводит список проектов пользователя к переданному:
-// чего нет в списке — отзывается, что есть — выдаётся или обновляется.
-//
-// Возвращает id проектов, доступ к которым отозван: вызывающая сторона
-// снимает по ним индивидуальные права, иначе доступ «отозван», а право
-// на правку бюджета этого проекта осталось бы висеть.
+// SetProjectAccess приводит список проектов пользователя к переданному: чего
+// нет в списке — отзывается, что есть — выдаётся или обновляется.
 func (s *Service) SetProjectAccess(userID int, req SetProjectsRequest, grantedBy int) ([]int, error) {
 	tx, err := s.db.Beginx()
 	if err != nil {

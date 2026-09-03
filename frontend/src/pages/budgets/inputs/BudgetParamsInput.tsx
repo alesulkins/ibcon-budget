@@ -42,12 +42,7 @@ export default function BudgetParamsInput({ versionId, executor, readonly }: Pro
     queryFn: () => budgetsApi.getInput<InputBudgetParams>(versionId, 'budget_params'),
   });
 
-  /**
-   * Справочные значения исполнителя. Нужны только как значение по
-   * умолчанию для пустых ячеек: то, что уже сохранено в версии, они не
-   * перебивают — иначе правка справочника молча меняла бы посчитанный
-   * бюджет, чего справочники делать не должны.
-   */
+  // Справочные значения исполнителя.
   const { data: executors } = useQuery({
     queryKey: ['executors'],
     queryFn: () => refsApi.executors(),
@@ -83,12 +78,8 @@ export default function BudgetParamsInput({ versionId, executor, readonly }: Pro
 
   const numFmt = (v: number | undefined) => v?.toLocaleString('ru-RU') ?? '';
 
-  /**
-   * Режим выручки. ТКП задан → ручная выручка, банковские гарантии
-   * считаются от него. ТКП пуст → режим наценки: БГ не от чего считать
-   * (все нулевые), зато работает целевая рентабельность.
-   * См. docs/rules_excel.md §4 и §5.
-   */
+  // Режим выручки. ТКП задан → ручная выручка, банковские гарантии считаются
+  // от него.
   const hasTKP = (values.contract_value ?? 0) > 0;
 
   const withVAT = tkpIncludesVAT(executor);

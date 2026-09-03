@@ -67,22 +67,21 @@ type Project struct {
 
 // ProjectListItem — облегчённая запись для реестра проектов
 type ProjectListItem struct {
-	ID             int      `db:"id"              json:"id"`
-	Name           string   `db:"name"            json:"name"`
-	Customer       string   `db:"customer"        json:"customer"`
-	ExecutorName   string   `db:"executor_name"   json:"executor_name"`
-	Director       string   `db:"director"        json:"director"`
-	Manager        string   `db:"manager"         json:"manager"`
-	Administrator  string   `db:"administrator"   json:"administrator"`
-	Economist      string   `db:"economist"       json:"economist"`
-	Status         string   `db:"status"          json:"status"`
-	BudgetStatus   *string  `db:"budget_status"   json:"budget_status"`
-	CostNoVat      *float64 `db:"cost_no_vat"     json:"cost_no_vat"`
-	Profitability  *float64 `db:"profitability"   json:"profitability"`
-	// Отдаём время как есть, а не строкой 'DD.MM.YYYY': фронт форматирует
-	// сам, а предформатированную строку dayjs не разбирал и показывал
-	// «Invalid Date». В карточке проекта это поле всегда было time.Time —
-	// реестр был единственным местом с расхождением.
+	ID            int      `db:"id"              json:"id"`
+	Name          string   `db:"name"            json:"name"`
+	Customer      string   `db:"customer"        json:"customer"`
+	ExecutorName  string   `db:"executor_name"   json:"executor_name"`
+	Director      string   `db:"director"        json:"director"`
+	Manager       string   `db:"manager"         json:"manager"`
+	Administrator string   `db:"administrator"   json:"administrator"`
+	Economist     string   `db:"economist"       json:"economist"`
+	Status        string   `db:"status"          json:"status"`
+	BudgetStatus  *string  `db:"budget_status"   json:"budget_status"`
+	CostNoVat     *float64 `db:"cost_no_vat"     json:"cost_no_vat"`
+	Profitability *float64 `db:"profitability"   json:"profitability"`
+	// Отдаём время как есть, а не строкой 'DD.MM.YYYY': фронт форматирует сам,
+	// а предформатированную строку dayjs не разбирал и показывал «Invalid
+	// Date».
 	CreatedAt     time.Time `db:"created_at"      json:"created_at"`
 	CreatedByName string    `db:"created_by_name" json:"created_by_name"`
 }

@@ -43,18 +43,11 @@ const (
 	TypeOfficeCleaning = "office_cleaning"
 	// Листы-списки 4.8, 4.9 и 4.11: позиции с наименованием и стоимостью по
 	// месяцам (см. InputCostLines). Дают строки 193, 200 и 202.
-	//
-	// Ключи без суффикса — TypeSoftware, TypeSubcontractExt,
-	// TypeSubcontractGen — это те же листы СТАРЫМ вводом, готовыми суммами
-	// по месяцам. Читаются только ради версий, сохранённых до перехода на
-	// список позиций; новые данные пишутся в ключи с `_items`.
 	TypeSoftwareItems       = "software_items"
 	TypeSubcontractExtItems = "subcontract_ext_items"
 	TypeSubcontractGenItems = "subcontract_gen_items"
-	// Листы-покупки 4.7 и 4.12: строки «месяц / количество / цена»
-	// (см. InputPurchases). Дают строки 189 и 205. Ключи без суффикса —
-	// TypeControlEquipment и TypeCorporateEvents — это те же листы старым
-	// вводом готовыми суммами по месяцам.
+	// Листы-покупки 4.7 и 4.12: строки «месяц / количество / цена» (см.
+	// InputPurchases). Дают строки 189 и 205.
 	TypeEquipmentItems       = "equipment_items"
 	TypeCorporateEventsItems = "corporate_events_items"
 	// TypeGphEmployees — лист 4.10: среднее количество и средняя стоимость

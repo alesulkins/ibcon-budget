@@ -1,8 +1,4 @@
 // Package reminders — напоминания личного кабинета.
-//
-// Напоминание это заметка со сроком: когда срок наступил, платформа
-// показывает её всплывающим уведомлением на любой странице. Рассылки
-// писем нет — решение владельца 2026-08-30.
 package reminders
 
 import (
@@ -79,10 +75,6 @@ func (s *Service) Create(userID int, text string, remindAt time.Time) (*Reminder
 }
 
 // Update меняет текст, срок или отметку «выполнено». nil — не менять.
-//
-// Перенос срока вперёд снимает отметку о показе: напоминание, которое
-// передвинули на будущее, должно всплыть заново — иначе перенос молча
-// превращал бы его в невидимое.
 func (s *Service) Update(userID, id int, text *string, remindAt *time.Time, done *bool) (*Reminder, error) {
 	if text != nil || remindAt != nil {
 		t := ""

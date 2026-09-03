@@ -15,14 +15,7 @@ interface Props {
 
 const CIRCLE = 48; // вдвое больше стандартного кружка antd Steps
 
-/**
- * Полоса шагов мастера бюджета.
- *
- * Своя вместо antd Steps по трём причинам: подпись должна стоять ПОД
- * кружком, не переноситься по буквам при нехватке места, а вся полоса —
- * прокручиваться по горизонтали (колесом мыши и ползунком), потому что
- * 15 шагов в ширину экрана не помещаются.
- */
+// Полоса шагов мастера бюджета.
 export default function WizardSteps({ items, current, onChange }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   const activeRef = useRef<HTMLDivElement>(null);
@@ -54,9 +47,6 @@ export default function WizardSteps({ items, current, onChange }: Props) {
       manualUntil.current = Date.now() + 400;
       pending += e.deltaY;
       // Все события одного кадра складываются в одну запись scrollLeft.
-      // Инерция трекпада шлёт их десятками подряд, и запись на каждое
-      // заставляла браузер пересчитывать раскладку по кругу — отсюда и
-      // рывки при быстром пролистывании.
       if (!frame) frame = requestAnimationFrame(flush);
     };
 
@@ -107,10 +97,6 @@ export default function WizardSteps({ items, current, onChange }: Props) {
         const clickable = !!onChange;
 
         // ЦВЕТА ШАГОВ МЕНЯЮТСЯ ЗДЕСЬ.
-        //   active — текущий шаг: фирменная заливка, белая цифра
-        //   done   — ПРОЙДЕННЫЙ шаг: фирменный цвет, взятый прозрачным
-        //   иначе  — ещё не открытый шаг
-        // Фирменный цвет — переменной: он настраивается пользователем.
         const bg = active ? 'var(--ibcon-brand)' : done ? 'var(--ibcon-step-done-bg)' : 'transparent';
         const fg = active ? '#fff' : done ? 'var(--ibcon-brand)' : 'var(--ibcon-step-todo)';
 

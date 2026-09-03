@@ -40,14 +40,8 @@ type ListParams struct {
 	Limit  int
 	Offset int
 
-	// ProjectIDs — ограничение выборки проектами, которые пользователю
-	// видны. nil означает «все» и ставится только тем, кто видит весь
-	// журнал. Пустой непустой-по-смыслу список (len == 0, но
-	// ScopeAll == false) обработчик до сюда не доводит: он сразу
-	// отдаёт пустой ответ.
-	//
-	// Записи без проекта (создание пользователя, правка справочника)
-	// при ограничении не показываются: они относятся к системе целиком.
+	// ProjectIDs — ограничение выборки проектами, которые пользователю видны.
+	// nil означает «все» и ставится только тем, кто видит весь журнал.
 	ProjectIDs []int
 }
 
@@ -64,8 +58,7 @@ type LogRow struct {
 
 	// ProjectID / ProjectName — проект, к которому относится запись.
 	// Заполняются и для действий над версией бюджета: по цепочке
-	// budget_versions → budgets → projects. Нужны, чтобы в истории
-	// показывать название проекта и делать его ссылкой.
+	// budget_versions → budgets → projects.
 	ProjectID   *int   `db:"project_id"   json:"project_id"`
 	ProjectName string `db:"project_name" json:"project_name"`
 }
@@ -75,10 +68,8 @@ func (s *Service) List(p ListParams) ([]LogRow, int, error) {
 		p.Limit = 50
 	}
 
-	// Проект определяем двумя путями: напрямую (object_type='project') и
-	// через версию бюджета (object_type='budget_version'). Один и тот же
-	// FROM используется и для подсчёта, и для выборки, иначе при
-	// ограничении по проектам «всего» и страница разошлись бы.
+	// Проект определяем двумя путями: напрямую (object_type='project') и через
+	// версию бюджета (object_type='budget_version').
 	from := `
 		 FROM audit_log a
 		 LEFT JOIN users u ON u.id = a.user_id

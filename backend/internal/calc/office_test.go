@@ -8,11 +8,6 @@ import (
 
 // Эталонные данные листа 4.5. Формулы во всех трёх файлах идентичны, а
 // данные различаются — и это важно: они закрывают обе ветки листа.
-// Длительность проекта 2.Бюджет!D8 = 6 во всех файлах.
-//
-//	цены офисов   4.5!B15:B17
-//	количества    4.5!C15:BJ17
-//	уборка        4.5!B11 = 20 000 (стоимость ОДНОГО офиса за месяц)
 
 // один офис за 125 000 все шесть месяцев — файлы «Айбикон» и «Айбикон Киргизия»
 func referenceOfficeSingle() *InputOffice {
@@ -80,9 +75,7 @@ func TestCalcOffice_Kirgizia(t *testing.T) {
 }
 
 // TestCalcOffice_AibiconProject — два офиса с разными ценами, второй
-// подключается с пятого месяца. Заодно проверяет, что уборка реагирует на
-// количество офисов: 20 000 → 40 000.
-// Эталон: calc_sheets_ibcon-project-russia.xlsm.
+// подключается с пятого месяца.
 func TestCalcOffice_AibiconProject(t *testing.T) {
 	rent, cleaning := calcOffice(referenceOfficeTwo(), ExecutorAibiconProject, 6)
 

@@ -20,9 +20,6 @@ type Methodology struct {
 }
 
 // MethodologyText — то, что платформа объясняет про цену.
-//
-// Пишется здесь, а не на фронтенде: это описание того, что делает
-// расчёт, и оно должно меняться вместе с ним, а не отдельно.
 func MethodologyText() []Methodology {
 	return []Methodology{
 		{

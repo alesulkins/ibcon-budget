@@ -28,10 +28,8 @@ type Profile struct {
 	Avatar   string `db:"avatar"    json:"avatar"`
 	Notes    string `db:"notes"     json:"notes"`
 
-	// UISettings — размер шрифта, тема и цвета интерфейса. Хранятся в
-	// учётке, а не в браузере, чтобы человек видел свой интерфейс на
-	// любом устройстве. Формат свободный: набор настроек будет расти, и
-	// миграция на каждый переключатель — лишняя.
+	// UISettings — размер шрифта, тема и цвета интерфейса. Хранятся в учётке, а
+	// не в браузере, чтобы человек видел свой интерфейс на любом устройстве.
 	UISettings json.RawMessage `db:"ui_settings" json:"ui_settings"`
 
 	// Permissions — что пользователь может хотя бы где-нибудь.
@@ -112,10 +110,6 @@ func (s *Service) UpdateProfile(userID int, req UpdateProfileRequest) (*Profile,
 }
 
 // ChangeOwnPassword меняет пароль пользователю по его собственной просьбе.
-//
-// В отличие от SetPassword (её вызывает главный экономист), здесь
-// обязательна проверка текущего пароля: иначе перехваченная сессия
-// позволила бы сменить пароль и закрепиться в системе.
 func (s *Service) ChangeOwnPassword(userID int, req ChangePasswordRequest) error {
 	var hash string
 	if err := s.db.Get(&hash, `SELECT password_hash FROM users WHERE id=$1 AND active=TRUE`, userID); err != nil {

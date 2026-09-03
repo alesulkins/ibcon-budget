@@ -15,22 +15,10 @@ const (
 
 	// rememberExpiryHours — срок жизни токена при «Запомнить меня»: 90 дней.
 	// Решение владельца. Обычный срок берётся из JWT_EXPIRY_HOURS.
-	// Внимание: автовыход по бездействию (60 мин) действует независимо от
-	// этого срока — см. middleware.Auth.
 	rememberExpiryHours = 90 * 24
 )
 
 // errInvalidLogin — единственный ответ на любую неудачу входа.
-//
-// Раньше «нет такой почты», «учётная запись отключена» и «заблокирована
-// на 15 минут» отвечали по-разному, и по ответу можно было перебором
-// узнать, какие адреса заведены в системе и какие из них живые. Человеку
-// эти три случая различать незачем — он в любом из них идёт к
-// администратору; нападающему различие даёт список целей.
-//
-// Правило блокировки после пяти попыток из ТЗ не отменяется: она
-// работает по-прежнему, просто не объявляет о себе. Подсказка про
-// блокировку осталась на экране входа постоянным текстом.
 var errInvalidLogin = errors.New("неверный email или пароль")
 
 type LoginRequest struct {
@@ -57,15 +45,15 @@ func NewService(db *sqlx.DB, jwtSecret string, expiryHours int) *Service {
 }
 
 type userRow struct {
-	ID           int        `db:"id"`
-	Email        string     `db:"email"`
-	PasswordHash string     `db:"password_hash"`
-	FullName     string     `db:"full_name"`
-	Role         string     `db:"role"`
-	Active       bool       `db:"active"`
-	FailedAttempts int      `db:"failed_attempts"`
-	LockedUntil  *time.Time `db:"locked_until"`
-	LastActivity *time.Time `db:"last_activity"`
+	ID             int        `db:"id"`
+	Email          string     `db:"email"`
+	PasswordHash   string     `db:"password_hash"`
+	FullName       string     `db:"full_name"`
+	Role           string     `db:"role"`
+	Active         bool       `db:"active"`
+	FailedAttempts int        `db:"failed_attempts"`
+	LockedUntil    *time.Time `db:"locked_until"`
+	LastActivity   *time.Time `db:"last_activity"`
 }
 
 func (s *Service) Login(req LoginRequest) (*LoginResponse, error) {

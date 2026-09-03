@@ -95,14 +95,8 @@ function WhenPicker({ date, time, onDate, onTime, open, onOpenChange, onSubmit, 
   );
 }
 
-/**
- * Напоминания личного кабинета: заметка со сроком, которая в срок
- * всплывает уведомлением на экране.
- *
- * Первая строка списка — не кнопка, а само напоминание, только бледное:
- * заготовка стоит там же, где появится готовая запись, поэтому список не
- * прыгает, а «добавить» не выглядит отдельным действием.
- */
+// Напоминания личного кабинета: заметка со сроком, которая в срок всплывает
+// уведомлением на экране.
 export default function Reminders() {
   const qc = useQueryClient();
   const [text, setText] = useState('');
@@ -149,11 +143,7 @@ export default function Reminders() {
   const parsed = parseTime(time);
   const canSave = text.trim() !== '' && parsed !== null;
 
-  /**
-   * Enter в панели срока. Значение читается на следующем такте: Enter в
-   * календаре сначала подтверждает набранную дату, и в этот момент
-   * состояние ещё прежнее — сохранили бы вчерашний срок.
-   */
+  // Enter в панели срока.
   const draft = useRef({ text, time });
   draft.current = { text, time };
   function submitFromPicker() {

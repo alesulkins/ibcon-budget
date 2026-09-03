@@ -36,10 +36,7 @@ type InputOffice struct {
 	CleaningPrice float64 `json:"cleaning_price"`
 }
 
-// calcOffice рассчитывает лист 4.5. Возвращает два массива длиной duration:
-//
-//	rent     — аренда офиса (4.5!строка 5)  → 2.Бюджет строка 182
-//	cleaning — уборка офиса (4.5!строка 11) → 2.Бюджет строка 183
+// calcOffice рассчитывает лист 4.5.
 func calcOffice(in *InputOffice, executor string, duration int) (rent, cleaning []float64) {
 	rent = make([]float64, duration)
 	cleaning = make([]float64, duration)
