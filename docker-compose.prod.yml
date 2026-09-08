@@ -1,0 +1,73 @@
+# Развёртывание на сервере. Отличия от docker-compose.yml (разработка):
+# наружу открыт только 80-й порт, база и бэкенд доступны лишь внутри сети
+# Compose, пароли и секрет берутся из .env, контейнеры поднимаются сами
+# после перезагрузки.
+#
+#   cp .env.prod.example .env && $EDITOR .env
+#   docker compose -f docker-compose.prod.yml up -d
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:?укажите DB_USER в .env}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?укажите DB_PASSWORD в .env}
+      POSTGRES_DB: ${DB_NAME:?укажите DB_NAME в .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: ibcon-backend:latest
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      DB_SSLMODE: disable
+      # Не короче 32 символов — иначе сервер не стартует.
+      JWT_SECRET: ${JWT_SECRET:?укажите JWT_SECRET в .env}
+      JWT_EXPIRY_HOURS: ${JWT_EXPIRY_HOURS:-60}
+      SERVER_PORT: 8080
+      GIN_MODE: release
+      # Фронтенд отдаётся тем же адресом через nginx, поэтому список
+      # разрешённых источников пуст: кросс-доменных запросов нет.
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      # Прокси, если у сервера нет прямого выхода в интернет. Нужен
+      # только оценке рыночной аренды — без него она честно скажет, что
+      # площадки недоступны, остальная система работает как обычно.
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,postgres}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: ibcon-frontend:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:

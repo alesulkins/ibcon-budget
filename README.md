@@ -118,14 +118,23 @@ mean) по выборке, ограниченной 95-м перцентилем
 
 ## Развёртывание
 
+На сервере (наружу открыт только 80-й порт, база и API доступны лишь
+внутри сети Compose):
+
 ```bash
-docker compose up
+cp .env.prod.example .env && $EDITOR .env      # пароль БД и JWT-секрет
+docker compose -f docker-compose.prod.yml up -d
 ```
 
-Локальная разработка:
+Требования: x86_64, 2 vCPU / 4 ГБ / 40 ГБ (рекомендуется 4 / 8 / 60),
+Docker Engine 24+ и Compose v2. Схема БД накатывается миграциями при
+старте контейнера.
+
+Локально:
 
 ```bash
-cd backend  && cp .env.example .env && go run ./cmd/server   # :8080
+docker compose up                                             # всё разом
+cd backend  && cp .env.example .env && go run ./cmd/server    # :8080
 cd frontend && npm ci && npm run dev                          # :5173
 ```
 
