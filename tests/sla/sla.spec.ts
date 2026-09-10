@@ -13,7 +13,8 @@ const SLA = {
 };
 
 const EMAIL = process.env.SLA_EMAIL ?? 'admin@ibcon.ru';
-const PASSWORD = process.env.SLA_PASSWORD ?? 'IBcon2024Admin!';
+// Пароль только из окружения: зашитый в код уезжает вместе с репозиторием.
+const PASSWORD = process.env.SLA_PASSWORD ?? '';
 
 /** Секунды с начала замера — в том виде, в каком их читает норматив. */
 async function seconds(fn: () => Promise<unknown>): Promise<number> {

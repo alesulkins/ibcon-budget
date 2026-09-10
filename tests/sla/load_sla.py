@@ -18,6 +18,7 @@
 """
 
 import argparse
+import os
 import json
 import statistics
 import sys
@@ -123,11 +124,15 @@ def main():
     ap.add_argument('--url', default='http://localhost:8080')
     ap.add_argument('--users', type=int, default=10)
     ap.add_argument('--email', default='admin@ibcon.ru')
-    ap.add_argument('--password', default='IBcon2024Admin!')
+    # Пароль только из окружения или аргумента: зашитый в код уезжает
+    # вместе с репозиторием.
+    ap.add_argument('--password', default=os.environ.get('SLA_PASSWORD', ''))
     ap.add_argument('--project', type=int)
     ap.add_argument('--version', type=int)
     args = ap.parse_args()
 
+    if not args.password:
+        raise SystemExit('укажите пароль: --password или переменная SLA_PASSWORD')
     token = login(args.url, args.email, args.password)
     pid, vid = discover(args.url, token, args.project, args.version)
     print(f'Проект {pid}, версия бюджета {vid}, одновременных пользователей: {args.users}\n')
