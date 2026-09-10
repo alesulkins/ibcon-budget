@@ -17,8 +17,6 @@ interface Props {
   versionId: number;
   duration: number;
   startDate: string;
-  /** Город проекта — подставляется в запрос рыночной стоимости. */
-  city?: string;
   readonly?: boolean;
 }
 
@@ -44,7 +42,7 @@ function emptyRow(duration: number): RoomRow {
 }
 
 export default function RentApartmentsInput({
-  versionId, duration, startDate, city, readonly,
+  versionId, duration, startDate, readonly,
 }: Props) {
   // Запрос рыночной стоимости к площадкам объявлений — по кнопке, а не
   // при открытии шага: поход к площадкам занимает секунды и цену всё
@@ -291,7 +289,6 @@ export default function RentApartmentsInput({
       <RentMarketModal
         open={marketOpen}
         onClose={() => setMarketOpen(false)}
-        defaultCity={city}
         // Подстановка только когда версию можно править: в архивной
         // версии кнопка «узнать» остаётся, а «подставить» — нет.
         onApply={readonly

@@ -15,15 +15,13 @@ const { Text } = Typography;
 interface Props {
   open: boolean;
   onClose: () => void;
-  /** Город проекта — подставляется в форму, но его можно поменять. */
-  defaultCity?: string;
   /** Подставить цену в строку таблицы. Пусто — режим «только посмотреть». */
   onApply?: (rooms: number, price: number) => void;
 }
 
 // Рыночная стоимость аренды квартиры. Платформа опрашивает площадки
 // объявлений и считает по ним оценку.
-export default function RentMarketModal({ open, onClose, defaultCity, onApply }: Props) {
+export default function RentMarketModal({ open, onClose, onApply }: Props) {
   const [form] = Form.useForm<RentMarketQuery>();
   const [result, setResult] = useState<RentMarketEstimate | null>(null);
 
@@ -58,7 +56,9 @@ export default function RentMarketModal({ open, onClose, defaultCity, onApply }:
       <Form
         form={form}
         layout="inline"
-        initialValues={{ city: defaultCity ?? '' }}
+        // Город не подставляем: в карточке проекта может стоять страна
+        // или площадка («Киргизия»), а оценка считается по конкретному
+        // городу — его вводят руками.
         onFinish={submit}
         // Одной строкой: город, район, комнаты, площадь и кнопка. Поля
         // подобраны по ширине так, чтобы строка помещалась целиком —
