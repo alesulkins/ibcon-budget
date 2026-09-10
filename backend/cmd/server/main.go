@@ -42,6 +42,15 @@ func main() {
 	}
 	defer database.Close()
 
+	// Первая учётная запись: без неё в свежую систему не войти.
+	// Существующие пользователи не затрагиваются.
+	if err := auth.EnsureFirstUser(database,
+		os.Getenv("ADMIN_EMAIL"), os.Getenv("ADMIN_PASSWORD"),
+		os.Getenv("ADMIN_NAME")); err != nil {
+		slog.Error("первая учётная запись не создана", "err", err)
+		os.Exit(1)
+	}
+
 	gin.SetMode(os.Getenv("GIN_MODE"))
 	r := gin.New()
 	r.Use(gin.Recovery())

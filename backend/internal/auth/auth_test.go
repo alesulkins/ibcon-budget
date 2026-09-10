@@ -90,3 +90,22 @@ func TestSessionTimeoutConst(t *testing.T) {
 		t.Errorf("блокировка должна быть 15 минут, got %v", lockDuration)
 	}
 }
+
+// Сгенерированный пароль первой учётной записи должен проходить те же
+// правила, что и заданный человеком, и не повторяться.
+func TestRandomPasswordMeetsRules(t *testing.T) {
+	seen := map[string]bool{}
+	for i := 0; i < 50; i++ {
+		p, err := randomPassword()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := ValidatePassword(p); err != nil {
+			t.Fatalf("сгенерированный пароль не проходит проверку: %v (%q)", err, p)
+		}
+		if seen[p] {
+			t.Fatalf("пароль повторился: %q", p)
+		}
+		seen[p] = true
+	}
+}

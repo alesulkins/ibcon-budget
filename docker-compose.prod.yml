@@ -40,6 +40,10 @@ services:
       JWT_EXPIRY_HOURS: ${JWT_EXPIRY_HOURS:-60}
       SERVER_PORT: 8080
       GIN_MODE: release
+      # Первая учётная запись: создаётся только в пустой базе.
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@ibcon.ru}
+      ADMIN_NAME: ${ADMIN_NAME:-Администратор}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       # Фронтенд отдаётся тем же адресом через nginx, поэтому список
       # разрешённых источников пуст: кросс-доменных запросов нет.
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}

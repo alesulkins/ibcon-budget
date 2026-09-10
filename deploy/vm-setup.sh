@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Запускается НА СЕРВЕРЕ из каталога проекта: готовит .env, поднимает
+# запускается НА СЕРВЕРЕ из каталога проекта: готовит .env, поднимает
 # контейнеры и ждёт, пока система ответит. Повторный запуск безопасен —
 # существующий .env не перезаписывается, данные базы не трогаются.
 set -euo pipefail
@@ -35,7 +35,18 @@ for _ in $(seq 1 60); do
     echo " — готово"
     docker compose -f docker-compose.prod.yml ps
     ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+    echo
     echo "Система доступна: http://${ip:-<адрес сервера>}/"
+
+    # Пароль первой учётной записи печатается сервером один раз при
+    # создании — достаём его из журнала, иначе войти будет нечем.
+    pass=$(docker compose -f docker-compose.prod.yml logs backend 2>/dev/null \
+           | grep -o '"пароль":"[^"]*"' | tail -1 | cut -d'"' -f4)
+    if [ -n "$pass" ]; then
+      user=$(grep '^ADMIN_EMAIL=' .env | cut -d= -f2)
+      echo "Вход: ${user:-admin@ibcon.ru} / ${pass}"
+      echo "Пароль сгенерирован при первом запуске — смените его после входа."
+    fi
     exit 0
   fi
   echo -n "."
