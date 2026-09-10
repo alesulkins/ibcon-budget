@@ -40,9 +40,15 @@ trap cleanup EXIT
 echo "Собираю и поднимаю (первый раз — несколько минут)"
 compose up -d --build
 
+# Ждём именно бэкенд: статика отдаётся nginx сразу, и по ней система
+# кажется готовой, когда API ещё не поднялся.
 echo -n "Жду готовности"
 for _ in $(seq 1 60); do
-  if curl -fsS -o /dev/null http://localhost:8081/ 2>/dev/null; then
+  code=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+         http://localhost:8081/api/v1/auth/login \
+         -H 'Content-Type: application/json' \
+         -d '{"email":"нет@нет.ru","password":"x"}' 2>/dev/null || true)
+  if [ "$code" = "401" ] || [ "$code" = "400" ]; then
     echo " — готово"
     break
   fi

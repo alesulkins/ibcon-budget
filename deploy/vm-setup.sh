@@ -6,8 +6,29 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# Проверки до начала работы: каждая из них иначе выстрелит на середине
+# установки невнятной ошибкой.
 if ! command -v docker >/dev/null; then
   echo "Docker не установлен" >&2
+  exit 1
+fi
+
+if ! docker info >/dev/null 2>&1; then
+  echo "Нет доступа к Docker. Запустите от root (sudo) или добавьте" >&2
+  echo "пользователя в группу docker: sudo usermod -aG docker \$USER" >&2
+  exit 1
+fi
+
+if ! docker compose version >/dev/null 2>&1; then
+  echo "Нужен Docker Compose v2 (команда «docker compose»)" >&2
+  exit 1
+fi
+
+# Порт 80 занимают уже стоящие nginx или apache — тогда контейнер не
+# поднимется, а причина будет видна только в журнале.
+if command -v ss >/dev/null && ss -ltn 2>/dev/null | grep -qE ':80\s'; then
+  echo "Порт 80 занят другой службой. Освободите его либо поменяйте" >&2
+  echo "проброс порта в docker-compose.prod.yml (строка \"80:80\")." >&2
   exit 1
 fi
 
