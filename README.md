@@ -8,6 +8,10 @@
 **Стек:** Go 1.26 · Gin · PostgreSQL · React 19 · TypeScript · antd v6 ·
 excelize
 
+**Готовый пакет для развёртывания:**
+[скачать последний релиз](https://github.com/alesulkins/ibcon-budget/releases/latest/download/ibcon-budget-deploy.tar.gz)
+· [все релизы](https://github.com/alesulkins/ibcon-budget/releases/latest)
+
 ---
 
 ## Развёртывание: 
