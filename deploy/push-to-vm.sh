@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # запускается на ноутике: копирует проект на сервер и разворачивает.
 #
-#   deploy/push-to-vm.sh angela@192.168.24.6 ~/.ssh/ibcon_vm
+#   deploy/push-to-vm.sh user@server ~/.ssh/ключ
 set -euo pipefail
 
 target=${1:?укажите пользователь@адрес}
